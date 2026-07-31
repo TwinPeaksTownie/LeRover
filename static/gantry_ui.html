@@ -751,6 +751,12 @@
             }
         }
 
+        function nudge(id, delta) {
+            const current = (id === 7) ? currentSpinTick : currentGantryTick;
+            const target = current + delta;
+            setPos(id, target);
+        }
+
         function goHome(id) {
             if (id === 8) {
                 onGantrySlider(50);

@@ -263,7 +263,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 target_acc = degrees_to_ticks_s7(float(body["angle"]))
             else:
                 target_acc = int(body.get("target", 1024))
-            ok, msg = hw.move_target(sid, target_acc, step_size=50, speed=400, max_t=500)
+            max_torque_req = 800 if sid == 7 else 500
+            ok, msg = hw.move_target(sid, target_acc, step_size=50, speed=400, max_t=max_torque_req)
             if not ok:
                 self._send_json({"status": "error", "message": msg}, 400)
             else:
