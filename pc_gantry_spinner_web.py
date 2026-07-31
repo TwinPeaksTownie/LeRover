@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 CALIB_FILE = "calibration_aux.json"
 
+
 def ticks_to_degrees_s7(ticks: int) -> float:
     """Converts raw Motor 7 ticks (0-4095) to intuitive degrees where 0 deg is Forward (tick 1024)."""
     deg = (int(ticks) - 1024) * 360.0 / 4096.0
@@ -330,6 +331,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "calibration": hw.calibration})
         else:
             self._send_json({"error": "Endpoint not found"}, 404)
+
 
 def connect_hardware():
     try:
