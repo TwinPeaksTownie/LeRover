@@ -153,38 +153,34 @@ class PokeballTeleopDriver:
                 self.target_x += (-y_offset / 2048.0) * self.step_xy
                 self.target_x = max(0.05, min(0.28, self.target_x))
                 
-            # 3. Button B (Top Red Button) + Joystick Left/Right -> Pedestal Preset Stepping (Requires Joystick Direction)
+            # 3. Button B (Top Red Button) -> Advances to Next Pedestal Preset in Order
             if (buttons & 0x01) and not (self.last_buttons & 0x01):
                 if self.is_busy or now < self.busy_until:
                     logging.info("⚠️ Button B Ignored: Movement currently in progress.")
                 else:
-                    if x_offset > 200:
-                        self.preset_index = min(len(self.preset_angles) - 1, self.preset_index + 1)
-                        target_deg = self.preset_angles[self.preset_index]
-                        logging.info("Button B + Right -> Stepping Pedestal Preset: %.1f deg (Index %d/%d)", target_deg, self.preset_index, len(self.preset_angles)-1)
-                        self._send_aux_request("/api/move", {"id": 7, "angle": target_deg}, lock_duration=2.2)
-                    elif x_offset < -200:
-                        self.preset_index = max(0, self.preset_index - 1)
-                        target_deg = self.preset_angles[self.preset_index]
-                        logging.info("Button B + Left -> Stepping Pedestal Preset: %.1f deg (Index %d/%d)", target_deg, self.preset_index, len(self.preset_angles)-1)
-                        self._send_aux_request("/api/move", {"id": 7, "angle": target_deg}, lock_duration=2.2)
-                    # Button B alone does NOTHING.
+                    if self.preset_index < len(self.preset_angles) - 1:
+                        self.preset_index += 1
+                    else:
+                        self.preset_index = 0  # Loop back to start after reaching end
+                        
+                    target_deg = self.preset_angles[self.preset_index]
+                    logging.info("Top Button B Pressed -> Next Pedestal Preset: %.1f deg (Index %d/%d)", target_deg, self.preset_index, len(self.preset_angles)-1)
+                    self._send_aux_request("/api/move", {"id": 7, "angle": target_deg}, lock_duration=2.2)
                 
-            # 4. Button A (Stick Click) + Joystick Left/Right -> Gantry 500 Tick Nudge (Requires Joystick Direction)
+            # 4. Joystick Left/Right + Thumbstick Click (Button A) -> Moves Gantry 500 Ticks over 2 Seconds
             if (buttons & 0x02) and not (self.last_buttons & 0x02):
                 if x_offset < -200:
                     if self.is_busy or now < self.busy_until:
-                        logging.info("⚠️ Stick Click A + Left Ignored: Movement currently in progress.")
+                        logging.info("⚠️ Thumbstick Click A + Left Ignored: Movement currently in progress.")
                     else:
-                        logging.info("Stick Click A + Left -> Nudging Gantry 500 ticks LEFT")
+                        logging.info("Thumbstick Click A + Left -> Nudging Gantry 500 ticks LEFT")
                         self._send_aux_request("/api/nudge_physical", {"id": 8, "direction": "left", "amount": 500, "speed": 250}, lock_duration=2.2)
                 elif x_offset > 200:
                     if self.is_busy or now < self.busy_until:
-                        logging.info("⚠️ Stick Click A + Right Ignored: Movement currently in progress.")
+                        logging.info("⚠️ Thumbstick Click A + Right Ignored: Movement currently in progress.")
                     else:
-                        logging.info("Stick Click A + Right -> Nudging Gantry 500 ticks RIGHT")
+                        logging.info("Thumbstick Click A + Right -> Nudging Gantry 500 ticks RIGHT")
                         self._send_aux_request("/api/nudge_physical", {"id": 8, "direction": "right", "amount": 500, "speed": 250}, lock_duration=2.2)
-                # Button A alone does NOTHING.
                 
             # Solve IK
             joint_angles = self.ik.inverse_kinematics(
