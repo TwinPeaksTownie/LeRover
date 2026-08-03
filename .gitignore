@@ -15,4 +15,5 @@ ENV/
 # Local Runtime State
 gantry_state.json
 web.log
+*.log
 *.tmp
