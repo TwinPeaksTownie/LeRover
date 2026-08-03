@@ -13,11 +13,11 @@ def main():
         ssh.connect(PI500_IP, username=username, password=password, timeout=5)
         sftp = ssh.open_sftp()
         
-        # Upload pc_gantry_spinner_web.py
-        local_web = r"I:\pc_gantry_spinner_web.py"
-        remote_web = "/home/user/pc_gantry_spinner_web.py"
+        # Upload aux_daemon.py
+        local_web = r"I:\aux_daemon.py"
+        remote_web = "/home/user/aux_daemon.py"
         sftp.put(local_web, remote_web)
-        print("Uploaded pc_gantry_spinner_web.py")
+        print("Uploaded aux_daemon.py")
         
         # Upload HTML
         os.makedirs("static", exist_ok=True)
@@ -41,11 +41,9 @@ def main():
         
         sftp.close()
 
-        # Restart running web server so new calibration file is loaded into memory
-        ssh.exec_command("pkill -f pc_gantry_spinner_web.py")
-        time.sleep(1)
-        ssh.exec_command("nohup python3 /home/user/pc_gantry_spinner_web.py > /home/user/web.log 2>&1 &")
-        print("Restarted pc_gantry_spinner_web.py on Pi 500.")
+        # Restart running aux_daemon service/process
+        ssh.exec_command("sudo systemctl restart aux_daemon.service || (pkill -f aux_daemon.py; nohup python3 /home/user/aux_daemon.py > /home/user/aux_daemon.log 2>&1 &)")
+        print("Restarted aux_daemon.py on Pi 500.")
 
     except Exception as e:
         print(f"SSH Error: {e}")

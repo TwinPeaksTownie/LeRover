@@ -2,801 +2,493 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gantry & Spinner Control Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Overlander 4 Touch Controller</title>
     <style>
-        :root {
-            --bg-dark: #090c15;
-            --card-bg: rgba(18, 24, 38, 0.75);
-            --card-border: rgba(255, 255, 255, 0.08);
-            --spinner-cyan: #00f2fe;
-            --gantry-purple: #a855f7;
-            --text-main: #f1f5f9;
-            --text-sub: #94a3b8;
-            --accent-green: #10b981;
-            --accent-yellow: #f59e0b;
-            --accent-red: #ef4444;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
         }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-dark);
-            background-image: 
-                radial-gradient(at 10% 10%, rgba(0, 242, 254, 0.08) 0px, transparent 50%),
-                radial-gradient(at 90% 90%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
-            color: var(--text-main);
-            min-height: 100vh;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            position: relative;
-        }
-
-        #toastContainer {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .toast {
-            background: rgba(16, 185, 129, 0.95);
-            color: #000000;
-            font-weight: 800;
-            font-size: 13px;
-            padding: 12px 20px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: slideIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-        }
-
-        .toast.toast-info { background: rgba(0, 242, 254, 0.95); }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--card-border);
-            padding: 14px 24px;
-            border-radius: 16px;
-        }
-
-        .brand { display: flex; align-items: center; gap: 12px; }
-        .brand-icon { font-size: 26px; }
-
-        h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 20px;
-            font-weight: 900;
-            background: linear-gradient(135deg, #ffffff 0%, var(--spinner-cyan) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        /* Distinct Hardware Status Badges */
-        .status-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 6px 14px;
-            border-radius: 20px;
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            color: var(--accent-green);
-        }
-
-        .status-badge.sim-mode {
-            background: rgba(245, 158, 11, 0.15);
-            border-color: rgba(245, 158, 11, 0.4);
-            color: var(--accent-yellow);
-        }
-
-        .status-badge.offline {
-            background: rgba(239, 68, 68, 0.15);
-            border-color: rgba(239, 68, 68, 0.3);
-            color: var(--accent-red);
-        }
-
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
-        .calib-banner {
-            background: rgba(245, 158, 11, 0.12);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: 14px;
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .calib-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--accent-yellow);
-        }
-
-        .calib-btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        @media (max-width: 1024px) { .dashboard-grid { grid-template-columns: 1fr; } }
-
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--card-border);
-            border-radius: 18px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .card.spinner-card { border-top: 3px solid var(--spinner-cyan); }
-        .card.gantry-card { border-top: 3px solid var(--gantry-purple); }
-
-        .card-header { display: flex; justify-content: space-between; align-items: center; }
-
-        .card-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 16px;
-            font-weight: 800;
-        }
-
-        .card-title.spinner-title { color: var(--spinner-cyan); }
-        .card-title.gantry-title { color: var(--gantry-purple); }
-
-        .tick-display {
-            font-family: 'Outfit', monospace;
-            font-size: 22px;
-            font-weight: 900;
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--card-border);
-            padding: 4px 12px;
-            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000000;
             color: #ffffff;
-        }
-
-        .visualizer-box {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 14px;
-            padding: 12px;
+            padding: 0;
         }
 
-        canvas { max-width: 100%; }
-
-        .control-group { display: flex; flex-direction: column; gap: 10px; }
-
-        .slider-label-row {
+        /* Left Navigation Rail (120px Wide, 480px Full Height) */
+        .left-rail {
+            width: 130px;
+            height: 100vh;
+            background: #0d0d0d;
+            border-right: 3px solid #222222;
             display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-sub);
+            flex-direction: column;
+            gap: 6px;
+            padding: 6px;
+            flex-shrink: 0;
         }
 
-        input[type="range"] {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 8px;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            outline: none;
-        }
-
-        .spinner-card input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
-            background: var(--spinner-cyan); box-shadow: 0 0 10px var(--spinner-cyan); cursor: pointer;
-        }
-
-        .gantry-card input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
-            background: var(--gantry-purple); box-shadow: 0 0 10px var(--gantry-purple); cursor: pointer;
-        }
-
-        .btn-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-
-        .btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: var(--text-main);
-            font-size: 11px;
-            font-weight: 700;
-            padding: 8px 4px;
+        .rail-btn {
+            flex: 1;
+            background: #181818;
+            border: 2px solid #333333;
+            color: #888888;
+            font-size: 15px;
+            font-weight: 900;
             border-radius: 8px;
             cursor: pointer;
-            text-align: center;
-            transition: all 0.15s ease;
-        }
-
-        .btn:hover { background: rgba(255, 255, 255, 0.12); }
-        .btn-warning { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: var(--accent-yellow); }
-        
-        .btn-warning.active-off {
-            background: #f59e0b;
-            color: #000000;
-            font-weight: 900;
-            box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
-        }
-
-        .btn-success { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); color: var(--accent-green); }
-        .btn-danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: var(--accent-red); }
-
-        .bounds-info {
-            font-size: 11px;
-            color: var(--text-sub);
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            background: rgba(0,0,0,0.25);
-            padding: 8px 12px;
-            border-radius: 8px;
-            gap: 6px;
-        }
-
-        .tick-input {
-            width: 50px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #ffffff;
-            font-family: 'Outfit', monospace;
-            font-weight: 700;
-            font-size: 11px;
-            padding: 2px 4px;
-            border-radius: 4px;
+            justify-content: center;
             text-align: center;
+            gap: 4px;
         }
 
-        footer {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            padding: 12px 20px;
-            border-radius: 12px;
+        .rail-btn.active {
+            background: #00e5ff;
+            color: #000000;
+            border-color: #00e5ff;
+        }
+
+        /* Main Workspace (670px Wide x 480px Tall) */
+        .workspace {
+            flex-grow: 1;
+            height: 100vh;
             display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .tab-panel {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tab-panel.active {
+            display: flex;
+        }
+
+        /* Top Header Readout Bar */
+        .header-bar {
+            height: 48px;
+            background: #111111;
+            border: 2px solid #333333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
             justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-sub);
+            padding: 0 14px;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 900;
+            color: #00e5ff;
+        }
+
+        .header-readout {
+            font-family: monospace;
+            font-size: 24px;
+            font-weight: 900;
+            color: #f8d800;
+        }
+
+        /* Massive 130px+ Tall Action Grid */
+        .giant-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            flex-grow: 1;
+        }
+
+        .btn-action {
+            background: #181818;
+            border: 3px solid #444444;
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 900;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 12px;
+            line-height: 1.2;
+        }
+
+        .btn-action:active {
+            background: #00e5ff;
+            color: #000000;
+            border-color: #00e5ff;
+        }
+
+        .btn-orange {
+            border-color: #ff9900;
+            color: #ff9900;
+            background: #1e1200;
+        }
+
+        .btn-orange:active {
+            background: #ff9900;
+            color: #000000;
+        }
+
+        .btn-red {
+            border-color: #ff3344;
+            color: #ff3344;
+            background: #220000;
+        }
+
+        .btn-red:active {
+            background: #ff3344;
+            color: #ffffff;
         }
     </style>
 </head>
 <body>
 
-    <div id="toastContainer"></div>
+    <!-- Left Vertical Navigation Rail (130px Wide x 480px Tall) -->
+    <div class="left-rail">
+        <button id="railBtnGantry" class="rail-btn active" onclick="switchTab('gantry')">
+            <span style="font-size: 24px;">⚙️</span>
+            <span>GANTRY</span>
+        </button>
 
-    <header>
-        <div class="brand">
-            <div class="brand-icon">⚙️</div>
-            <div>
-                <h1>GANTRY & SPINNER DASHBOARD</h1>
-                <div style="font-size: 11px; color: var(--text-sub);">Zero-Guessing Mechanical Bounds Calibration • localhost:8085</div>
-            </div>
-        </div>
-        <div id="statusBadge" class="status-badge">
-            <div class="status-dot"></div>
-            <span id="statusText">CONNECTING TO HARDWARE...</span>
-        </div>
-    </header>
+        <button id="railBtnControls" class="rail-btn" onclick="switchTab('controls')">
+            <span style="font-size: 24px;">🦾</span>
+            <span>TELEOP</span>
+        </button>
 
-    <!-- Calibration Control Panel -->
-    <div class="calib-banner">
-        <div>
-            <div class="calib-title">⚙️ LIVE MANUAL CALIBRATION MODE</div>
-            <div style="font-size: 11px; color: var(--text-sub); margin-top: 2px;">
-                Release torque to move mechanism by hand. Magnetic encoders stream position live!
-            </div>
-        </div>
-        <div class="calib-btn-group">
-            <button id="releaseTorqueBtn" class="btn btn-warning" onclick="toggleCalibTorque(false)">🔓 Release Torque (Hand Move)</button>
-            <button class="btn btn-success" onclick="saveCalibration()">💾 Save Limits to Disk</button>
-        </div>
+        <button id="railBtnPower" class="rail-btn" onclick="switchTab('power')">
+            <span style="font-size: 24px;">⚡</span>
+            <span>POWER</span>
+        </button>
     </div>
 
-    <!-- Main Grid -->
-    <div class="dashboard-grid">
+    <!-- Main Unobstructed Workspace -->
+    <div class="workspace">
 
-        <!-- SPINNER (MOTOR 7) -->
-        <div class="card spinner-card">
-            <div class="card-header">
-                <div class="card-title spinner-title">🔄 SPINNER (MOTOR 7)</div>
-                <div class="tick-display" id="spinTickDisplay">2048</div>
+        <!-- TAB 1: ⚙️ GANTRY SLIDE (Motor 8 Stepper) -->
+        <div id="panelGantry" class="tab-panel active">
+            <div class="header-bar">
+                <div class="header-title">LESLIDE CARRIAGE (MOTOR 8)</div>
+                <div id="sliderValDisplay" class="header-readout">2503 ticks</div>
             </div>
 
-            <div class="visualizer-box">
-                <canvas id="spinnerCanvas" width="260" height="260"></canvas>
-            </div>
+            <div class="giant-grid">
+                <button class="btn-action" onclick="nudgeSlider(-5)">◀ STEP LEFT<br>(-5 TICKS)</button>
+                <button class="btn-action" onclick="nudgeSlider(5)">STEP RIGHT ▶<br>(+5 TICKS)</button>
 
-            <div class="bounds-info">
-                <span>Left Bound: <input type="number" id="spinLeftInput" class="tick-input" value="0" onchange="onManualCalibInput(7)"></span>
-                <span>Mid: <input type="number" id="spinMidInput" class="tick-input" value="2048" onchange="onManualCalibInput(7)"></span>
-                <span>Right Bound: <input type="number" id="spinRightInput" class="tick-input" value="4095" onchange="onManualCalibInput(7)"></span>
+                <button class="btn-action btn-orange" onclick="syncGantryLeft()">🛑 SYNC LEFT<br>HARD STOP (3)</button>
+                <button class="btn-action btn-orange" onclick="syncGantryRight()">🛑 SYNC RIGHT<br>HARD STOP (4800)</button>
             </div>
-
-            <!-- Direct Tick Control -->
-            <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 8px;">
-                <span style="font-size: 11px; font-weight: 700; color: var(--spinner-cyan);">Direct Tick:</span>
-                <input type="number" id="spinDirectInput" class="tick-input" style="width: 80px; text-align: left; padding: 4px 8px;" value="2048" min="0" max="4095">
-                <button class="btn btn-success" style="padding: 4px 10px;" onclick="sendDirectTick(7)">Go</button>
-            </div>
-
-            <!-- Incremental Step Nudges -->
-            <div class="btn-grid" style="grid-template-columns: repeat(4, 1fr);">
-                <button class="btn" onclick="nudge(7, -100)">-100 Ticks</button>
-                <button class="btn" onclick="nudge(7, -10)">-10 Ticks</button>
-                <button class="btn" onclick="nudge(7, 10)">+10 Ticks</button>
-                <button class="btn" onclick="nudge(7, 100)">+100 Ticks</button>
-            </div>
-
-            <div class="control-group">
-                <div class="slider-label-row">
-                    <span>Angle: <span id="spinDegText" style="color: var(--spinner-cyan);">180°</span></span>
-                    <span>Slider Target</span>
-                </div>
-                <input type="range" id="spinnerSlider" min="0" max="1000" value="500" onchange="onSpinnerSlider(this.value)" oninput="updateSpinnerLabel(this.value)">
-            </div>
-
-            <div class="btn-grid" style="grid-template-columns: repeat(4, 1fr); margin-top: 20px;">
-                <button class="btn" onclick="setLeftLimit(7)">Set Left</button>
-                <button class="btn" onclick="setMidLimit(7)">Set Mid</button>
-                <button class="btn" onclick="setRightLimit(7)">Set Right</button>
-                <button class="btn" onclick="setPos(7, calibData['7'].home)">Go Midpoint</button>
-            </div>
-            <button id="spinTorqueBtn" class="btn btn-danger" style="margin-top: 6px; width: 100%;" onclick="toggleTorque(7)">🔒 Torque ON</button>
         </div>
 
-        <!-- GANTRY (MOTOR 8) -->
-        <div class="card gantry-card">
-            <div class="card-header">
-                <div class="card-title gantry-title">📏 GANTRY LE-SLIDER (MOTOR 8)</div>
-                <div class="tick-display" id="gantryTickDisplay">2048</div>
+        <!-- TAB 2: 🦾 TELEOP CONTROLLERS -->
+        <div id="panelControls" class="tab-panel">
+            <div class="header-bar">
+                <div class="header-title">TELEOPERATION CONTROLLERS</div>
+                <div id="teleopStatus" class="header-readout" style="font-size: 16px; color: #00ff66;">READY</div>
             </div>
 
-            <div class="visualizer-box">
-                <canvas id="gantryCanvas" width="260" height="260"></canvas>
+            <div class="giant-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <button id="leaderBtn" class="btn-action" onclick="toggleMacLeader()">🍎<br>START LEADER</button>
+                <button id="followerBtn" class="btn-action" onclick="togglePi500Follower()">🦾<br>START FOLLOWER</button>
+                <button id="pokeballBtn" class="btn-action btn-red" onclick="togglePokeballTeleop()">🔴<br>CONNECT POKÉBALL</button>
             </div>
-
-            <div class="bounds-info">
-                <span>Left Bound: <input type="number" id="gantryLeftInput" class="tick-input" value="0" onchange="onManualCalibInput(8)"></span>
-                <span>Mid: <input type="number" id="gantryMidInput" class="tick-input" value="2048" onchange="onManualCalibInput(8)"></span>
-                <span>Right Bound: <input type="number" id="gantryRightInput" class="tick-input" value="4095" onchange="onManualCalibInput(8)"></span>
-            </div>
-
-            <!-- Direct Tick Control -->
-            <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 8px;">
-                <span style="font-size: 11px; font-weight: 700; color: var(--gantry-purple);">Direct Tick:</span>
-                <input type="number" id="gantryDirectInput" class="tick-input" style="width: 80px; text-align: left; padding: 4px 8px;" value="2048" min="0" max="4095">
-                <button class="btn btn-success" style="padding: 4px 10px;" onclick="sendDirectTick(8)">Go</button>
-            </div>
-
-            <!-- Incremental Step Nudges -->
-            <div style="margin-bottom: 8px;">
-                <label style="color: var(--accent-red); font-size: 11px; display: flex; align-items: center; gap: 5px;">
-                    <input type="checkbox" id="gantryForceCheck"> ⚠️ IGNORE BOUNDS (Recovery Mode)
-                </label>
-            </div>
-            <div class="btn-grid" style="grid-template-columns: repeat(4, 1fr);">
-                <button class="btn" onclick="nudgePhysical(8, 'left', 200)">← Left Fast</button>
-                <button class="btn" onclick="nudgePhysical(8, 'left', 50)">← Left Slow</button>
-                <button class="btn" onclick="nudgePhysical(8, 'right', 50)">Right Slow →</button>
-                <button class="btn" onclick="nudgePhysical(8, 'right', 200)">Right Fast →</button>
-            </div>
-
-            <div class="control-group">
-                <div class="slider-label-row">
-                    <span>Position: <span id="gantryPctText" style="color: var(--gantry-purple);">50%</span></span>
-                    <span>Slider Target</span>
+        
+            <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
+            <div id="pbTelemetryBox" style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 14px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
+                    <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
                 </div>
-                <input type="range" id="gantrySlider" min="0" max="100" value="50" onchange="onGantrySlider(this.value)" oninput="updateGantryLabel(this.value)">
+                <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 14px;">
+                    <div>Joystick (X,Y): <span id="pbJoyReadout" style="color: #00e5ff; font-weight: 900;">0.00, 0.00</span></div>
+                    <div>Packets: <span id="pbPktReadout" style="color: #00ff66; font-weight: 900;">0</span></div>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; font-size: 12px; font-weight: 900;">
+                    <span id="pbBtnA" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button A (Click)</span>
+                    <span id="pbBtnB" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button B (Top Red)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ⚡ POWER & TOOLS -->
+        <div id="panelPower" class="tab-panel">
+            <div class="header-bar">
+                <div class="header-title">SYSTEM POWER & DIAGNOSTICS</div>
+                <div id="powerStatus" class="header-readout" style="font-size: 16px; color: #00ff66;">PI 500 ONLINE</div>
             </div>
 
-            <div class="btn-grid" style="grid-template-columns: repeat(4, 1fr); margin-top: 20px;">
-                <button class="btn" onclick="setLeftLimit(8)">Set Left</button>
-                <button class="btn" onclick="setMidLimit(8)">Set Mid</button>
-                <button class="btn" onclick="setRightLimit(8)">Set Right</button>
-                <button class="btn" onclick="setPos(8, calibData['8'].home)">Go Midpoint</button>
-                <button id="gantryTorqueBtn" class="btn btn-danger" onclick="toggleTorque(8)">🔒 Torque ON</button>
+            <div class="giant-grid">
+                <button class="btn-action btn-red" onclick="triggerPi500PowerOn()">⚡ WAKE PI 500<br>(WAKE-ON-LAN)</button>
+                <button class="btn-action" style="cursor: default; opacity: 0.8;">🔒 MATRIX LOCKED<br>(0 1 0 1 0 0)</button>
             </div>
         </div>
 
     </div>
-
-    <footer>
-        <div>Server: <strong style="color:#fff">http://localhost:8085</strong></div>
-        <div>Latency: <strong id="latencyVal" style="color:#fff">-- ms</strong></div>
-        <div>Safety Max Torque: <strong style="color:var(--accent-green)">300 / 1000</strong></div>
-    </footer>
 
     <script>
-        const spinCanvas = document.getElementById('spinnerCanvas');
-        const spinCtx = spinCanvas.getContext('2d');
-        const gantryCanvas = document.getElementById('gantryCanvas');
-        const gantryCtx = gantryCanvas.getContext('2d');
+        let currentVerifiedPos = 2503;
+        let isLeaderRunning = false;
+        let isFollowerRunning = false;
+        let isPokeballRunning = false;
 
-        let currentSpinTick = 2048;
-        let currentGantryTick = 2048;
-        let calibData = {
-            "7": { left: 0, right: 4095, home: 2048 },
-            "8": { left: 0, right: 4095, home: 2048 }
-        };
+        function switchTab(tabId) {
+            document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
 
-        function showToast(msg, isInfo = false) {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = 'toast' + (isInfo ? ' toast-info' : '');
-            toast.innerHTML = msg;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        function tickToAngle(tick, c) {
-            if (!c || c.left === undefined || c.right === undefined) return 0;
-            const trueMin = Math.min(c.left, c.right), trueMax = Math.max(c.left, c.right);
-            const ratio = (tick - trueMin) / Math.max(1, (trueMax - trueMin));
-            return (ratio * 360).toFixed(1);
-        }
-
-        function drawSpinner(tick) {
-            const w = spinCanvas.width, h = spinCanvas.height;
-            const cx = w / 2, cy = h / 2, r = 90;
-            const c = calibData["7"];
-            const trueMin = Math.min(c.left, c.right), trueMax = Math.max(c.left, c.right);
-            const ratio = (tick - trueMin) / Math.max(1, (trueMax - trueMin));
-
-            spinCtx.clearRect(0, 0, w, h);
-
-            spinCtx.beginPath();
-            spinCtx.arc(cx, cy, r, 0, Math.PI * 2);
-            spinCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-            spinCtx.lineWidth = 12;
-            spinCtx.stroke();
-
-            const startAngle = -Math.PI / 2;
-            const angle = startAngle + Math.min(1.0, Math.max(0.0, ratio)) * Math.PI * 2;
-            spinCtx.beginPath();
-            spinCtx.arc(cx, cy, r, startAngle, angle);
-            spinCtx.strokeStyle = '#00f2fe';
-            spinCtx.lineWidth = 12;
-            spinCtx.stroke();
-
-            spinCtx.beginPath();
-            spinCtx.moveTo(cx, cy);
-            spinCtx.lineTo(cx + Math.cos(angle) * (r - 10), cy + Math.sin(angle) * (r - 10));
-            spinCtx.strokeStyle = '#ffffff';
-            spinCtx.lineWidth = 4;
-            spinCtx.stroke();
-
-            spinCtx.beginPath();
-            spinCtx.arc(cx, cy, 10, 0, Math.PI * 2);
-            spinCtx.fillStyle = '#00f2fe';
-            spinCtx.fill();
-        }
-
-        function drawGantry(pct) {
-            const w = gantryCanvas.width, h = gantryCanvas.height;
-            const margin = 24, trackY = h / 2, trackLen = w - margin * 2;
-            const ratio = Math.min(1.0, Math.max(0.0, pct / 100.0));
-
-            gantryCtx.clearRect(0, 0, w, h);
-
-            gantryCtx.beginPath();
-            gantryCtx.roundRect(margin, trackY - 8, trackLen, 16, 8);
-            gantryCtx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-            gantryCtx.fill();
-
-            const trolleyX = margin + ratio * trackLen;
-            gantryCtx.beginPath();
-            gantryCtx.roundRect(margin, trackY - 8, Math.max(1, trolleyX - margin), 16, 8);
-            gantryCtx.fillStyle = 'rgba(168, 85, 247, 0.25)';
-            gantryCtx.fill();
-
-            gantryCtx.fillStyle = '#a855f7';
-            gantryCtx.beginPath();
-            gantryCtx.roundRect(trolleyX - 18, trackY - 20, 36, 40, 6);
-            gantryCtx.fill();
-
-            gantryCtx.beginPath();
-            gantryCtx.arc(trolleyX, trackY, 8, 0, Math.PI * 2);
-            gantryCtx.fillStyle = '#ffffff';
-            gantryCtx.fill();
-        }
-
-        function updateDisplays(s7, s8Pos, s8Pct) {
-            currentSpinTick = s7;
-            currentGantryTick = s8Pos;
-
-            document.getElementById('spinTickDisplay').innerText = s7;
-            const c7 = calibData["7"];
-            let r7 = (c7.right !== c7.left) ? (s7 - c7.left) / (c7.right - c7.left) : 0.5;
-            r7 = Math.min(1.0, Math.max(0.0, r7));
-            if (document.activeElement !== document.getElementById('spinnerSlider')) {
-                document.getElementById('spinnerSlider').value = Math.round(r7 * 1000);
+            if (tabId === 'gantry') {
+                document.getElementById('railBtnGantry').classList.add('active');
+                document.getElementById('panelGantry').classList.add('active');
+            } else if (tabId === 'controls') {
+                document.getElementById('railBtnControls').classList.add('active');
+                document.getElementById('panelControls').classList.add('active');
+            } else if (tabId === 'power') {
+                document.getElementById('railBtnPower').classList.add('active');
+                document.getElementById('panelPower').classList.add('active');
             }
-            document.getElementById('spinDegText').innerText = Math.round(r7 * 360) + '°';
-            drawSpinner(s7);
-
-            document.getElementById('gantryTickDisplay').innerText = s8Pos;
-            
-            const c8 = calibData["8"];
-            let gantryPct = 50.0;
-            if (c8.left !== undefined && c8.right !== undefined && c8.left !== c8.right) {
-                gantryPct = ((s8Pos - c8.left) / (c8.right - c8.left)) * 100.0;
-                gantryPct = Math.min(100.0, Math.max(0.0, gantryPct));
-            }
-
-            if (document.activeElement !== document.getElementById('gantrySlider')) {
-                document.getElementById('gantrySlider').value = Math.round(gantryPct);
-            }
-            document.getElementById('gantryPctText').innerText = gantryPct.toFixed(1) + '%';
-            drawGantry(gantryPct);
         }
 
-        function applyCalibUI() {
-            const s7 = calibData["7"];
-            document.getElementById('spinLeftInput').value = s7.left;
-            document.getElementById('spinMidInput').value = s7.home;
-            document.getElementById('spinRightInput').value = s7.right;
-            const spinS = document.getElementById('spinnerSlider');
-            spinS.min = 0; spinS.max = 1000;
-
-            const s8 = calibData["8"];
-            document.getElementById('gantryLeftInput').value = s8.left;
-            document.getElementById('gantryMidInput').value = s8.home;
-            document.getElementById('gantryRightInput').value = s8.right;
-            const gantryS = document.getElementById('gantrySlider');
-            gantryS.min = 0; gantryS.max = 1000;
-        }
-
-        function onManualCalibInput(id) {
-            const sid = String(id);
-            if (id === 7) {
-                calibData[sid].left = parseInt(document.getElementById('spinLeftInput').value) || 0;
-                calibData[sid].home = parseInt(document.getElementById('spinMidInput').value) || 2048;
-                calibData[sid].right = parseInt(document.getElementById('spinRightInput').value) || 4095;
-            } else {
-                calibData[sid].left = parseInt(document.getElementById('gantryLeftInput').value) || 0;
-                calibData[sid].home = parseInt(document.getElementById('gantryMidInput').value) || 2048;
-                calibData[sid].right = parseInt(document.getElementById('gantryRightInput').value) || 4095;
+        function setHeaderAlert(msg) {
+            const el = document.getElementById('sliderValDisplay');
+            if (el) {
+                el.innerText = '⚡ ' + (msg || '12V POWER OFF');
+                el.style.color = '#ff3344';
             }
-            applyCalibUI();
-            showToast(`📌 Updated Servo ${id} Limits: [Left: ${calibData[sid].left}, Mid: ${calibData[sid].home}, Right: ${calibData[sid].right}]`, true);
         }
 
-        async function pollStatus() {
-            const start = performance.now();
-            try {
-                const res = await fetch('/api/status');
-                if (res.ok) {
-                    const data = await res.json();
-                    const badge = document.getElementById('statusBadge');
-                    const badgeText = document.getElementById('statusText');
-                    
-                    if (data.hardware_connected) {
-                        badge.className = 'status-badge';
-                        badgeText.innerText = `🟢 HARDWARE CONNECTED (${data.active_port})`;
+        function pollTelemetry() {
+            fetch('/api/status')
+                .then(r => {
+                    if (!r.ok) {
+                        setHeaderAlert('12V POWER OFF');
+                        return null;
+                    }
+                    return r.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    // 1. Process Telemetry Readout
+                    if (data.closed_loop_verified && data.hardware_telemetry) {
+                        if (data.hardware_telemetry.hardware_connected === false || (data.hardware_telemetry.error && data.hardware_telemetry.error.includes("12V"))) {
+                            setHeaderAlert('12V POWER OFF');
+                        } else if (data.hardware_telemetry.servos && data.hardware_telemetry.servos['8']) {
+                            const m8 = data.hardware_telemetry.servos['8'];
+                            if (m8.pos !== undefined) {
+                                currentVerifiedPos = m8.pos;
+                                document.getElementById('sliderValDisplay').innerText = m8.pos + ' ticks (VERIFIED)';
+                                document.getElementById('sliderValDisplay').style.color = '#00ff66';
+                            }
+                        }
+                    } else if (!data.pi500_online) {
+                        document.getElementById('sliderValDisplay').innerText = 'PI 500 OFFLINE';
+                        document.getElementById('sliderValDisplay').style.color = '#ff3344';
                     } else {
-                        badge.className = 'status-badge offline';
-                        badgeText.innerText = `🔴 HARDWARE DISCONNECTED: ${data.error || 'No serial port response'}`;
+                        setHeaderAlert('12V POWER OFF');
                     }
+
+                    // 2. Process Process States
+                    isFollowerRunning = data.follower && data.follower.running;
+                    isLeaderRunning = data.leader && data.leader.running;
                     
-                    if (data.calibration && !window.calibLoaded) {
-                        calibData = data.calibration;
-                        applyCalibUI();
-                        window.calibLoaded = true;
-                    }
+                    const pkData = data.pokeball || {};
+                    isPokeballRunning = pkData.running;
+                    const isPokeballConnected = pkData.connected;
+                    const pkTelem = pkData.telemetry || (data.hardware_telemetry && data.hardware_telemetry.pokeball);
 
-                    if (data.servos) {
-                        const s7Data = data.servos['7'];
-                        const s8Data = data.servos['8'];
+                    // Parse Pokeball Live Telemetry & Badge
+                    if (pkTelem || pkData) {
+                        const badge = document.getElementById('pbConnectBadge');
+                        const joy = document.getElementById('pbJoyReadout');
+                        const pkt = document.getElementById('pbPktReadout');
+                        const btnA = document.getElementById('pbBtnA');
+                        const btnB = document.getElementById('pbBtnB');
+
+                        if (badge) {
+                            if (isPokeballConnected) {
+                                badge.innerText = '🟢 CONNECTED';
+                                badge.style.background = 'rgba(0,255,102,0.2)';
+                                badge.style.color = '#00ff66';
+                            } else if (isPokeballRunning) {
+                                badge.innerText = '🟡 SEARCHING...';
+                                badge.style.background = 'rgba(255,170,0,0.2)';
+                                badge.style.color = '#ffaa00';
+                            } else {
+                                badge.innerText = '🔴 DISCONNECTED';
+                                badge.style.background = 'rgba(255,51,68,0.2)';
+                                badge.style.color = '#ff3344';
+                            }
+                        }
+
+                        if (joy && pkTelem) joy.innerText = `${(pkTelem.norm_x || 0).toFixed(2)}, ${(pkTelem.norm_y || 0).toFixed(2)}`;
+                        if (pkt && pkTelem) pkt.innerText = pkTelem.packet_count || 0;
                         
-                        const s7Pos = s7Data ? s7Data.pos : currentSpinTick;
-                        const s8Pos = s8Data ? s8Data.pos : currentGantryTick;
-                        const s8Pct = s8Data ? s8Data.pct : 50.0;
-                        updateDisplays(s7Pos, s8Pos, s8Pct);
-
-                        const relBtn = document.getElementById('releaseTorqueBtn');
-                        const isTorqueOff = (s7Data && !s7Data.torque) || (s8Data && !s8Data.torque);
-                        if (isTorqueOff) {
-                            relBtn.classList.add('active-off');
-                            relBtn.innerHTML = '🔓 TORQUE IS OFF (HAND MOVE ACTIVE)';
-                        } else {
-                            relBtn.classList.remove('active-off');
-                            relBtn.innerHTML = '🔓 Release Torque (Hand Move)';
+                        if (btnA && pkTelem) {
+                            btnA.style.background = pkTelem.button_a ? '#00ff66' : '#222';
+                            btnA.style.color = pkTelem.button_a ? '#000' : '#666';
                         }
-
-                        const spinTBtn = document.getElementById('spinTorqueBtn');
-                        if (s7Data && s7Data.torque) {
-                            spinTBtn.innerHTML = '🔒 Torque ON';
-                        } else {
-                            spinTBtn.innerHTML = '🔓 TORQUE OFF';
-                        }
-
-                        const gantryTBtn = document.getElementById('gantryTorqueBtn');
-                        if (s8Data && s8Data.torque) {
-                            gantryTBtn.innerHTML = '🔒 Torque ON';
-                        } else {
-                            gantryTBtn.innerHTML = '🔓 TORQUE OFF';
+                        if (btnB && pkTelem) {
+                            btnB.style.background = pkTelem.button_b ? '#ff3344' : '#222';
+                            btnB.style.color = pkTelem.button_b ? '#fff' : '#666';
                         }
                     }
-                }
-            } catch (e) {
-                const badge = document.getElementById('statusBadge');
-                badge.className = 'status-badge offline';
-                document.getElementById('statusText').innerText = '🔴 WEB SERVER OFFLINE';
-            } finally {
-                document.getElementById('latencyVal').innerText = Math.round(performance.now() - start) + ' ms';
-            }
+
+                    const followerBtn = document.getElementById('followerBtn');
+                    if (followerBtn) {
+                        followerBtn.style.borderColor = isFollowerRunning ? '#00ff66' : '#444444';
+                        followerBtn.style.color = isFollowerRunning ? '#00ff66' : '#ffffff';
+                        followerBtn.innerHTML = isFollowerRunning ? '🦾<br>STOP FOLLOWER' : '🦾<br>START FOLLOWER';
+                    }
+
+                    const pokeballBtn = document.getElementById('pokeballBtn');
+                    if (pokeballBtn) {
+                        if (!isPokeballRunning) {
+                            pokeballBtn.style.borderColor = '#ff3344';
+                            pokeballBtn.style.color = '#ff3344';
+                            pokeballBtn.style.background = 'rgba(255, 51, 68, 0.1)';
+                            pokeballBtn.innerHTML = '🔴<br>START POKÉBALL';
+                        } else if (isPokeballConnected) {
+                            pokeballBtn.style.borderColor = '#00ff66';
+                            pokeballBtn.style.color = '#00ff66';
+                            pokeballBtn.style.background = 'rgba(0, 255, 102, 0.15)';
+                            pokeballBtn.innerHTML = '🟢<br>POKÉBALL CONNECTED<br><span style="font-size:11px; font-weight:normal; color:#aaffcc;">(Click to Stop)</span>';
+                        } else {
+                            pokeballBtn.style.borderColor = '#ffaa00';
+                            pokeballBtn.style.color = '#ffaa00';
+                            pokeballBtn.style.background = 'rgba(255, 170, 0, 0.15)';
+                            pokeballBtn.innerHTML = '🟡<br>SEARCHING BLE...<br><span style="font-size:11px; font-weight:normal; color:#ffddaa;">Press Button to Wake</span>';
+                        }
+                    }
+
+                    const leaderBtn = document.getElementById('leaderBtn');
+                    if (leaderBtn) {
+                        leaderBtn.style.borderColor = isLeaderRunning ? '#00e5ff' : '#444444';
+                        leaderBtn.style.color = isLeaderRunning ? '#00e5ff' : '#ffffff';
+                        leaderBtn.innerHTML = isLeaderRunning ? '🍎<br>STOP LEADER' : '🍎<br>START LEADER';
+                    }
+
+                    // 3. Power status
+                    const pStatus = document.getElementById('powerStatus');
+                    if (pStatus) {
+                        pStatus.innerText = data.pi500_online ? 'PI 500 ONLINE' : 'PI 500 OFFLINE';
+                        pStatus.style.color = data.pi500_online ? '#00ff66' : '#ff3344';
+                    }
+                })
+                .catch(() => setHeaderAlert('12V POWER OFF'));
         }
 
-        function onGantrySlider(val) {
-            const c8 = calibData["8"];
-            if (c8.left !== undefined && c8.right !== undefined) {
-                const target = Math.round(c8.left + (parseFloat(val) / 100.0) * (c8.right - c8.left));
-                setPos(8, target);
-            }
-        }
+        setInterval(pollTelemetry, 600);
+        pollTelemetry();
 
-        async function nudgePhysical(id, direction, amount) {
-            try {
-                const forceCheck = document.getElementById('gantryForceCheck');
-                const isForce = forceCheck ? forceCheck.checked : false;
-                
-                const res = await fetch('/api/nudge_physical?t=' + Date.now(), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, direction: direction, amount: amount, force: isForce, max_torque: 1000, speed: 300 })
-                });
-                const data = await res.json();
-                if (data.status === 'ok') {
-                    showToast(`↔️ Moved ${direction === 'left' ? '← Left' : 'Right →'} by ${amount} ticks (Target ${data.target_acc})`, true);
+        function sendSliderMove(targetVal) {
+            document.getElementById('sliderValDisplay').innerText = targetVal + ' ticks (SENDING...)';
+            document.getElementById('sliderValDisplay').style.color = '#f8d800';
+            fetch('/api/slider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: 8, target: parseInt(targetVal) })
+            })
+            .then(r => {
+                if (!r.ok) {
+                    setHeaderAlert('12V POWER OFF');
                 } else {
-                    showToast(`❌ Move Rejected: ${data.message || 'Server Error'}`, false);
+                    setTimeout(pollTelemetry, 150);
                 }
-            } catch (e) {
-                showToast(`❌ Network Error: ${e.message}`, false);
-                console.error(e);
-            }
+            })
+            .catch(() => setHeaderAlert('12V POWER OFF'));
         }
 
-        function setLeftLimit(id) {
-            const val = (id === 7) ? currentSpinTick : currentGantryTick;
-            calibData[String(id)].left = val;
-            applyCalibUI();
-            showToast(`📌 Set Servo ${id} Left Bound = ${val} ticks`, true);
+        function nudgeSlider(delta) {
+            let targetVal = currentVerifiedPos + delta;
+            targetVal = Math.max(3, Math.min(4800, targetVal));
+            sendSliderMove(targetVal);
         }
 
-        function setMidLimit(id) {
-            const val = (id === 7) ? currentSpinTick : currentGantryTick;
-            calibData[String(id)].home = val;
-            applyCalibUI();
-            showToast(`📌 Set Servo ${id} Midpoint = ${val} ticks`, true);
-        }
-
-        function setRightLimit(id) {
-            const val = (id === 7) ? currentSpinTick : currentGantryTick;
-            calibData[String(id)].right = val;
-            applyCalibUI();
-            showToast(`📌 Set Servo ${id} Right Bound = ${val} ticks`, true);
-        }
-
-        async function saveCalibration() {
-            try {
-                const res = await fetch('/api/calibration', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ calibration: calibData })
-                });
-                if (res.ok) {
-                    showToast("✅ CALIBRATION SAVED TO DISK (calibration_aux.json)!");
+        function syncGantryLeft() {
+            document.getElementById('sliderValDisplay').innerText = 'SYNCING LEFT...';
+            document.getElementById('sliderValDisplay').style.color = '#ff9900';
+            fetch('/api/sync_position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: 8, pos: 3 })
+            })
+            .then(r => {
+                if (!r.ok) {
+                    setHeaderAlert('12V POWER OFF');
+                } else {
+                    setTimeout(pollTelemetry, 250);
                 }
-                toggleCalibTorque(true);
-            } catch (e) {
-                showToast("❌ Failed to save calibration: " + e, false);
-            }
+            })
+            .catch(() => setHeaderAlert('12V POWER OFF'));
         }
 
-        async function toggleCalibTorque(enable) {
-            await toggleTorque(7, enable);
-            await toggleTorque(8, enable);
+        function syncGantryRight() {
+            document.getElementById('sliderValDisplay').innerText = 'SYNCING RIGHT...';
+            document.getElementById('sliderValDisplay').style.color = '#ff9900';
+            fetch('/api/sync_position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: 8, pos: 4800 })
+            })
+            .then(r => {
+                if (!r.ok) {
+                    setHeaderAlert('12V POWER OFF');
+                } else {
+                    setTimeout(pollTelemetry, 250);
+                }
+            })
+            .catch(() => setHeaderAlert('12V POWER OFF'));
         }
 
-        async function setPos(id, target) {
-            try {
-                await fetch('/api/move', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, target: target, max_torque: 1000 })
-                });
-            } catch (e) { console.error(e); }
+        function toggleMacLeader() {
+            const action = isLeaderRunning ? 'stop' : 'start';
+            fetch('/api/mac_leader_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 300));
         }
 
-        async function sendDirectTick(id) {
-            const inputId = (id === 7) ? 'spinDirectInput' : 'gantryDirectInput';
-            const val = parseInt(document.getElementById(inputId).value);
-            if (!isNaN(val)) {
-                await setPos(id, val);
-                showToast(`🎯 Sent Direct Target to Servo ${id}: ${val} ticks`, true);
-            }
+        function togglePi500Follower() {
+            const action = isFollowerRunning ? 'stop' : 'start';
+            fetch('/api/pi500_follower_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 300));
         }
 
-        function nudge(id, delta) {
-            const current = (id === 7) ? currentSpinTick : currentGantryTick;
-            const target = current + delta;
-            setPos(id, target);
+        function togglePokeballTeleop() {
+            const action = isPokeballRunning ? 'stop' : 'start';
+            fetch('/api/pokeball_teleop_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 300));
         }
 
-        function goHome(id) {
-            if (id === 8) {
-                onGantrySlider(50);
-            } else {
-                setPos(id, calibData[String(id)].home);
-            }
+        function triggerPi500PowerOn() {
+            fetch('/api/pi500_poweron', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 500));
         }
-
-        function updateSpinnerLabel(val) {
-            const ratio = parseInt(val) / 1000.0;
-            document.getElementById('spinDegText').innerText = Math.round(ratio * 360) + '°';
-        }
-
-        function updateGantryLabel(val) {
-            document.getElementById('gantryPctText').innerText = val + '%';
-        }
-
-        function onSpinnerSlider(val) {
-            const c7 = calibData["7"];
-            const target = Math.round(c7.left + (parseInt(val) / 1000.0) * (c7.right - c7.left));
-            setPos(7, target);
-        }
-
-        async function toggleTorque(id, enableOverride = null) {
-            try {
-                const body = (enableOverride !== null) 
-                    ? { id: id, toggle: false, enable: enableOverride }
-                    : { id: id, toggle: true };
-                await fetch('/api/torque', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-            } catch (e) { console.error(e); }
-        }
-
-        drawSpinner(2048);
-        drawGantry(2048);
-        setInterval(pollStatus, 200);
-
     </script>
 </body>
 </html>

@@ -36,6 +36,7 @@ class AuxiliaryServoController:
                 logging.info("Auxiliary Servo Controller port closed.")
 
     def _send_and_read(self, pkt: list, expected_res_len: int = 6):
+        target_id = pkt[2]
         checksum = (~sum(pkt[2:])) & 0xFF
         pkt.append(checksum)
         pkt_bytes = bytes(pkt)
@@ -44,7 +45,7 @@ class AuxiliaryServoController:
         self.ser.write(pkt_bytes)
         time.sleep(0.015)
         
-        raw = self.ser.read(self.ser.in_waiting or 32)
+        raw = self.ser.read(self.ser.in_waiting or 64)
         if not raw:
             return None
         
@@ -52,15 +53,16 @@ class AuxiliaryServoController:
         if len(raw) >= len(pkt_bytes) and raw[:len(pkt_bytes)] == pkt_bytes:
             raw = raw[len(pkt_bytes):]
             
-        if len(raw) >= expected_res_len and raw[0] == 0xFF and raw[1] == 0xFF:
-            return raw
+        for i in range(len(raw) - expected_res_len + 1):
+            if raw[i] == 0xFF and raw[i+1] == 0xFF and (raw[i+2] == target_id or target_id == 0xFE):
+                return raw[i:i+expected_res_len]
         return None
 
     def read_pos(self, servo_id: int) -> int:
         """Reads 12-bit position (0..4095) for specified servo ID in single-turn mode."""
         with self.bus_lock:
             pkt = [0xFF, 0xFF, servo_id, 4, 2, 56, 2] # Reg 56 (Present_Position), 2 bytes
-            resp = self._send_and_read(pkt, expected_res_len=8)
+            resp = self._send_and_read(pkt, expected_res_len=7)
             if resp and len(resp) >= 7 and resp[2] == servo_id:
                 val_l = resp[5]
                 val_h = resp[6]
@@ -75,7 +77,7 @@ class AuxiliaryServoController:
         """
         with self.bus_lock:
             pkt = [0xFF, 0xFF, servo_id, 4, 2, 56, 2]
-            resp = self._send_and_read(pkt, expected_res_len=8)
+            resp = self._send_and_read(pkt, expected_res_len=7)
             if resp and len(resp) >= 7 and resp[2] == servo_id:
                 pos = resp[5] | (resp[6] << 8)
                 if pos & 0x8000:
@@ -128,14 +130,17 @@ class AuxiliaryServoController:
 
     def set_position_multiturn(self, servo_id: int, target_ticks: int, speed: int = 1500):
         """
-        Writes 16-bit signed multi-turn target ticks to Reg 42 (Goal Position) and Reg 46 (Goal Speed).
-        Feetech uses standard 16-bit two's complement representation.
+        Writes 16-bit signed multi-turn target ticks using strict Feetech Sign-Magnitude.
+        Sends Reg 42 (Goal Position), Reg 44 (Time=0), and Reg 46 (Goal Speed) in a single packet write.
         """
         target_ticks = max(-32768, min(32767, int(target_ticks)))
+        
+        # Feetech Sign-Magnitude: Bit 15 is the sign bit.
         if target_ticks < 0:
             raw_val = abs(target_ticks) | 0x8000
         else:
             raw_val = target_ticks
+            
         pos_L = raw_val & 0xFF
         pos_H = (raw_val >> 8) & 0xFF
         spd_L = speed & 0xFF

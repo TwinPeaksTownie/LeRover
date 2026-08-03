@@ -12,8 +12,13 @@ from aux_servo_controller import AuxiliaryServoController
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CALIB_FILE = os.path.join(SCRIPT_DIR, "calibration_aux.json")
-STATE_FILE = os.path.join(SCRIPT_DIR, "gantry_state.json")
+ROVER_DIR = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "daemons" else SCRIPT_DIR
+
+CONFIG_DIR = os.path.join(ROVER_DIR, "config") if os.path.exists(os.path.join(ROVER_DIR, "config")) else SCRIPT_DIR
+STATIC_DIR = os.path.join(ROVER_DIR, "static") if os.path.exists(os.path.join(ROVER_DIR, "static")) else os.path.join(SCRIPT_DIR, "static")
+
+CALIB_FILE = os.path.join(CONFIG_DIR, "calibration_aux.json")
+STATE_FILE = os.path.join(CONFIG_DIR, "gantry_state.json")
 
 def ticks_to_degrees_s7(ticks: int) -> float:
     """Converts raw Motor 7 ticks (0-4095) to intuitive degrees where 0 deg is Forward (tick 2048)."""
@@ -37,14 +42,15 @@ class HardwareState:
     def __init__(self):
         self.lock = threading.Lock()
         self.ctrl = None
-        self.raw_positions = {7: 1024, 8: 2503}
-        self.accumulated_positions = {7: 1024, 8: 2503}
+        self.raw_positions = {7: 2048, 8: 4800}
+        self.accumulated_positions = {7: 2048, 8: 4800}
         self.last_raw_positions = {7: None, 8: None}
         self.torque_state = {7: False, 8: False}
         self.is_moving = {7: False, 8: False}
+        self.moving_until = {7: 0.0, 8: 0.0}
         self.calibration = {
-            "7": {"min": 0, "max": 4095, "home": 1024, "home_deg": 0.0},
-            "8": {}
+            "7": {"min": 0, "max": 4095, "home": 2048, "left": 0, "right": 4095},
+            "8": {"min": 3, "max": 4800, "home": 2503, "left": 3, "right": 4800}
         }
         self.hardware_active = False
         self.active_port = "None"
@@ -91,7 +97,7 @@ class HardwareState:
     def save_state(self):
         try:
             with open(STATE_FILE, "w") as f:
-                json.dump({"7": self.accumulated_positions.get(7, 1024), "8": self.accumulated_positions.get(8, 2500)}, f, indent=2)
+                json.dump({"7": self.accumulated_positions.get(7, 2048), "8": self.accumulated_positions.get(8, 4800)}, f, indent=2)
         except Exception as e:
             logging.error(f"Failed to save state: {e}")
 
@@ -104,7 +110,6 @@ class HardwareState:
             return raw_pos
 
         # Servo 7 is a single-turn joint bounded to [-165, 165] deg.
-        # Direct raw assignment without delta accumulation to prevent drift.
         raw_pos = raw_pos % 4096
         self.raw_positions[sid] = raw_pos
         self.accumulated_positions[sid] = raw_pos
@@ -115,11 +120,13 @@ class HardwareState:
             if not self.ctrl or not self.hardware_active:
                 return False, "Hardware offline"
             
-            if self.is_moving.get(sid, False):
+            now = time.time()
+            if self.is_moving.get(sid, False) or now < self.moving_until.get(sid, 0.0):
                 logging.warning(f"Rejected move for Servo {sid}: Motor is currently executing a move.")
                 return False, "Motor is currently executing a move. Request ignored."
 
             self.is_moving[sid] = True
+            move_dur = 0.5
             try:
                 # Auto-enable torque state on move command
                 self.torque_state[sid] = True
@@ -129,27 +136,49 @@ class HardwareState:
                     deg = ticks_to_degrees_s7(target_acc)
                     clamped_deg = max(-165.0, min(165.0, deg))
                     target_acc = degrees_to_ticks_s7(clamped_deg)
+                    curr = self.accumulated_positions.get(7, 2048)
+                    delta_ticks = abs(target_acc - curr)
+                    move_dur = max(0.5, (delta_ticks / max(100, speed)) + 0.3)
                     self.ctrl.write_goal_raw(7, target_acc, speed=speed)
                     self.accumulated_positions[7] = target_acc
                     self.raw_positions[7] = target_acc
                 elif sid == 8:
-                    # Hardcoded physical safety bounds [3, 4800] - Absolutely no moves permitted beyond 4800
-                    target_acc = max(3, min(4800, int(target_acc)))
-                    curr = self.accumulated_positions.get(8, 2503)
+                    # Dynamic calibration bounds with hard physical safety limits [3, 4800]
+                    c8 = self.calibration.get("8", {})
+                    left_b = c8.get("left", 3)
+                    right_b = c8.get("right", 4800)
+                    true_min = max(3, min(left_b, right_b))
+                    true_max = min(4800, max(left_b, right_b))
+                    target_acc = max(true_min, min(true_max, int(target_acc)))
+                    
+                    curr = self.accumulated_positions.get(8, 4800)
                     delta = target_acc - curr
-                    self.ctrl.set_position_multiturn(8, delta, speed=speed)
+                    if delta == 0:
+                        return True, "Already at target"
+                        
+                    res = self.ctrl.set_position_multiturn(8, delta, speed=speed)
+                    if res is None:
+                        return False, "Hardware serial write failed (No ACK from Servo 8)"
+                    
+                    move_dur = max(0.5, (abs(delta) / max(100, speed)) + 0.3)
                     self.accumulated_positions[8] = target_acc
                     self.raw_positions[8] = target_acc
+                    self.save_state()
 
                 if sid == 7:
                     final_raw = self.ctrl.read_pos(sid)
                     if final_raw is not None:
                         self.update_raw_pos(sid, final_raw)
                 
+                self.moving_until[sid] = time.time() + move_dur
                 self.save_state()
                 return True, "OK"
             finally:
-                self.is_moving[sid] = False
+                def _unlock(s, duration):
+                    time.sleep(duration)
+                    with self.lock:
+                        self.is_moving[s] = False
+                threading.Thread(target=_unlock, args=(sid, move_dur), daemon=True).start()
 
     def start_background_polling(self):
         def _poll_worker():
@@ -159,23 +188,14 @@ class HardwareState:
                     continue
                 with self.lock:
                     if self.ctrl:
-                        for sid in [7, 8]:
-                            # Suspend polling if motor is actively executing a move command to prevent bus contention
-                            if self.is_moving.get(sid, False):
-                                continue
-                            try:
-                                if sid == 8:
-                                    # Skip polling Reg 56 for Servo 8 (Mode 3).
-                                    continue
-                                else:
-                                    pos = self.ctrl.read_pos(sid)
-                                
-                                if pos is not None:
-                                    self.update_raw_pos(sid, pos)
-                                else:
-                                    logging.debug(f"Bus collision: None returned for servo {sid}. Keeping last known pos.")
-                            except Exception as e:
-                                logging.debug(f"Bus collision on servo {sid}: {e}. Keeping last known pos.")
+                        if self.is_moving.get(7, False):
+                            continue
+                        try:
+                            pos = self.ctrl.read_pos(7)
+                            if pos is not None:
+                                self.update_raw_pos(7, pos)
+                        except Exception:
+                            pass
 
         t = threading.Thread(target=_poll_worker, daemon=True)
         t.start()
@@ -208,13 +228,32 @@ class WebRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path in ["/", "/index.html"]:
-            static_file = os.path.join(os.path.dirname(__file__), "static", "gantry_ui.html")
+            static_file = os.path.join(STATIC_DIR, "gantry_ui.html")
             self._send_file(static_file, "text/html")
         elif parsed.path == "/api/status":
+            # Read live pokeball telemetry from /tmp/pokeball_telemetry.json
+            pokeball_data = {
+                "connected": False,
+                "status": "OFFLINE",
+                "mac": "58:2F:40:8D:50:71",
+                "last_seen": 0,
+                "packet_count": 0,
+                "norm_x": 0.0,
+                "norm_y": 0.0,
+                "button_a": False,
+                "button_b": False
+            }
+            if os.path.exists("/tmp/pokeball_telemetry.json"):
+                try:
+                    with open("/tmp/pokeball_telemetry.json", "r") as pf:
+                        pokeball_data = json.load(pf)
+                except Exception:
+                    pass
+
             with hw.lock:
                 left_b = hw.calibration.get("8", {}).get("left")
                 right_b = hw.calibration.get("8", {}).get("right")
-                curr_acc = hw.accumulated_positions.get(8, 2503)
+                curr_acc = hw.accumulated_positions.get(8, 4800)
                 
                 if left_b is not None and right_b is not None and left_b != right_b:
                     span = max(1, abs(right_b - left_b))
@@ -231,23 +270,30 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     "error": hw.error_msg,
                     "servos": {
                         "7": {
-                            "pos": hw.accumulated_positions.get(7, 1024),
-                            "raw": hw.raw_positions.get(7, 1024),
-                            "angle": ticks_to_degrees_s7(hw.accumulated_positions.get(7, 1024)),
+                            "pos": hw.accumulated_positions.get(7, 2048),
+                            "raw": hw.raw_positions.get(7, 2048),
+                            "angle": ticks_to_degrees_s7(hw.accumulated_positions.get(7, 2048)),
                             "torque": hw.torque_state.get(7, False),
                             "is_moving": hw.is_moving.get(7, False)
                         },
                         "8": {
-                            "pos": hw.accumulated_positions.get(8, 2503),
-                            "raw": hw.raw_positions.get(8, 2503),
+                            "pos": hw.accumulated_positions.get(8, 4800),
+                            "raw": hw.raw_positions.get(8, 4800),
                             "pct": pct,
                             "torque": hw.torque_state.get(8, False),
                             "is_moving": hw.is_moving.get(8, False)
                         }
                     },
+                    "pokeball": pokeball_data,
                     "calibration": hw.calibration
                 }
             self._send_json(resp)
+        elif parsed.path == "/api/pokeball_reconnect":
+            try:
+                os.system("echo 'raspberry' | sudo -S systemctl restart pokeball_teleop.service &")
+                self._send_json({"status": "ok", "message": "Poké Ball service restart triggered"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         else:
             self.send_response(404)
             self.end_headers()
@@ -259,11 +305,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
 
         if parsed.path == "/api/move":
-            sid = int(body.get("id", 7))
-            if "angle" in body and sid == 7:
+            if "id" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'id' parameter"}, 400)
+            sid = int(body["id"])
+            if sid not in [7, 8]:
+                return self._send_json({"status": "error", "message": "Invalid servo 'id'. Must be 7 or 8"}, 400)
+
+            if sid == 7 and "angle" in body:
                 target_acc = degrees_to_ticks_s7(float(body["angle"]))
+            elif "target" in body:
+                target_acc = int(body["target"])
             else:
-                target_acc = int(body.get("target", 1024))
+                return self._send_json({"status": "error", "message": "Missing required 'target' or 'angle' parameter"}, 400)
+
             max_torque_req = 800 if sid == 7 else 500
             ok, msg = hw.move_target(sid, target_acc, step_size=50, speed=400, max_t=max_torque_req)
             if not ok:
@@ -272,8 +326,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"status": "ok", "id": sid, "target_acc": target_acc, "angle": ticks_to_degrees_s7(target_acc) if sid == 7 else None})
 
         elif parsed.path == "/api/nudge_physical":
-            sid = int(body.get("id", 8))
-            direction = str(body.get("direction", "right")).lower()
+            if "id" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'id' parameter"}, 400)
+            if "direction" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'direction' parameter"}, 400)
+
+            sid = int(body["id"])
+            if sid not in [7, 8]:
+                return self._send_json({"status": "error", "message": "Invalid servo 'id'. Must be 7 or 8"}, 400)
+
+            direction = str(body["direction"]).lower()
+            if direction not in ["left", "right"]:
+                return self._send_json({"status": "error", "message": "Invalid direction. Must be 'left' or 'right'"}, 400)
+
             amount = abs(int(body.get("amount", 100)))
 
             with hw.lock:
@@ -288,7 +353,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 else:
                     delta = -amount if is_inverted else amount
 
-                curr_acc = hw.accumulated_positions.get(sid, 2503 if sid == 8 else 1024)
+                if sid not in hw.accumulated_positions:
+                    return self._send_json({"status": "error", "message": f"Servo {sid} position uninitialized"}, 400)
+
+                curr_acc = hw.accumulated_positions[sid]
                 target_acc = curr_acc + delta
 
                 if left_b is not None and right_b is not None and not body.get("force", False):
@@ -296,7 +364,6 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     true_max = max(left_b, right_b)
                     target_acc = max(true_min, min(true_max, target_acc))
 
-            # Move using appropriate hardware mechanism with 50% torque cap for over-current protection
             ok, msg = hw.move_target(sid, target_acc, step_size=50, speed=400, max_t=500)
             if not ok:
                 self._send_json({"status": "error", "message": msg}, 400)
@@ -305,7 +372,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"status": "ok", "id": sid, "direction": direction, "target_acc": target_acc, "current_acc": hw.accumulated_positions.get(sid)})
 
         elif parsed.path == "/api/torque":
-            sid = int(body.get("id", 7))
+            if "id" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'id' parameter"}, 400)
+            sid = int(body["id"])
+            if sid not in [7, 8]:
+                return self._send_json({"status": "error", "message": "Invalid servo 'id'. Must be 7 or 8"}, 400)
+
             toggle = body.get("toggle", True)
             with hw.lock:
                 new_state = not hw.torque_state[sid] if toggle else bool(body.get("enable", False))
@@ -315,8 +387,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "id": sid, "torque": new_state})
 
         elif parsed.path == "/api/sync_position":
-            sid = int(body.get("id", 8))
-            pos = int(body.get("pos", -3))
+            if "id" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'id' parameter"}, 400)
+            if "pos" not in body:
+                return self._send_json({"status": "error", "message": "Missing required 'pos' parameter"}, 400)
+            sid = int(body["id"])
+            pos = int(body["pos"])
             with hw.lock:
                 hw.accumulated_positions[sid] = pos
                 hw.raw_positions[sid] = pos
@@ -340,18 +416,14 @@ def connect_hardware():
         hw.hardware_active = True
         hw.active_port = '/dev/ttyACM0'
         
-        # Force Torque OFF on startup for safety
         ctrl.set_torque(7, False)
         ctrl.set_torque(8, False)
         hw.torque_state[7] = False
         hw.torque_state[8] = False
         
-        # Configure Servo 8 for Mode 3 (Multi-Turn)
         ctrl.setup_multi_turn_mode(8)
         
-        # Read initial pos without writing EEPROM
         pos7 = ctrl.read_pos(7)
-        pos8 = ctrl.get_position_multiturn(8)
         if pos7 is not None: hw.update_raw_pos(7, pos7)
         
         hw.start_background_polling()
