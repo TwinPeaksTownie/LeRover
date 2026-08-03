@@ -19,16 +19,9 @@ import os
 
 from bleak import BleakClient
 
-try:
-    import zmq
-except ImportError:
-    zmq = None
-
 MAC_ADDRESS = "58:2F:40:8D:50:71"
 INPUT_UUID = "6675e16c-f36d-4567-bb55-6b51e27a23e6"
 API_URL = "http://127.0.0.1:8085"
-ZMQ_ROVER_HOST = "127.0.0.1"
-ZMQ_ROVER_PORT = 5558
 TELEMETRY_FILE = "/tmp/pokeball_telemetry.json"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -64,19 +57,10 @@ def play_chime(kind="connect"):
 
 
 class PokeballTeleopDriver:
-    def __init__(self, mac_address=MAC_ADDRESS, api_url=API_URL, zmq_host=ZMQ_ROVER_HOST, zmq_port=ZMQ_ROVER_PORT):
+    def __init__(self, mac_address=MAC_ADDRESS, api_url=API_URL):
         self.mac_address = mac_address
         self.api_url = api_url
         self.client = None
-
-        # ZMQ Drive Socket Init
-        self.zmq_host = zmq_host
-        self.zmq_port = zmq_port
-        self.zmq_ctx = zmq.Context() if zmq else None
-        self.zmq_sock = None
-        self.zmq_lock = threading.Lock()
-        self.last_drive_send_time = 0.0
-        self._init_zmq_socket()
 
         # Pedestal Presets
         self.preset_angles = [-165.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 165.0]
@@ -111,47 +95,6 @@ class PokeballTeleopDriver:
             os.replace(tmp_path, TELEMETRY_FILE)
         except Exception as e:
             logging.debug("Telemetry write error: %s", e)
-
-    def _init_zmq_socket(self):
-        try:
-            if self.zmq_sock:
-                try:
-                    self.zmq_sock.close()
-                except Exception:
-                    pass
-            if self.zmq_ctx:
-                self.zmq_sock = self.zmq_ctx.socket(zmq.REQ)
-                self.zmq_sock.setsockopt(zmq.RCVTIMEO, 150)
-                self.zmq_sock.setsockopt(zmq.LINGER, 0)
-                self.zmq_sock.connect(f"tcp://{self.zmq_host}:{self.zmq_port}")
-                logging.info("Connected ZMQ drive client to tcp://%s:%d", self.zmq_host, self.zmq_port)
-        except Exception as e:
-            logging.warning("Failed to connect ZMQ socket: %s", e)
-            self.zmq_sock = None
-
-    def send_drive_command(self, x, y):
-        if not self.zmq_sock:
-            return
-        now = time.time()
-        if now - self.last_drive_send_time < 0.05:
-            return
-        self.last_drive_send_time = now
-
-        def _work():
-            with self.zmq_lock:
-                try:
-                    if self.zmq_sock:
-                        self.zmq_sock.send_json({"x": x, "y": y, "source": "pokeball"})
-                        _ = self.zmq_sock.recv_json()
-                except Exception:
-                    try:
-                        if self.zmq_sock:
-                            self.zmq_sock.close()
-                    except Exception:
-                        pass
-                    self._init_zmq_socket()
-
-        threading.Thread(target=_work, daemon=True).start()
 
     def _send_aux_request(self, endpoint, payload, lock_duration=2.2):
         now = time.time()
