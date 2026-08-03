@@ -140,13 +140,6 @@ class PokeballTeleopDriver:
         btn_b = bool(buttons & 0x01)
         btn_a = bool(buttons & 0x02)
 
-        # Deadzone filter
-        filt_x = 0.0 if abs(norm_x) < 0.08 else norm_x
-        filt_y = 0.0 if abs(norm_y) < 0.08 else norm_y
-            
-        # Stream drive commands over ZMQ to rover_daemon
-        self.send_drive_command(filt_x, filt_y)
-
         # Update Live Telemetry
         self.telemetry.update({
             "connected": True,
