@@ -201,11 +201,13 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/pi500_follower_toggle":
             action = req_data.get("action", "toggle")
             if action == "start":
+                subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", PI500_HOST, "sudo systemctl stop aux_daemon || pkill -f aux_daemon.py || true"])
                 subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", PI500_HOST, "pkill -f sewer_daemon.py || true"])
                 time.sleep(0.3)
                 subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", PI500_HOST, "nohup /home/user/so101/.venv/bin/python /home/user/sewer_daemon.py > /tmp/follower.log 2>&1 &"])
             elif action == "stop":
                 subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", PI500_HOST, "pkill -f sewer_daemon.py"])
+                subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", PI500_HOST, "sudo systemctl start aux_daemon || true"])
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
