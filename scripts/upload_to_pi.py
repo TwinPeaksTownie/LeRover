@@ -19,11 +19,11 @@ def deploy_pi4b():
         stdin, stdout, stderr = ssh.exec_command("cd /home/carson/aux_servo_interface && git fetch origin && git reset --hard origin/main")
         print("Git Pull STDOUT:", stdout.read().decode())
 
-        # Restart server.py
-        ssh.exec_command("fuser -k 8082/tcp || pkill -9 -f server.py || true")
+        # Restart touchscreen_ui.py
+        ssh.exec_command("fuser -k 8082/tcp || pkill -9 -f touchscreen_ui.py || true")
         time.sleep(1.0)
-        ssh.exec_command("nohup python3 /home/carson/aux_servo_interface/server.py > /home/carson/aux_servo_interface/server.log 2>&1 &")
-        print("Restarted server.py on Pi 4B.")
+        ssh.exec_command("nohup python3 /home/carson/aux_servo_interface/touchscreen_ui.py > /home/carson/aux_servo_interface/touchscreen_ui.log 2>&1 &")
+        print("Restarted touchscreen_ui.py on Pi 4B.")
 
         ssh.close()
     except Exception as e:
