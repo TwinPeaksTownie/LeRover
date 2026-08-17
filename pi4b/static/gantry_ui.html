@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Overlander 4 Touch Controller</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000000;
+            color: #ffffff;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            padding: 0;
+        }
+
+        /* Left Navigation Rail (120px Wide, 480px Full Height) */
+        .left-rail {
+            width: 130px;
+            height: 100vh;
+            background: #0d0d0d;
+            border-right: 3px solid #222222;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 6px;
+            flex-shrink: 0;
+        }
+
+        .rail-btn {
+            flex: 1;
+            background: #181818;
+            border: 2px solid #333333;
+            color: #888888;
+            font-size: 15px;
+            font-weight: 900;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 4px;
+        }
+
+        .rail-btn.active {
+            background: #00e5ff;
+            color: #000000;
+            border-color: #00e5ff;
+        }
+
+        /* Main Workspace (670px Wide x 480px Tall) */
+        .workspace {
+            flex-grow: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .tab-panel {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tab-panel.active {
+            display: flex;
+        }
+
+        /* Compact Telemetry Bar (No redundant title labels, 32px height) */
+        .telemetry-bar {
+            height: 32px;
+            background: #111111;
+            border: 1.5px solid #252525;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
+            flex-shrink: 0;
+        }
+
+        .header-readout {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 21px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+
+        /* Massive Touch Action Grid */
+        .giant-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex-grow: 1;
+        }
+
+        .btn-action {
+            background: #181818;
+            border: 3px solid #444444;
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 900;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 12px;
+            line-height: 1.2;
+            min-height: 85px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-action:active, .btn-action.touch-active {
+            background: #00e5ff;
+            color: #000000;
+            border-color: #00e5ff;
+            transform: scale(0.97);
+        }
+
+        .btn-orange {
+            border-color: #ff9900;
+            color: #ffffff;
+            background: #ff9900;
+            text-shadow: 0px 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .btn-orange:active {
+            background: #181818;
+            color: #ff9900;
+            border-color: #ff9900;
+            text-shadow: none;
+        }
+
+        .btn-red {
+            border-color: #ff3344;
+            color: #ffffff;
+            background: #ff3344;
+            text-shadow: 0px 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .btn-red:active {
+            background: #220000;
+            color: #ff3344;
+            border-color: #ff3344;
+            text-shadow: none;
+        }
+
+        .btn-cyan {
+            border-color: #00e5ff;
+            color: #000000;
+            background: #00e5ff;
+            text-shadow: none;
+        }
+
+        .btn-cyan:active {
+            background: #181818;
+            color: #00e5ff;
+            border-color: #00e5ff;
+            text-shadow: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Left Vertical Navigation Rail (130px Wide x 480px Tall) -->
+    <div class="left-rail">
+        <button id="railBtnGantry" class="rail-btn" onclick="switchTab('gantry')">
+            <span style="font-size: 24px;">⚙️</span>
+            <span>leSpiner</span>
+        </button>
+
+        <button id="railBtnControls" class="rail-btn active" onclick="switchTab('controls')">
+            <span style="font-size: 24px;">🦾</span>
+            <span>CONTROLLERS</span>
+        </button>
+
+        <button id="railBtnPower" class="rail-btn" onclick="switchTab('power')">
+            <span style="font-size: 24px;">⚡</span>
+            <span>BACKEND</span>
+        </button>
+    </div>
+
+    <!-- Main Unobstructed Workspace -->
+    <div class="workspace">
+
+        <!-- TAB 1: ⚙️ GANTRY & PEDESTAL -->
+        <div id="panelGantry" class="tab-panel">
+            <div class="telemetry-bar">
+                <div id="sliderValDisplay" class="header-readout"><span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span></div>
+            </div>
+
+            <div class="giant-grid" style="grid-template-rows: repeat(3, 1fr);">
+                <!-- Top Row: Orange Buttons for Pedestal Motor 7 (+/- 45 Deg Rotation) -->
+                <button class="btn-action btn-orange" onclick="rotatePedestal('left')">↺ ROTATE PEDESTAL<br>LEFT (-45°)</button>
+                <button class="btn-action btn-orange" onclick="rotatePedestal('right')">ROTATE PEDESTAL ↻<br>(+45°)</button>
+
+                <!-- Middle Row: Step Moves for LeSlide Gantry Motor 8 (500 Ticks) -->
+                <button class="btn-action btn-cyan" onclick="nudgeSlider(-500)">◀ STEP LEFT<br>(-500 TICKS)</button>
+                <button class="btn-action btn-cyan" onclick="nudgeSlider(500)">STEP RIGHT ▶<br>(+500 TICKS)</button>
+
+                <!-- Bottom Row: Max Bounds for LeSlide Gantry Motor 8 -->
+                <button class="btn-action btn-cyan" onclick="moveGantryMaxLeft()">⏪ MAX LEFT<br>(3 TICKS)</button>
+                <button class="btn-action btn-cyan" onclick="moveGantryMaxRight()">MAX RIGHT ⏩<br>(4800 TICKS)</button>
+            </div>
+        </div>
+
+        <!-- TAB 2: 🦾 TELEOP CONTROLLERS -->
+        <div id="panelControls" class="tab-panel active">
+            <div class="telemetry-bar">
+                <div id="teleopStatus" class="header-readout" style="color: #00ff66;">DAEMON RUNNING</div>
+            </div>
+
+            <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;">
+                <!-- Top Left: Leader -->
+                <button id="leaderBtn" class="btn-action" onclick="toggleMacLeader()">🍎<br>START LEADER</button>
+                <!-- Top Right: Calibration (Servo Studio) -->
+                <button id="studioBtn" class="btn-action" onclick="toggleServoStudio()">🔧<br>START CALIBRATION</button>
+                <!-- Bottom Left: Teleop -->
+                <button id="followerBtn" class="btn-action" onclick="togglePi500Follower()">🦾<br>START TELEOP</button>
+                <!-- Bottom Right: Pokéball -->
+                <button id="pokeballBtn" class="btn-action" onclick="togglePokeballTeleop()">🔴<br>START POKÉBALL</button>
+            </div>
+        
+            <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
+            <div id="pbTelemetryBox" style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 14px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
+                    <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 14px;">
+                    <div>Direction: <span id="pbDirReadout" style="color: #ffaa00; font-weight: 900;">CENTER</span></div>
+                    <div>Packets: <span id="pbPktReadout" style="color: #00ff66; font-weight: 900;">0</span></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 13px; color: #aaa;">
+                    <div>Raw Bytes (X, Y): <span id="pbJoyReadout" style="color: #00e5ff; font-weight: 900;">x_val=7, y_val=118</span></div>
+                </div>
+                <div style="font-family: monospace; font-size: 12px; background: #000; padding: 6px 10px; border-radius: 6px; border: 1px solid #222;">
+                    Raw Packet Hex: <span id="pbRawHex" style="color: #ff00ff; font-weight: 700;">--</span>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; font-size: 12px; font-weight: 900;">
+                    <span id="pbBtnA" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button A (Top Red)</span>
+                    <span id="pbBtnB" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button B (Stick Click)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ⚡ POWER & TOOLS -->
+        <div id="panelPower" class="tab-panel">
+            <div class="telemetry-bar">
+                <div id="powerStatus" class="header-readout" style="color: #00ff66;">PI 500 ONLINE</div>
+            </div>
+
+            <div class="giant-grid">
+                <button class="btn-action btn-red" onclick="triggerPi500PowerOn()">⚡ WAKE PI 500<br>(WAKE-ON-LAN)</button>
+                <button id="masterDaemonBtn" class="btn-action btn-cyan" onclick="triggerPi500MasterDaemonRestart()">🤖 RESTART MASTER DAEMON<br>(PI 500 PORT 8085)</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentVerifiedPos = 2503;
+        let isLeaderRunning = false;
+        let isFollowerRunning = false;
+        let isPokeballRunning = false;
+        let isStudioRunning = false;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+            if (tabId === 'gantry') {
+                document.getElementById('railBtnGantry').classList.add('active');
+                document.getElementById('panelGantry').classList.add('active');
+            } else if (tabId === 'controls') {
+                document.getElementById('railBtnControls').classList.add('active');
+                document.getElementById('panelControls').classList.add('active');
+            } else if (tabId === 'power') {
+                document.getElementById('railBtnPower').classList.add('active');
+                document.getElementById('panelPower').classList.add('active');
+            }
+        }
+
+        function setHeaderAlert(msg) {
+            const el = document.getElementById('sliderValDisplay');
+            if (el) {
+                el.innerHTML = '<span style="color:#ff3344; font-weight:900;">⚡ ' + (msg || '12V POWER OFF') + '</span>';
+            }
+        }
+
+        function renderButtonStates() {
+            const followerBtn = document.getElementById('followerBtn');
+            if (followerBtn) {
+                followerBtn.style.borderColor = isFollowerRunning ? '#00ff66' : '#444444';
+                followerBtn.style.color = isFollowerRunning ? '#00ff66' : '#ffffff';
+                followerBtn.innerHTML = isFollowerRunning ? '🦾<br>STOP TELEOP' : '🦾<br>START TELEOP';
+            }
+
+            const leaderBtn = document.getElementById('leaderBtn');
+            if (leaderBtn) {
+                leaderBtn.style.borderColor = isLeaderRunning ? '#00e5ff' : '#444444';
+                leaderBtn.style.color = isLeaderRunning ? '#00e5ff' : '#ffffff';
+                leaderBtn.innerHTML = isLeaderRunning ? '🍎<br>STOP LEADER' : '🍎<br>START LEADER';
+            }
+
+            const studioBtn = document.getElementById('studioBtn');
+            if (studioBtn) {
+                studioBtn.style.borderColor = isStudioRunning ? '#ffaa00' : '#444444';
+                studioBtn.style.color = isStudioRunning ? '#ffaa00' : '#ffffff';
+                studioBtn.innerHTML = isStudioRunning ? '🔧<br>STOP CALIBRATION' : '🔧<br>START CALIBRATION';
+            }
+        }
+
+        function pollTelemetry() {
+            fetch('/api/status?t=' + Date.now(), { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+                .then(r => {
+                    if (!r.ok) {
+                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
+                        document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
+                        document.getElementById('teleopStatus').style.color = '#ff3344';
+                        isFollowerRunning = false;
+                        isLeaderRunning = false;
+                        isPokeballRunning = false;
+                        renderButtonStates();
+                        return null;
+                    }
+                    return r.json();
+                })
+                .then(data => {
+                    if (!data) {
+                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
+                        document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
+                        document.getElementById('teleopStatus').style.color = '#ff3344';
+                        isFollowerRunning = false;
+                        isLeaderRunning = false;
+                        isPokeballRunning = false;
+                        renderButtonStates();
+                        return;
+                    }
+                    // 1. Motor Position Readout (Tab 1)
+                    if (data.closed_loop_verified && data.hardware_telemetry && data.hardware_telemetry.servos) {
+                        const servos = data.hardware_telemetry.servos;
+                        const m7 = servos['7'];
+                        const m8 = servos['8'];
+                        let readouts = [];
+                        if (m7 && m7.angle !== undefined) {
+                            readouts.push('<span style="color:#ff9900;">Pedestal: ' + m7.angle + '°</span>');
+                        } else {
+                            readouts.push('<span style="color:#ff9900;">Pedestal: --°</span>');
+                        }
+                        if (m8 && m8.pos !== undefined) {
+                            currentVerifiedPos = m8.pos;
+                            readouts.push('<span style="color:#00e5ff;">Gantry: ' + m8.pos + ' ticks</span>');
+                        } else {
+                            readouts.push('<span style="color:#00e5ff;">Gantry: --</span>');
+                        }
+                        document.getElementById('sliderValDisplay').innerHTML = readouts.join(' <span style="color:#666;">|</span> ');
+                    } else {
+                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
+                    }
+
+                    const ht = data.hardware_telemetry || {};
+                    const ams = ht.app_manager_status || {};
+                    let activeAppName = ht.current_app || ams.current_app;
+                    if (!activeAppName && Array.isArray(ht.apps)) {
+                        const runningAppObj = ht.apps.find(a => a.is_running);
+                        if (runningAppObj) activeAppName = runningAppObj.name;
+                    }
+                    const currentApp = activeAppName;
+                    const telemLeader = ht.leader;
+                    const telemFollower = ht.follower;
+                    
+                    isStudioRunning = (currentApp === 'servo_studio_app');
+                    isFollowerRunning = (currentApp === 'teleop_app') || (data.daemon_running && !!((data.follower && data.follower.running) || (telemFollower && telemFollower.running)));
+                    isLeaderRunning = !!((data.leader && data.leader.running) || (telemLeader && telemLeader.running));
+                    
+                    const teleopEl = document.getElementById('teleopStatus');
+                    if (teleopEl) {
+                        if (isStudioRunning) {
+                            teleopEl.innerText = 'CALIBRATION ACTIVE';
+                            teleopEl.style.color = '#ffaa00';
+                        } else if (isFollowerRunning) {
+                            teleopEl.innerText = 'TELEOP ACTIVE';
+                            teleopEl.style.color = '#00ff66';
+                        } else if (data.daemon_running) {
+                            teleopEl.innerText = 'DAEMON READY';
+                            teleopEl.style.color = '#00e5ff';
+                        } else {
+                            teleopEl.innerText = 'DAEMON OFF';
+                            teleopEl.style.color = '#ff3344';
+                        }
+                    }
+
+                    const pkData = data.pokeball || {};
+                    isPokeballRunning = (currentApp === 'pokeball_teleop_app') || !!pkData.running || !!(ht.pokeball && ht.pokeball.running);
+                    const isPokeballConnected = !!pkData.connected;
+                    const pkTelem = pkData.telemetry || (data.hardware_telemetry && data.hardware_telemetry.pokeball);
+
+                    // Parse Pokeball Live Telemetry & Badge
+                    if (pkTelem || pkData) {
+                        const badge = document.getElementById('pbConnectBadge');
+                        const joy = document.getElementById('pbJoyReadout');
+                        const dir = document.getElementById('pbDirReadout');
+                        const rawHex = document.getElementById('pbRawHex');
+                        const pkt = document.getElementById('pbPktReadout');
+                        const btnA = document.getElementById('pbBtnA');
+                        const btnB = document.getElementById('pbBtnB');
+
+                        const activeTelem = pkTelem || pkData;
+
+                        if (badge) {
+                            if (isPokeballConnected) {
+                                badge.innerText = '🟢 CONNECTED';
+                                badge.style.background = 'rgba(0,255,102,0.2)';
+                                badge.style.color = '#00ff66';
+                            } else if (isPokeballRunning) {
+                                badge.innerText = '🔴 SEARCHING (NOT CONNECTED)';
+                                badge.style.background = 'rgba(255,51,68,0.2)';
+                                badge.style.color = '#ff3344';
+                            } else {
+                                badge.innerText = '⚪ DISCONNECTED';
+                                badge.style.background = '#222';
+                                badge.style.color = '#888';
+                            }
+                        }
+
+                        if (dir && activeTelem) dir.innerText = (activeTelem.x_direction || 'CENTER').toUpperCase();
+                        if (joy && activeTelem) joy.innerText = `x_val=${activeTelem.x_val !== undefined ? activeTelem.x_val : 7}, y_val=${activeTelem.y_val !== undefined ? activeTelem.y_val : 118}`;
+                        if (rawHex && activeTelem) rawHex.innerText = activeTelem.raw_hex || '--';
+                        if (pkt && activeTelem) pkt.innerText = activeTelem.packet_count || 0;
+                        
+                        if (btnA && activeTelem) {
+                            const isTopActive = activeTelem.button_top || activeTelem.button_a;
+                            btnA.style.background = isTopActive ? '#ff3344' : '#222';
+                            btnA.style.color = isTopActive ? '#fff' : '#666';
+                        }
+                        if (btnB && activeTelem) {
+                            const isStickActive = activeTelem.button_stick || activeTelem.button_b;
+                            btnB.style.background = isStickActive ? '#00ff66' : '#222';
+                            btnB.style.color = isStickActive ? '#000' : '#666';
+                        }
+                    }
+
+                    renderButtonStates();
+
+                    const pokeballBtn = document.getElementById('pokeballBtn');
+                    if (pokeballBtn) {
+                        if (!isPokeballRunning) {
+                            pokeballBtn.style.borderColor = '#444444';
+                            pokeballBtn.style.color = '#ffffff';
+                            pokeballBtn.style.background = '#181818';
+                            pokeballBtn.innerHTML = '🔴<br>START POKÉBALL';
+                        } else if (isPokeballConnected) {
+                            pokeballBtn.style.borderColor = '#00ff66';
+                            pokeballBtn.style.color = '#00ff66';
+                            pokeballBtn.style.background = 'rgba(0, 255, 102, 0.15)';
+                            pokeballBtn.innerHTML = '🟢<br>POKÉBALL CONNECTED<br><span style="font-size:11px; font-weight:normal; color:#aaffcc;">(Click to Stop)</span>';
+                        } else {
+                            pokeballBtn.style.borderColor = '#ff3344';
+                            pokeballBtn.style.color = '#ff3344';
+                            pokeballBtn.style.background = 'rgba(255, 51, 68, 0.15)';
+                            pokeballBtn.innerHTML = '🔴<br>SEARCHING BLE...<br><span style="font-size:11px; font-weight:normal; color:#ff8899;">Press Button to Wake</span>';
+                        }
+                    }
+
+                    // 3. Power status (Tab 3)
+                    const pStatus = document.getElementById('powerStatus');
+                    if (pStatus) {
+                        if (data.pi500_online) {
+                            const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
+                            const pogoState = (ht.pogo_connected) ? 'POGO: CONNECTED' : 'POGO: DISCONNECTED';
+                            if (data.daemon_running) {
+                                pStatus.innerText = `PI 500 ONLINE | 12V: ${volt} | ${pogoState}`;
+                                pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#ffaa00';
+                            } else {
+                                pStatus.innerText = 'PI 500 ONLINE | DAEMON OFF';
+                                pStatus.style.color = '#ffaa00';
+                            }
+                        } else {
+                            pStatus.innerText = 'PI 500 OFFLINE';
+                            pStatus.style.color = '#ff3344';
+                        }
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('sliderValDisplay').innerText = 'Pedestal: --° | Gantry: --';
+                    document.getElementById('sliderValDisplay').style.color = '#888888';
+                    document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
+                    document.getElementById('teleopStatus').style.color = '#ff3344';
+                    isFollowerRunning = false;
+                    isLeaderRunning = false;
+                    isPokeballRunning = false;
+                    renderButtonStates();
+                });
+        }
+
+        setInterval(pollTelemetry, 2000);
+        pollTelemetry();
+
+        function rotatePedestal(direction) {
+            const dirStr = direction === 'left' ? 'LEFT (-45°)' : 'RIGHT (+45°)';
+            document.getElementById('sliderValDisplay').innerText = 'STEPPING ' + dirStr + '...';
+            document.getElementById('sliderValDisplay').style.color = '#ff9900';
+            fetch('/api/pedestal_step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction: direction })
+            })
+            .then(async r => {
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok || data.status === 'error') {
+                    setHeaderAlert(data.message || data.error || 'SERVO UNRESPONSIVE');
+                } else {
+                    if (data.at_limit && data.message && data.message.includes('limit reached')) {
+                        setHeaderAlert(data.message.toUpperCase());
+                    }
+                    setTimeout(pollTelemetry, 250);
+                }
+            })
+            .catch(() => setHeaderAlert('NETWORK ERROR'));
+        }
+
+        function sendSliderMove(targetVal) {
+            document.getElementById('sliderValDisplay').innerText = targetVal + ' ticks (SENDING...)';
+            document.getElementById('sliderValDisplay').style.color = '#f8d800';
+            fetch('/api/slider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: 8, target: parseInt(targetVal), value: parseInt(targetVal) })
+            })
+            .then(async r => {
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok || data.status === 'error') {
+                    setHeaderAlert(data.message || data.error || 'GANTRY UNRESPONSIVE');
+                } else {
+                    setTimeout(pollTelemetry, 150);
+                }
+            })
+            .catch(() => setHeaderAlert('NETWORK ERROR'));
+        }
+
+        function nudgeSlider(delta) {
+            let targetVal = currentVerifiedPos + delta;
+            targetVal = Math.max(3, Math.min(4800, targetVal));
+            sendSliderMove(targetVal);
+        }
+
+        function moveGantryMaxLeft() {
+            sendSliderMove(3);
+        }
+
+        function moveGantryMaxRight() {
+            sendSliderMove(4800);
+        }
+
+        function toggleMacLeader() {
+            const action = isLeaderRunning ? 'stop' : 'start';
+            const btn = document.getElementById('leaderBtn');
+            if (btn) {
+                btn.style.borderColor = '#ffaa00';
+                btn.style.color = '#ffaa00';
+                btn.innerHTML = action === 'stop' ? '🍎<br>STOPPING...' : '🍎<br>STARTING...';
+            }
+            fetch('/api/mac_leader_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 600));
+        }
+
+        function togglePi500Follower() {
+            const action = isFollowerRunning ? 'stop' : 'start';
+            const btn = document.getElementById('followerBtn');
+            if (btn) {
+                btn.style.borderColor = '#ffaa00';
+                btn.style.color = '#ffaa00';
+                btn.innerHTML = action === 'stop' ? '🦾<br>STOPPING...' : '🦾<br>STARTING...';
+            }
+            fetch('/api/pi500_follower_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 600));
+        }
+
+        function togglePokeballTeleop() {
+            const action = isPokeballRunning ? 'stop' : 'start';
+            fetch('/api/pokeball_teleop_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 300));
+        }
+
+        function toggleServoStudio() {
+            const action = isStudioRunning ? 'stop' : 'start';
+            const btn = document.getElementById('studioBtn');
+            if (btn) {
+                btn.style.borderColor = '#ffaa00';
+                btn.style.color = '#ffaa00';
+                btn.innerHTML = action === 'stop' ? '🔧<br>STOPPING...' : '🔧<br>STARTING...';
+            }
+            isStudioRunning = (action === 'start');
+            fetch('/api/servo_studio_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(() => setTimeout(pollTelemetry, 300));
+        }
+
+        function triggerPi500PowerOn() {
+            fetch('/api/pi500_poweron', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 500));
+        }
+
+        function triggerPi500MasterDaemonRestart() {
+            const btn = document.getElementById('masterDaemonBtn');
+            if (btn) {
+                btn.style.opacity = '0.5';
+                btn.innerHTML = '⌛ RESTARTING DAEMON...';
+            }
+            fetch('/api/pi500_master_daemon_restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'restart' })
+            }).then(r => r.json()).then(() => {
+                setTimeout(() => {
+                    if (btn) {
+                        btn.style.opacity = '1.0';
+                        btn.innerHTML = '🤖 RESTART MASTER DAEMON<br>(PI 500 PORT 8085)';
+                    }
+                    pollTelemetry();
+                }, 2500);
+            }).catch(() => {
+                if (btn) {
+                    btn.style.opacity = '1.0';
+                    btn.innerHTML = '❌ RESTART ERROR';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -17,3 +17,6 @@ gantry_state.json
 web.log
 *.log
 *.tmp
+.agents/credentials.json
+.env
+
