@@ -274,9 +274,11 @@
                 <div id="powerStatus" class="header-readout" style="color: #00ff66;">PI 500 ONLINE</div>
             </div>
 
-            <div class="giant-grid">
+            <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;">
                 <button class="btn-action btn-red" onclick="triggerPi500PowerOn()">⚡ WAKE PI 500<br>(WAKE-ON-LAN)</button>
                 <button id="masterDaemonBtn" class="btn-action btn-cyan" onclick="triggerPi500MasterDaemonRestart()">🤖 RESTART MASTER DAEMON<br>(PI 500 PORT 8085)</button>
+                <button id="roverStandaloneBtn" class="btn-action btn-cyan" onclick="togglePokeballRoverStandalone()">🏎️ START POKÉBALL ROVER<br>(NO 12V REQ)</button>
+                <button class="btn-action btn-red" onclick="triggerEmergencyKillAll()">🛑 STOP ALL<br>PROCESSES</button>
             </div>
         </div>
 
@@ -287,6 +289,7 @@
         let isLeaderRunning = false;
         let isFollowerRunning = false;
         let isPokeballRunning = false;
+        let isRoverStandaloneRunning = false;
         let isStudioRunning = false;
 
         function switchTab(tabId) {
@@ -332,6 +335,21 @@
                 studioBtn.style.borderColor = isStudioRunning ? '#ffaa00' : '#444444';
                 studioBtn.style.color = isStudioRunning ? '#ffaa00' : '#ffffff';
                 studioBtn.innerHTML = isStudioRunning ? '🔧<br>STOP CALIBRATION' : '🔧<br>START CALIBRATION';
+            }
+
+            const roverBtn = document.getElementById('roverStandaloneBtn');
+            if (roverBtn) {
+                if (isRoverStandaloneRunning) {
+                    roverBtn.style.borderColor = '#00ff66';
+                    roverBtn.style.color = '#00ff66';
+                    roverBtn.style.background = 'rgba(0, 255, 102, 0.15)';
+                    roverBtn.innerHTML = '🟢 STOP POKÉBALL ROVER<br><span style="font-size:11px; color:#aaffcc;">(ACTIVE - NO 12V REQ)</span>';
+                } else {
+                    roverBtn.style.borderColor = '#00e5ff';
+                    roverBtn.style.color = '#ffffff';
+                    roverBtn.style.background = '#181818';
+                    roverBtn.innerHTML = '🏎️ START POKÉBALL ROVER<br><span style="font-size:11px; color:#88ccff;">(STANDALONE - NO 12V REQ)</span>';
+                }
             }
         }
 
@@ -419,6 +437,9 @@
                     isPokeballRunning = (currentApp === 'pokeball_teleop_app') || !!pkData.running || !!(ht.pokeball && ht.pokeball.running);
                     const isPokeballConnected = !!pkData.connected;
                     const pkTelem = pkData.telemetry || (data.hardware_telemetry && data.hardware_telemetry.pokeball);
+
+                    const pkrData = data.pokeball_rover || {};
+                    isRoverStandaloneRunning = !!pkrData.running;
 
                     // Parse Pokeball Live Telemetry & Badge
                     if (pkTelem || pkData) {
@@ -660,6 +681,44 @@
                     btn.innerHTML = '❌ RESTART ERROR';
                 }
             });
+        }
+
+        function togglePokeballRoverStandalone() {
+            const action = isRoverStandaloneRunning ? 'stop' : 'start';
+            const btn = document.getElementById('roverStandaloneBtn');
+            if (btn) {
+                btn.style.opacity = '0.5';
+                btn.innerHTML = action === 'start' ? '⌛ STARTING ROVER...' : '⌛ STOPPING ROVER...';
+            }
+            fetch('/api/pokeball_rover_toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.running !== undefined) isRoverStandaloneRunning = d.running;
+                if (btn) btn.style.opacity = '1.0';
+                renderButtonStates();
+                setTimeout(pollTelemetry, 500);
+            })
+            .catch(() => {
+                if (btn) btn.style.opacity = '1.0';
+            });
+        }
+
+        function triggerEmergencyKillAll() {
+            fetch('/api/kill_all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'kill_all' })
+            }).then(() => {
+                fetch('/api/pokeball_rover_toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stop' })
+                });
+            }).then(() => setTimeout(pollTelemetry, 500));
         }
     </script>
 </body>

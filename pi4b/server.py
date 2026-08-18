@@ -24,6 +24,7 @@ MAC_HOST = "twinpeakstownie@192.168.0.2"
 
 STATUS_CACHE = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
+    "pokeball_rover": {"running": False, "pid": ""},
     "follower": {"running": False, "pid": ""},
     "leader": {"running": False, "pid": ""},
     "pi500_online": False,
@@ -237,6 +238,46 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 return
             except Exception as e:
                 print(f"[TouchUI] Daemon restart failed: {e}", flush=True)
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
+                return
+
+        if path == "/api/pokeball_rover_toggle":
+            action = req_data.get("action", "toggle")
+            try:
+                try:
+                    import rover_launcher
+                except ImportError:
+                    sys.path.insert(0, DIRECTORY)
+                    import rover_launcher
+
+                running = rover_launcher.is_running()
+                if action == "toggle":
+                    action = "stop" if running else "start"
+
+                if action == "start":
+                    rover_launcher.start_rover()
+                    time.sleep(0.6)
+                    running = rover_launcher.is_running()
+                    STATUS_CACHE["pokeball_rover"] = {"running": running}
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "action": "started", "running": running}).encode())
+                    return
+                else:
+                    rover_launcher.stop_rover()
+                    time.sleep(0.3)
+                    running = rover_launcher.is_running()
+                    STATUS_CACHE["pokeball_rover"] = {"running": running}
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped", "running": running}).encode())
+                    return
+            except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()

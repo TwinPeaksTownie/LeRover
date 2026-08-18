@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """PokeballApp module for Poké Ball Plus BLE teleoperation.
 Implements managed BaseApp interface matching Reachy Mini application standards.
+Supports dual-mode operation:
+- AUX Manipulator Mode (Gantry & Pedestal control)
+- ROVER Drive Mode (Overlander-4 differential drive via GPIO UART to KB2040)
+Transitions between modes via 3-second Joystick Press (Button A) hold with Mario Kart audio sync.
 """
 
 import asyncio
@@ -11,10 +15,25 @@ import os
 import random
 import struct
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
 from typing import Optional, Dict, Any
+
+# Ensure rover package is importable
+current_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_root = os.path.abspath(os.path.join(current_dir, ".."))
+if workspace_root not in sys.path:
+    sys.path.insert(0, workspace_root)
+
+try:
+    from rover.rover_controller import RoverController
+except ImportError:
+    try:
+        from rover_controller import RoverController
+    except ImportError:
+        RoverController = None
 
 try:
     from bleak import BleakClient
@@ -54,21 +73,40 @@ def play_chime(kind="connect"):
 
 
 class PokeballApp(BaseApp):
-    """Managed Poké Ball Plus Teleoperation Application."""
+    """Managed Poké Ball Plus Teleoperation Application with Dual Aux/Rover Mode."""
     metadata = AppMetadata(
         name="pokeball_teleop_app",
         title="Poké Ball Teleop",
-        description="BLE Poké Ball Plus teleoperation for pedestal and gantry movement",
-        version="1.0.0",
-        tags=["teleop", "ble", "pokeball"],
+        description="BLE Poké Ball Plus teleoperation for pedestal, gantry, and rover drive",
+        version="2.0.0",
+        tags=["teleop", "ble", "pokeball", "rover"],
         icon="🔴"
     )
 
-    def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL) -> None:
+    def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL, rover_ctrl: Optional[Any] = None) -> None:
         super().__init__()
         self.mac_address = mac_address
         self.api_url = api_url
         self.client: Optional[BleakClient] = None
+
+        # Mode state machine: 'AUX' (Manipulator) or 'ROVER' (Drivetrain)
+        self.control_mode: str = "AUX"
+        self.stick_press_start_time: Optional[float] = None
+        self.mode_switch_triggered: bool = False
+        self.last_btn_stick_press_time: float = 0.0
+
+        # Rover safety timing
+        self.rover_start_time: float = 0.0
+        self.rover_drive_active_time: float = 0.0  # Startup lockout (sound duration + 1.0s safety delay)
+        self.last_rover_interaction_time: float = 0.0  # 30-second inactivity timeout tracker
+
+        # Rover controller instance
+        if rover_ctrl is not None:
+            self.rover_ctrl = rover_ctrl
+        elif RoverController is not None:
+            self.rover_ctrl = RoverController()
+        else:
+            self.rover_ctrl = None
 
         self.preset_angles = [-165.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 165.0]
         self.preset_index = 4
@@ -88,16 +126,24 @@ class PokeballApp(BaseApp):
             "running": False,
             "connected": False,
             "status": "DISCONNECTED",
+            "control_mode": self.control_mode,
+            "hold_progress": 0.0,
+            "rover_ready": False,
+            "ready_countdown": 0.0,
+            "inactivity_seconds": 0.0,
             "mac": self.mac_address,
             "last_seen": 0.0,
             "packet_count": 0,
             "norm_x": 0.0,
             "norm_y": 0.0,
-            "button_a": False,
-            "button_b": False,
+            "button_a": False,  # Stick Click
+            "button_b": False,  # Top Red Button
+            "button_stick": False,
+            "button_top": False,
             "last_error": None
         }
         self.write_telemetry()
+
 
     def write_telemetry(self) -> None:
         try:
@@ -158,34 +204,183 @@ class PokeballApp(BaseApp):
 
             buttons = data[1]
 
-            # Direct Empirical Byte Parsing (No STS servo math)
-            x_val = data[3] & 0x0F  # Low digit of byte 3 (2-3: Left, 4-7: Center, 8-15: Right)
-            y_val = data[4]         # Byte 4 analog vertical value (rest ~118, <80: UP)
+            # 12-Bit Joystick Decoding (X: steering, Y: throttle)
+            raw_x_12 = data[2] | ((data[3] & 0x0F) << 8)
+            raw_y_12 = (data[3] >> 4) | (data[4] << 4)
 
-            if x_val in (2, 3):
+            x_offset = raw_x_12 - 2048
+            y_offset = raw_y_12 - 2048
+
+            norm_x = max(-1.0, min(1.0, x_offset / 2048.0))
+            norm_y = max(-1.0, min(1.0, y_offset / 2048.0))
+
+            # Deadzone filter
+            if abs(norm_x) < 0.08:
+                norm_x = 0.0
+            if abs(norm_y) < 0.08:
+                norm_y = 0.0
+
+            # Direction classification for discrete step gestures
+            if norm_x < -0.35:
                 x_direction = "left"
-            elif x_val >= 8:
+            elif norm_x > 0.35:
                 x_direction = "right"
             else:
                 x_direction = "center"
 
-            btn_top = bool(buttons & 0x01)    # Top Red Button (BLE bit 0x01)
-            btn_stick = bool(buttons & 0x02)  # Joystick Press In / Stick Click (BLE bit 0x02)
+            # Button Mapping:
+            # Button A (Stick Click) = 0x02
+            # Button B (Top Red Button) = 0x01
+            btn_stick = bool(buttons & 0x02)  # Button A
+            btn_top = bool(buttons & 0x01)    # Button B
 
-            btn_a = btn_top    # Button A = Top Red Button
-            btn_b = btn_stick  # Button B = Stick Click
+            btn_a = btn_stick
+            btn_b = btn_top
+
+            now = time.time()
+
+            # --- 3-SECOND JOYSTICK PRESS (BUTTON A) HOLD LOGIC ---
+            hold_progress = 0.0
+            # Relaxed center deadzone (55%) so firm thumb pressure during stick click doesn't cancel hold
+            is_stick_centered = (abs(norm_x) < 0.55 and abs(norm_y) < 0.55)
+
+            if btn_stick and is_stick_centered:
+                self.last_btn_stick_press_time = now
+                if self.stick_press_start_time is None:
+                    self.stick_press_start_time = now
+                
+                hold_duration = now - self.stick_press_start_time
+                hold_progress = min(1.0, hold_duration / 3.0)
+
+                if hold_duration >= 3.0 and not self.mode_switch_triggered:
+                    if self.control_mode == "AUX":
+                        self.control_mode = "ROVER"
+                        self.rover_start_time = now
+                        self.rover_drive_active_time = now + 4.25  # 3.25s audio + 1.0s safety delay = 4.25s lockout
+                        self.last_rover_interaction_time = now
+                        if self.rover_ctrl:
+                            self.rover_ctrl.start()
+                            self.rover_ctrl.stop()
+                        play_chime("mario_kart_start")
+                        self.logger.info("🏎️ [MODE SWITCH] Switched to ROVER DRIVE MODE! Mario Kart countdown active (drive output unlocks in 4.25s).")
+                    else:
+                        self.control_mode = "AUX"
+                        if self.rover_ctrl:
+                            self.rover_ctrl.stop()
+                        play_chime("disconnect")
+                        self.logger.info("🦾 [MODE SWITCH] Switched to AUX MANIPULATOR MODE! Zeroed rover motors.")
+                    
+                    self.mode_switch_triggered = True
+            elif not btn_stick:
+                # 250ms release debounce buffer: prevents packet drops / glitch / interleaving from resetting hold timer
+                if now - getattr(self, "last_btn_stick_press_time", 0.0) > 0.25:
+                    self.stick_press_start_time = None
+                    self.mode_switch_triggered = False
+
+
+            # --- ROVER DRIVE MODE EXECUTION ---
+            if self.control_mode == "ROVER":
+                # 1. Top Red Button (Button B) Cancel: Immediately cancels Rover Mode & returns to Aux
+                if btn_top and not self.last_btn_top:
+                    self.control_mode = "AUX"
+                    if self.rover_ctrl:
+                        self.rover_ctrl.stop()
+                    play_chime("disconnect")
+                    self.logger.info("🛑 [MODE CANCEL] Top Red Button (Button B) pressed -> Canceled Rover Mode & returned to Aux Mode.")
+                else:
+                    # 2. 30-Second Inactivity Watchdog Timeout
+                    is_active_input = (abs(norm_x) > 0.08 or abs(norm_y) > 0.08 or btn_stick)
+                    if is_active_input:
+                        self.last_rover_interaction_time = now
+
+                    inactivity_dur = now - self.last_rover_interaction_time
+                    if inactivity_dur >= 30.0:
+                        self.control_mode = "AUX"
+                        if self.rover_ctrl:
+                            self.rover_ctrl.stop()
+                        play_chime("disconnect")
+                        self.logger.info("⏰ [INACTIVITY TIMEOUT] 30s elapsed with no drive input -> Auto-returned to Aux Mode.")
+                    elif self.rover_ctrl:
+                        # 3. 1.0s Post-Audio Safety Lockout Delay: Wheels strictly locked at 1500 during countdown + 1.0s buffer
+                        if now < self.rover_drive_active_time:
+                            self.rover_ctrl.stop()
+                        else:
+                            self.rover_ctrl.set_drive(norm_x, norm_y)
+
+
+            # --- AUX MANIPULATOR MODE EXECUTION ---
+            elif self.control_mode == "AUX":
+                # 1. Dual-edge trigger: Top Red Button (Button B) + Stick L/R -> Step Pedestal Spinner (Motor 7)
+                top_btn_triggered = (btn_top and not self.last_btn_top and x_direction in ("left", "right"))
+                x_dir_triggered = (btn_top and x_direction in ("left", "right") and x_direction != self.last_x_direction)
+
+                if top_btn_triggered or x_dir_triggered:
+                    if self.is_busy or now < self.busy_until:
+                        self.logger.info("⚠️ Top Red Button Ignored: Movement currently in progress.")
+                    else:
+                        self.logger.info("Joystick %s -> Stepping Pedestal Preset", x_direction.title())
+                        self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
+                elif btn_top and not self.last_btn_top and x_direction == "center":
+                    self.logger.info("🔴 Standalone Top Red Button clicked (joystick centered).")
+
+                # 2. Dual-edge trigger: Stick Click (Button A) + Stick L/R -> Nudge LeSlider Gantry (Motor 8)
+                # Only triggers if joystick was actively tilted left/right (canceling 3s hold mode toggle)
+                stick_btn_triggered = (btn_stick and not self.last_btn_stick and x_direction in ("left", "right"))
+                gantry_dir_triggered = (btn_stick and x_direction in ("left", "right") and x_direction != self.last_x_direction)
+
+                if (stick_btn_triggered or gantry_dir_triggered) and not self.mode_switch_triggered:
+                    self.stick_press_start_time = None  # Cancel mode switch hold
+                    aux_calib_8 = getattr(self.backend, "aux_calibration", {}).get("8", {}) if self.backend else {}
+                    gantry_min = aux_calib_8.get("min_ticks", 3)
+                    gantry_max = aux_calib_8.get("max_ticks", 4800)
+
+                    if not (self.is_busy or now < self.busy_until):
+                        curr_gantry = self.backend.gantry_position if (self.backend and hasattr(self.backend, "gantry_position")) else 2800
+
+                        if x_direction == "left":
+                            if curr_gantry <= gantry_min:
+                                self.logger.info("⚠️ Gantry Min Left Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
+                                play_chime("smw_shell_ricochet")
+                            else:
+                                target_pos = max(gantry_min, curr_gantry - 500)
+                                self.logger.info("Joystick Left -> Stick Clicked -> Nudging Gantry LEFT -> Target: %d ticks", target_pos)
+                                self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
+                                play_chime("smw_map_move_to_spot")
+                        elif x_direction == "right":
+                            if curr_gantry >= gantry_max:
+                                self.logger.info("⚠️ Gantry Max Right Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
+                                play_chime("smw_shell_ricochet")
+                            else:
+                                target_pos = min(gantry_max, curr_gantry + 500)
+                                self.logger.info("Joystick Right -> Stick Clicked -> Nudging Gantry RIGHT -> Target: %d ticks", target_pos)
+                                self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
+                                play_chime("smw_map_move_to_spot")
+
+            self.last_x_direction = x_direction
+            self.last_btn_top = btn_top
+            self.last_btn_stick = btn_stick
+            self.last_buttons = buttons
+
+            rover_ready = (self.control_mode == "ROVER" and now >= self.rover_drive_active_time)
+            ready_countdown = max(0.0, self.rover_drive_active_time - now) if (self.control_mode == "ROVER" and not rover_ready) else 0.0
+            inactivity_seconds = max(0.0, now - self.last_rover_interaction_time) if self.control_mode == "ROVER" else 0.0
 
             self.telemetry.update({
                 "running": True,
                 "connected": True,
                 "status": "CONNECTED",
+                "control_mode": self.control_mode,
+                "hold_progress": hold_progress,
+                "rover_ready": rover_ready,
+                "ready_countdown": ready_countdown,
+                "inactivity_seconds": inactivity_seconds,
                 "last_seen": time.time(),
                 "packet_count": self.counter,
                 "raw_hex": data.hex(' '),
                 "raw_bytes": list(data),
                 "data_len": len(data),
-                "x_val": x_val,
-                "y_val": y_val,
+                "norm_x": norm_x,
+                "norm_y": norm_y,
                 "x_direction": x_direction,
                 "button_top": btn_top,
                 "button_stick": btn_stick,
@@ -194,66 +389,11 @@ class PokeballApp(BaseApp):
                 "last_error": None
             })
             self.write_telemetry()
+
         except Exception as e:
             self.logger.error("Error processing Poké Ball packet in notification_handler: %s", e, exc_info=True)
             self.telemetry["last_error"] = f"Notification parse error: {e}"
             self.write_telemetry()
-            return
-
-        now = time.time()
-
-        if buttons != self.last_buttons:
-            if buttons != 0:
-                self.logger.info("🔴 POKEBALL BUTTON PRESSED: buttons=0x%02x, x_val=%d, x_dir=%s", buttons, x_val, x_direction)
-
-        # 1. Dual-edge trigger: Top Red Button + Joystick Left/Right -> Step Motor 7 (Pedestal Spinner Presets) + Vine Sound
-        top_btn_triggered = (btn_top and not self.last_btn_top and x_direction in ("left", "right"))
-        x_dir_triggered = (btn_top and x_direction in ("left", "right") and x_direction != self.last_x_direction)
-
-        if top_btn_triggered or x_dir_triggered:
-            if self.is_busy or now < self.busy_until:
-                self.logger.info("⚠️ Top Red Button Ignored: Movement currently in progress.")
-            else:
-                self.logger.info("Joystick %s -> Stepping Pedestal Preset", x_direction.title())
-                self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
-        elif btn_top and not self.last_btn_top and x_direction == "center":
-            self.logger.info("🔴 Standalone Top Red Button clicked (joystick centered).")
-
-        # 2. Dual-edge trigger: Stick Click + Joystick Left/Right -> Move Motor 8 (Gantry Rail)
-        stick_btn_triggered = (btn_stick and not self.last_btn_stick and x_direction in ("left", "right"))
-        gantry_dir_triggered = (btn_stick and x_direction in ("left", "right") and x_direction != self.last_x_direction)
-
-        aux_calib_8 = getattr(self.backend, "aux_calibration", {}).get("8", {}) if self.backend else {}
-        gantry_min = aux_calib_8.get("min_ticks", 3)
-        gantry_max = aux_calib_8.get("max_ticks", 4800)
-
-        if stick_btn_triggered or gantry_dir_triggered:
-            if not (self.is_busy or now < self.busy_until):
-                curr_gantry = self.backend.gantry_position if (self.backend and hasattr(self.backend, "gantry_position")) else 2800
-
-                if x_direction == "left":
-                    if curr_gantry <= gantry_min:
-                        self.logger.info("⚠️ Gantry Min Left Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
-                        play_chime("smw_shell_ricochet")
-                    else:
-                        target_pos = max(gantry_min, curr_gantry - 500)
-                        self.logger.info("Joystick Left -> Stick Clicked -> Nudging Gantry LEFT -> Target: %d ticks", target_pos)
-                        self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
-                        play_chime("smw_map_move_to_spot")
-                elif x_direction == "right":
-                    if curr_gantry >= gantry_max:
-                        self.logger.info("⚠️ Gantry Max Right Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
-                        play_chime("smw_shell_ricochet")
-                    else:
-                        target_pos = min(gantry_max, curr_gantry + 500)
-                        self.logger.info("Joystick Right -> Stick Clicked -> Nudging Gantry RIGHT -> Target: %d ticks", target_pos)
-                        self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
-                        play_chime("smw_map_move_to_spot")
-
-        self.last_x_direction = x_direction
-        self.last_btn_top = btn_top
-        self.last_btn_stick = btn_stick
-        self.last_buttons = buttons
 
     def _cleanup_bluez_device(self) -> None:
         """Purges stale BlueZ D-Bus device locks."""
@@ -323,6 +463,8 @@ class PokeballApp(BaseApp):
                         self.write_telemetry()
                         await asyncio.sleep(3.0)
             finally:
+                if self.rover_ctrl:
+                    self.rover_ctrl.shutdown()
                 if self.connect_chime_played:
                     play_chime("disconnect")
                     self.connect_chime_played = False

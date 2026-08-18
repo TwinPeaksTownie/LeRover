@@ -1,8 +1,9 @@
-# Python
+# Python bytecode & cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.pytest_cache/
 
 # Environment & IDE
 .venv/
@@ -12,11 +13,16 @@ ENV/
 .vscode/
 .idea/
 
-# Local Runtime State
-gantry_state.json
+# Local Runtime State & Logs
+**/gantry_state.json
 web.log
 *.log
 *.tmp
-.agents/credentials.json
 .env
 
+# Agent Metadata & Internal Docs
+.agents/
+lessons_learned.md
+
+# Scratch & Temporary Testing Scripts
+scratch/

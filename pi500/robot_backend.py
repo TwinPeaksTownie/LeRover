@@ -16,8 +16,17 @@ from typing import Dict, Any, Tuple, Optional
 from aux_servo_controller import AuxiliaryServoController
 from power_manager import BusPowerManager
 from telemetry_proxies import _ServoFieldProxy, _ServoMotorStatesProxy, MOTOR_NAMES
-from lerobot.motors import Motor, MotorCalibration, MotorNormMode
-from lerobot.motors.feetech import FeetechMotorsBus
+try:
+    from lerobot.motors import Motor, MotorCalibration, MotorNormMode
+    from lerobot.motors.feetech import FeetechMotorsBus
+    LEROBOT_AVAILABLE = True
+except ImportError:
+    Motor = Any
+    MotorCalibration = Any
+    MotorNormMode = Any
+    FeetechMotorsBus = Any
+    LEROBOT_AVAILABLE = False
+
 
 BASE_DIR = Path.home() / "so101"
 STATE_FILE = str(BASE_DIR / "gantry_state.json")

@@ -194,6 +194,33 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 logging.error("[ApiGateway] Daemon restart failed: %s", e)
                 self._send_json({"error": str(e), "status": "failed"}, 500)
+        # 5.5 Standalone Pokéball Rover Toggle
+        if path == "/api/pokeball_rover_toggle":
+            action = req_data.get("action", "toggle")
+            try:
+                try:
+                    import rover_launcher
+                except ImportError:
+                    sys.path.insert(0, DIRECTORY)
+                    import rover_launcher
+
+                running = rover_launcher.is_running()
+                if action == "toggle":
+                    action = "stop" if running else "start"
+
+                if action == "start":
+                    rover_launcher.start_rover()
+                    time.sleep(0.6)
+                    running = rover_launcher.is_running()
+                    self._send_json({"status": "ok", "action": "started", "running": running})
+                else:
+                    rover_launcher.stop_rover()
+                    time.sleep(0.3)
+                    running = rover_launcher.is_running()
+                    self._send_json({"status": "ok", "action": "stopped", "running": running})
+            except Exception as e:
+                logging.error("[ApiGateway] Rover toggle failed: %s", e)
+                self._send_json({"error": str(e), "status": "failed"}, 500)
             return
 
         # 6. Mode Toggles & Teleop Controls (Forwarded to Pi 500 or Mac Mini)

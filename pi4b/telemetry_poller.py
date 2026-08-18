@@ -28,6 +28,7 @@ class TelemetryPollerService:
 
         self.status_cache: Dict[str, Any] = {
             "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
+            "pokeball_rover": {"running": False, "pid": ""},
             "follower": {"running": False, "pid": ""},
             "leader": {"running": False, "pid": ""},
             "pi500_online": False,
