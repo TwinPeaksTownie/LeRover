@@ -13,12 +13,14 @@ import subprocess
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from robot_backend import RobotBackend
 from app_manager import AppManager
 from teleop_control_loop import TeleopControlApp
 from servo_studio_app import ServoStudioApp
 from pokeball_app import PokeballApp
+from clack_pose_app import ClackPoseApp
 from api_server import create_master_http_server
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -47,6 +49,7 @@ def main() -> None:
     app_manager.register_app(TeleopControlApp)
     app_manager.register_app(ServoStudioApp)
     app_manager.register_app(PokeballApp)
+    app_manager.register_app(ClackPoseApp)
 
     logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
 
@@ -63,6 +66,8 @@ def main() -> None:
         backend.close()
         sys.exit(0)
 
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, _sig_handler)
     signal.signal(signal.SIGINT, _sig_handler)
 

@@ -27,10 +27,14 @@ STATUS_CACHE = {
     "pokeball_rover": {"running": False, "pid": ""},
     "follower": {"running": False, "pid": ""},
     "leader": {"running": False, "pid": ""},
+    "clack_pose": {"running": False},
     "pi500_online": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0
 }
+
+TAP_DETECTOR = None
+TAP_DETECTOR_LOCK = threading.Lock()
 
 MARIO_SOUNDS_DIR = "/home/carson/mario_sounds"
 PLANT_VINE_SOUNDS = [
@@ -45,14 +49,23 @@ PULSE_ENV = dict(os.environ)
 PULSE_ENV["XDG_RUNTIME_DIR"] = "/run/user/1000"
 PULSE_ENV["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
 
-def play_sound_helper(kind="connect", wav_path=None):
+def play_sound_helper(kind="connect", wav_path=None, stop_previous=False, delay_sec=0.0):
     def _work():
         try:
-            if kind == "stop_audio":
+            if stop_previous or kind == "stop_audio" or kind in ("trex_roar", "trex_roar_isolated"):
                 subprocess.run(["pkill", "-9", "mpg123"], check=False)
                 subprocess.run(["pkill", "-9", "paplay"], check=False)
                 subprocess.run(["pkill", "-9", "aplay"], check=False)
-                return
+                if kind == "stop_audio":
+                    return
+
+            if delay_sec > 0:
+                time.sleep(delay_sec)
+
+            global TAP_DETECTOR
+            if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
+                mute_dur = 5.0 if kind in ("trex_roar", "trex_roar_isolated", "mario_kart_start") else 2.0
+                TAP_DETECTOR.mute(mute_dur)
 
             target_wav = wav_path
             if not target_wav or not os.path.exists(target_wav):
@@ -70,6 +83,10 @@ def play_sound_helper(kind="connect", wav_path=None):
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_pause.wav")
                 elif kind in ("smw_shell_ricochet", "smw_shell_richochet", "shell_ricochet"):
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_shell_ricochet.wav")
+                elif kind in ("trex_roar", "trex_roar_isolated"):
+                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "trex_roar_isolated.wav")
+                    if not os.path.exists(target_wav):
+                        target_wav = "/home/carson/trex_roar_isolated.wav"
                 elif kind:
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, f"{kind}.wav")
 
@@ -134,7 +151,15 @@ def poll_status_loop():
         except Exception:
             STATUS_CACHE["leader"] = {"running": False, "pid": ""}
 
-        time.sleep(0.5)
+        # 4. Update Clack Pose telemetry
+        global TAP_DETECTOR
+        with TAP_DETECTOR_LOCK:
+            if TAP_DETECTOR is not None:
+                STATUS_CACHE["clack_pose"] = TAP_DETECTOR.get_state()
+            else:
+                STATUS_CACHE["clack_pose"] = {"running": False, "mode": "CALIBRATION_DETECTION_ONLY"}
+
+        time.sleep(0.33)
 
 threading.Thread(target=poll_status_loop, daemon=True).start()
 
@@ -184,9 +209,27 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(resp).encode('utf-8'))
             return
 
+        if parsed.path in ["/api/arm/presets", "/api/arm/sequences"]:
+            try:
+                req = urllib.request.Request(f"http://{PI500_IP}:8085{self.path}")
+                with urllib.request.urlopen(req, timeout=1.5) as resp:
+                    resp_body = resp.read()
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(resp_body)
+                    return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+                return
+
         return super().do_GET()
 
     def do_POST(self):
+        global TAP_DETECTOR
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         content_length = int(self.headers.get('Content-Length', 0))
@@ -199,7 +242,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/play_sound":
             kind = req_data.get("kind", "connect")
             wav_path = req_data.get("wav_path")
-            play_sound_helper(kind=kind, wav_path=wav_path)
+            stop_prev = bool(req_data.get("stop_previous", False))
+            delay_s = float(req_data.get("delay_sec", 0.0))
+            play_sound_helper(kind=kind, wav_path=wav_path, stop_previous=stop_prev, delay_sec=delay_s)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -226,18 +271,29 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "message": "WOL magic packet sent"}).encode())
             return
 
-        if path in ["/api/pi500_master_daemon_restart", "/api/pi500_daemon_restart"]:
+        if path in ["/api/pi500_master_daemon_restart", "/api/pi500_daemon_restart", "/api/pi500_daemon_toggle"]:
+            action = req_data.get("action", "restart")
+            if action == "toggle":
+                is_running = STATUS_CACHE.get("daemon_running", False)
+                action = "stop" if is_running else "start"
+
             try:
                 script_path = os.path.join(DIRECTORY, "restart_daemon.py")
-                res = subprocess.run([sys.executable, script_path], capture_output=True, text=True, timeout=10)
-                print(f"[TouchUI] Daemon restart executed: out='{res.stdout.strip()}', err='{res.stderr.strip()}'", flush=True)
+                res = subprocess.run([sys.executable, script_path, action], capture_output=True, text=True, timeout=10)
+                print(f"[TouchUI] Daemon {action} executed: out='{res.stdout.strip()}', err='{res.stderr.strip()}'", flush=True)
+                if action == "stop":
+                    STATUS_CACHE["daemon_running"] = False
+                elif action in ["start", "restart"]:
+                    STATUS_CACHE["daemon_running"] = True
+                    STATUS_CACHE["pokeball_rover"] = {"running": False}
+
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "message": "Pi 500 Master Daemon restart initiated", "stdout": res.stdout, "stderr": res.stderr}).encode())
+                self.wfile.write(json.dumps({"status": "ok", "action": action, "message": f"Pi 500 Master Daemon {action} executed", "stdout": res.stdout, "stderr": res.stderr}).encode())
                 return
             except Exception as e:
-                print(f"[TouchUI] Daemon restart failed: {e}", flush=True)
+                print(f"[TouchUI] Daemon {action} failed: {e}", flush=True)
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -284,8 +340,103 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
                 return
 
+        if path == "/api/clack_pose_toggle":
+            action = req_data.get("action", "toggle")
+            with TAP_DETECTOR_LOCK:
+                is_running = bool(TAP_DETECTOR is not None and TAP_DETECTOR.is_alive())
+                if action == "toggle":
+                    action = "stop" if is_running else "start"
+
+                if action == "start":
+                    if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
+                        try:
+                            from audio_tap_detector import AudioTapDetector
+                            TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
+                            TAP_DETECTOR.start()
+                            STATUS_CACHE["clack_pose"] = {"running": True}
+                            play_sound_helper(kind="connect")
+                        except Exception as e:
+                            print(f"[ClackPose] Startup error: {e}", flush=True)
+                            self.send_response(500)
+                            self.send_header("Content-Type", "application/json")
+                            self.end_headers()
+                            self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
+                            return
+                    try:
+                        req_p500 = urllib.request.Request(
+                            f"http://{PI500_IP}:8085/api/clack_pose_toggle",
+                            data=json.dumps({"action": "start"}).encode("utf-8"),
+                            headers={"Content-Type": "application/json"}
+                        )
+                        urllib.request.urlopen(req_p500, timeout=1.5)
+                    except Exception:
+                        pass
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "action": "started", "running": True}).encode())
+                    return
+                else:
+                    if TAP_DETECTOR is not None:
+                        try:
+                            TAP_DETECTOR.stop()
+                        except Exception:
+                            pass
+                        TAP_DETECTOR = None
+                    STATUS_CACHE["clack_pose"] = {"running": False}
+                    play_sound_helper(kind="disconnect")
+
+                    try:
+                        req_p500 = urllib.request.Request(
+                            f"http://{PI500_IP}:8085/api/clack_pose_toggle",
+                            data=json.dumps({"action": "stop"}).encode("utf-8"),
+                            headers={"Content-Type": "application/json"}
+                        )
+                        urllib.request.urlopen(req_p500, timeout=1.5)
+                    except Exception:
+                        pass
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped", "running": False}).encode())
+                    return
+
+        if path == "/api/clack_pose_threshold":
+            thresh = req_data.get("threshold")
+            refractory = req_data.get("refractory_ms")
+            with TAP_DETECTOR_LOCK:
+                if TAP_DETECTOR is not None:
+                    if thresh is not None:
+                        TAP_DETECTOR.set_threshold(int(thresh))
+                    if refractory is not None:
+                        TAP_DETECTOR.set_refractory(int(refractory))
+                    st = TAP_DETECTOR.get_state()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "state": st}).encode())
+                    return
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "message": "Detector not active"}).encode())
+                    return
+
         if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/kill_all"]:
             action = req_data.get("action", "toggle")
+            if path == "/api/kill_all":
+                with TAP_DETECTOR_LOCK:
+                    if TAP_DETECTOR is not None:
+                        try:
+                            TAP_DETECTOR.stop()
+                        except Exception:
+                            pass
+                        TAP_DETECTOR = None
+                STATUS_CACHE["clack_pose"] = {"running": False}
+
             try:
                 if path == "/api/mac_leader_toggle":
                     url = "http://192.168.0.2:8086/api/leader_toggle"
@@ -315,12 +466,37 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": f"HTTP endpoint error: {e}", "status": "failed"}).encode())
                 return
 
-        if path in ["/api/slider", "/api/nudge_physical", "/api/pedestal_step", "/api/pedestal", "/api/move", "/api/sync_position"]:
+        if path in [
+            "/api/slider",
+            "/api/nudge_physical",
+            "/api/pedestal_step",
+            "/api/pedestal",
+            "/api/move",
+            "/api/sync_position",
+            "/api/arm/torque",
+            "/api/arm/capture_pose",
+            "/api/arm/commit_preset",
+            "/api/arm/overwrite_preset",
+            "/api/arm/delete_preset",
+            "/api/arm/resume_last_pose",
+            "/api/arm/move_to_preset",
+            "/api/arm/execute_sequence",
+            "/api/arm/sequence",
+            "/api/arm/attack_sequence",
+            "/api/arm/attack",
+            "/api/arm/stop_sequence",
+        ]:
             try:
+                if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
+                    if path in ["/api/arm/attack_sequence", "/api/arm/attack", "/api/arm/execute_sequence"]:
+                        TAP_DETECTOR.mute(12.0)
+                    elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset"]:
+                        TAP_DETECTOR.mute(2.5)
+
                 url = f"http://{PI500_IP}:8085{path}"
                 data_bytes = body.encode('utf-8')
                 req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=1.5) as resp:
+                with urllib.request.urlopen(req, timeout=3.5) as resp:
                     resp_body = resp.read()
                     self.send_response(resp.status)
                     self.send_header("Content-Type", "application/json")
@@ -335,34 +511,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(err_body)
                 return
             except Exception as e:
-                print(f"Error forwarding slider request: {e}", flush=True)
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Connection Error: {e}"}).encode())
-                return
-
-        if path == "/api/sync_position":
-            try:
-                url = f"http://{PI500_IP}:8085/api/sync_position"
-                data_bytes = body.encode('utf-8')
-                req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=1.5) as resp:
-                    resp_body = resp.read()
-                    self.send_response(resp.status)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(resp_body)
-                    return
-            except urllib.error.HTTPError as e:
-                err_body = e.read()
-                self.send_response(e.code)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(err_body)
-                return
-            except Exception as e:
-                print(f"Error forwarding sync request: {e}", flush=True)
+                print(f"Error forwarding request {path}: {e}", flush=True)
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()

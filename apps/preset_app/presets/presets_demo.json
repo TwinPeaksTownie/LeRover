@@ -1,0 +1,73 @@
+{
+  "pose_1": {
+    "timestamp": 1724240000.0,
+    "normalized": {
+      "shoulder_pan": 0.0,
+      "shoulder_lift": 0.0,
+      "elbow_flex": 0.0,
+      "wrist_flex": 0.0,
+      "wrist_roll": 0.0,
+      "gripper": 0.0
+    },
+    "raw_ticks": {
+      "1": 2048,
+      "2": 2048,
+      "3": 2048,
+      "4": 2048,
+      "5": 2048,
+      "6": 2048
+    },
+    "aux": {
+      "7": 2048,
+      "8": 3300
+    }
+  },
+  "lunge": {
+    "timestamp": 1724240001.0,
+    "normalized": {
+      "shoulder_pan": 0.0,
+      "shoulder_lift": 35.0,
+      "elbow_flex": -40.0,
+      "wrist_flex": 30.0,
+      "wrist_roll": 0.0,
+      "gripper": 70.0
+    },
+    "raw_ticks": {},
+    "aux": {
+      "7": 2048,
+      "8": 3300
+    }
+  },
+  "ready": {
+    "timestamp": 1724240002.0,
+    "normalized": {
+      "shoulder_pan": 0.0,
+      "shoulder_lift": -25.0,
+      "elbow_flex": 45.0,
+      "wrist_flex": -20.0,
+      "wrist_roll": 0.0,
+      "gripper": 20.0
+    },
+    "raw_ticks": {},
+    "aux": {
+      "7": 2048,
+      "8": 3300
+    }
+  },
+  "roar": {
+    "timestamp": 1724240003.0,
+    "normalized": {
+      "shoulder_pan": 0.0,
+      "shoulder_lift": -50.0,
+      "elbow_flex": 60.0,
+      "wrist_flex": -50.0,
+      "wrist_roll": 0.0,
+      "gripper": 100.0
+    },
+    "raw_ticks": {},
+    "aux": {
+      "7": 2048,
+      "8": 3300
+    }
+  }
+}

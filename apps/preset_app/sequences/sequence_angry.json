@@ -1,0 +1,33 @@
+{
+  "name": "sequence_angry",
+  "title": "Angry Aggressive Stance Sequence",
+  "description": "Rapid defensive posture shifts with aggressive jaw snapping.",
+  "mode": "angry",
+  "steps": [
+    {
+      "step_name": "stance_left",
+      "preset": "pose_2",
+      "arm_duration": 0.8,
+      "audio": {
+        "kind": "smw_shell_ricochet",
+        "timing": "start",
+        "delay_sec": 0.0,
+        "stop_previous": true
+      }
+    },
+    {
+      "step_name": "stance_right",
+      "preset": "pose_3",
+      "arm_duration": 0.8
+    },
+    {
+      "step_name": "pause",
+      "pause_sec": 0.4
+    },
+    {
+      "step_name": "return_home",
+      "preset": "pose_1",
+      "arm_duration": 1.0
+    }
+  ]
+}

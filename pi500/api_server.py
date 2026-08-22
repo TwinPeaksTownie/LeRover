@@ -26,6 +26,37 @@ import threading
 MAC_API_URL = "http://192.168.0.2:8086"
 PI4B_SOUND_URL = "http://192.168.0.86:8082/api/play_sound"
 
+_leader_cache_lock = threading.Lock()
+_cached_leader_data = {"running": False, "pid": "", "connected": False, "error": None}
+_leader_poll_thread: Optional[threading.Thread] = None
+
+
+def _background_leader_poller():
+    """Background non-blocking worker polling Mac Mini leader arm status at 1 Hz."""
+    global _cached_leader_data
+    while True:
+        try:
+            req = urllib.request.Request(f"{MAC_API_URL}/api/status", headers={"User-Agent": "SO101-MasterApi"})
+            with urllib.request.urlopen(req, timeout=0.8) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode())
+                    leader = data.get("leader", data) if isinstance(data.get("leader"), dict) else data
+                    leader["connected"] = True
+                    leader["error"] = None
+                    with _leader_cache_lock:
+                        _cached_leader_data = leader
+        except Exception as e:
+            with _leader_cache_lock:
+                _cached_leader_data = {"running": False, "pid": "", "connected": False, "error": str(e)}
+        time.sleep(1.0)
+
+
+def ensure_leader_poller_started():
+    global _leader_poll_thread
+    if _leader_poll_thread is None or not _leader_poll_thread.is_alive():
+        _leader_poll_thread = threading.Thread(target=_background_leader_poller, daemon=True, name="MacLeaderPoller")
+        _leader_poll_thread.start()
+
 
 def play_chime(kind: str = "connect") -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
@@ -60,6 +91,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        logging.info("MasterApiHandler.do_GET: path=%r, parsed.path=%r", self.path, parsed.path)
         if parsed.path == "/api/status":
             if not self.backend or not self.app_manager:
                 return self._send_json({"error": "Uninitialized components"}, 500)
@@ -90,17 +122,8 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 "running": self.backend.follower_active,
                 "pid": str(os.getpid()) if self.backend.follower_active else "",
             }
-            leader_data = {"running": False, "pid": "", "connected": False, "error": None}
-            try:
-                req = urllib.request.Request(f"{MAC_API_URL}/api/status", headers={"User-Agent": "SO101-MasterApi"})
-                with urllib.request.urlopen(req, timeout=0.8) as resp:
-                    if resp.status == 200:
-                        data = json.loads(resp.read().decode())
-                        leader_data = data.get("leader", data) if isinstance(data.get("leader"), dict) else data
-                        leader_data["connected"] = True
-            except Exception as e:
-                logging.warning("Leader arm status poll failed (%s): %s", MAC_API_URL, e)
-                leader_data["error"] = f"Leader Arm unreachable: {e}"
+            with _leader_cache_lock:
+                leader_data = dict(_cached_leader_data)
 
             with self.backend.lock:
                 aux_calib_8 = getattr(self.backend, "aux_calibration", {}).get("8", {})
@@ -121,11 +144,18 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     "6": "gripper",
                 }
                 if self.backend.bus is not None:
-                    arm_raw = getattr(self.backend, "last_arm_positions", {})
-                    for sid, mname in motor_names.items():
-                        arm_data[sid] = {
+                    for sid_int in range(1, 7):
+                        sid_str = str(sid_int)
+                        mname = motor_names[sid_str]
+                        s_entry = self.backend.servos.get(sid_int, {})
+                        arm_data[sid_str] = {
+                            "id": sid_int,
                             "name": mname,
-                            "raw": arm_raw.get(mname, arm_raw.get(int(sid))),
+                            "raw": s_entry.get("raw"),
+                            "pos": s_entry.get("pos"),
+                            "normalized": s_entry.get("normalized"),
+                            "torque": s_entry.get("torque", False),
+                            "connected": s_entry.get("connected", False),
                         }
 
                 servos_map = arm_data
@@ -159,14 +189,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     all_errors = [m.get("error") for m in self.backend.motor_states.values() if m.get("error")]
                     if not all_errors and power_state == "CONNECTED":
                         active_error = None
-                        self.backend.error_msg = None
 
                 resp = {
-                    "status": "online" if power_summary.get("connected", True) else ("re-synching" if power_state == "RE-SYNCHING" else "offline"),
-                    "hardware_connected": power_summary.get("connected", True),
-                    "bus_power_state": power_state,
-                    "bus_voltage": power_summary.get("voltage", 0.0),
+                    "status": "ok",
+                    "hardware_connected": self.backend.hardware_active,
+                    "power_state": power_state,
                     "pogo_connected": power_summary.get("pogo_connected", False),
+                    "bus_voltage": power_summary.get("voltage", 0.0),
                     "current_app": self.app_manager.current_app_name,
                     "active_port": self.backend.active_port,
                     "error": active_error,
@@ -182,6 +211,20 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "apps": self.app_manager.list_apps()})
         elif parsed.path == "/api/apps/status":
             self._send_json({"status": "ok", "app_manager": self.app_manager.get_status()})
+        elif parsed.path == "/api/arm/presets":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            query = urllib.parse.parse_qs(parsed.query)
+            mode = query.get("mode", ["normal"])[0]
+            presets = self.backend.get_arm_presets(mode=mode)
+            self._send_json({"status": "ok", "mode": mode, "presets": presets})
+        elif parsed.path == "/api/arm/sequences":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            query = urllib.parse.parse_qs(parsed.query)
+            mode = query.get("mode", [None])[0]
+            sequences = self.backend.list_sequences(mode=mode)
+            self._send_json({"status": "ok", "mode": mode or "all", "sequences": sequences})
         elif parsed.path == "/api/pokeball_reconnect":
             self.app_manager.start_app_by_name("pokeball_teleop_app")
             self._send_json({"status": "ok", "message": "Poké Ball teleop app restart triggered"})
@@ -426,6 +469,109 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 ok = self.app_manager.start_app_by_name("pokeball_teleop_app")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
+        elif parsed.path == "/api/clack_pose_toggle":
+            action = body.get("action", "toggle")
+            is_running = (self.app_manager.current_app_name == "clack_pose_app")
+            if action == "toggle":
+                action = "stop" if is_running else "start"
+
+            if action in ["stop", "kill"]:
+                self.app_manager.stop_app("clack_pose_app")
+                self._send_json({"status": "ok", "action": action, "running": False})
+            else:
+                ok = self.app_manager.start_app_by_name("clack_pose_app")
+                self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
+
+        elif parsed.path == "/api/arm/torque":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            enable = body.get("enable", True)
+            ok = self.backend.set_arm_torque(enable)
+            self._send_json({"status": "ok" if ok else "error", "torque": enable})
+
+        elif parsed.path == "/api/arm/capture_pose":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            try:
+                res = self.backend.capture_temporary_arm_pose()
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/arm/commit_preset":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            try:
+                custom_name = body.get("name")
+                mode = body.get("mode", "normal")
+                overwrite = bool(body.get("overwrite", False))
+                res = self.backend.save_official_arm_preset(custom_name=custom_name, mode=mode, overwrite=overwrite)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/arm/overwrite_preset":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            preset_name = body.get("name")
+            if not preset_name:
+                return self._send_json({"status": "error", "message": "Missing required 'name' parameter"}, 400)
+            mode = body.get("mode", "normal")
+            try:
+                res = self.backend.overwrite_arm_preset(preset_name=preset_name, mode=mode)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/arm/delete_preset":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            preset_name = body.get("name")
+            if not preset_name:
+                return self._send_json({"status": "error", "message": "Missing required 'name' parameter"}, 400)
+            mode = body.get("mode", "normal")
+            res = self.backend.delete_arm_preset(preset_name=preset_name, mode=mode)
+            self._send_json(res, 200 if res.get("status") == "ok" else 400)
+
+        elif parsed.path == "/api/arm/resume_last_pose":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            duration = float(body.get("duration", 1.0))
+            mode = body.get("mode", "normal")
+            ok, msg = self.backend.resume_last_arm_pose(duration=duration, mode=mode)
+            self._send_json({"status": "ok" if ok else "error", "message": msg}, 200 if ok else 400)
+
+        elif parsed.path == "/api/arm/move_to_preset":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            preset_name = body.get("name")
+            if not preset_name:
+                return self._send_json({"status": "error", "message": "Missing required 'name' parameter"}, 400)
+            duration = float(body.get("duration", 1.0))
+            mode = body.get("mode", "normal")
+            ok, msg = self.backend.move_to_specific_arm_preset(preset_name=preset_name, duration=duration, mode=mode)
+            self._send_json({"status": "ok" if ok else "error", "name": preset_name, "mode": mode, "message": msg}, 200 if ok else 400)
+
+        elif parsed.path in ["/api/arm/execute_sequence", "/api/arm/sequence"]:
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            seq_name = body.get("sequence", body.get("name", "sequence_attack"))
+            mode = body.get("mode", "demo")
+            threading.Thread(target=self.backend.execute_sequence, args=(seq_name, mode), daemon=True).start()
+            self._send_json({"status": "ok", "action": "sequence_started", "sequence": seq_name, "mode": mode})
+
+        elif parsed.path in ["/api/arm/attack_sequence", "/api/arm/attack"]:
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            threading.Thread(target=self.backend.execute_attack_sequence, daemon=True).start()
+            self._send_json({"status": "ok", "action": "attack_sequence_started"})
+
+        elif parsed.path == "/api/arm/stop_sequence":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            self.backend.stop_sequence()
+            self._send_json({"status": "ok", "action": "sequence_stopped"})
+
         elif parsed.path == "/api/kill_all":
             try:
                 post_data = json.dumps({"action": "stop"}).encode("utf-8")
@@ -450,6 +596,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
 
 def create_master_http_server(host: str, port: int, backend: RobotBackend, app_manager: AppManager) -> ThreadedHTTPServer:
+    ensure_leader_poller_started()
     MasterApiHandler.backend = backend
     MasterApiHandler.app_manager = app_manager
     return ThreadedHTTPServer((host, port), MasterApiHandler)

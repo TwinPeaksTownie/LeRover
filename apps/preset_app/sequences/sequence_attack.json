@@ -1,0 +1,88 @@
+{
+  "name": "sequence_attack",
+  "title": "4-Click Piranha Plant Attack Choreography",
+  "description": "Lunge forward with 1m rover burst, pedestal right (+90°), blargg sound & return to center (0°), move to ready while sweeping left (-90°), roar posture, jaw open + T-Rex roar audio + pedestal center & Motor 1 sweep, settle, and return to pose 1.",
+  "mode": "demo",
+  "steps": [
+    {
+      "step_name": "1_lunge_and_rover_drive",
+      "description": "Lunge forward while driving rover forward in short quick burst (~1 meter)",
+      "preset": "lunge",
+      "arm_duration": 0.8,
+      "rover": {
+        "throttle": 0.85,
+        "steering": 0.0,
+        "duration_sec": 1.0
+      },
+      "audio": null
+    },
+    {
+      "step_name": "2_platform_spin_right_fast",
+      "description": "Platform servo 7 spins right to +90 degrees quickly",
+      "servo7_deg": 90.0,
+      "servo7_duration": 0.4,
+      "servo7_speed": 700
+    },
+    {
+      "step_name": "3_blargg_audio_and_return_center",
+      "description": "Play smw_blargg audio and spin pedestal back left to center (0.0°)",
+      "servo7_deg": 0.0,
+      "servo7_duration": 1.0,
+      "servo7_speed": 500,
+      "audio": {
+        "kind": "smw_blargg",
+        "wav_path": "smw_blargg.wav",
+        "timing": "start",
+        "delay_sec": 0.0,
+        "stop_previous": true
+      }
+    },
+    {
+      "step_name": "4_platform_sweep_left_and_ready_pose",
+      "description": "Sweep pedestal left to -90° over 2.0s while arm moves into 'ready' posture",
+      "preset": "ready",
+      "arm_duration": 2.0,
+      "servo7_deg": -90.0,
+      "servo7_duration": 2.0
+    },
+    {
+      "step_name": "5_transition_to_roar_posture",
+      "description": "Arm moves into the 'roar' position",
+      "preset": "roar",
+      "arm_duration": 0.8
+    },
+    {
+      "step_name": "6_jaw_open_roar_audio_and_motor1_sweep",
+      "description": "Jaw opens quickly, T-Rex roar audio plays with preemptive stop, pedestal rotates to center (-90 -> 0), and Motor 1 rotates max -> home over 3.0s",
+      "jaw_snap": 100.0,
+      "audio": {
+        "kind": "trex_roar",
+        "wav_path": "trex_roar_isolated.wav",
+        "timing": "start",
+        "delay_sec": 0.0,
+        "stop_previous": true
+      },
+      "pedestal_to_center": true,
+      "pedestal_duration": 3.0,
+      "motor1_sweep": {
+        "target_pan": 100.0,
+        "max_duration_sec": 1.5,
+        "home_duration_sec": 1.5
+      },
+      "step_duration": 4.25
+    },
+    {
+      "step_name": "7_audio_finish_pause",
+      "description": "0.5s pause after audio completion",
+      "pause_sec": 0.5
+    },
+    {
+      "step_name": "8_return_to_position_1",
+      "description": "Robot returns back to position 1",
+      "preset": "pose_1",
+      "arm_duration": 1.2,
+      "servo7_deg": 0.0,
+      "servo7_duration": 1.2
+    }
+  ]
+}

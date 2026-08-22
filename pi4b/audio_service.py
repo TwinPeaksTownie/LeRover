@@ -69,6 +69,12 @@ class AudioPlaybackService:
                 target_wav = os.path.join(self.sounds_dir, "smw_pause.wav")
             elif kind in ("smw_shell_ricochet", "smw_shell_richochet", "shell_ricochet"):
                 target_wav = os.path.join(self.sounds_dir, "smw_shell_ricochet.wav")
+            elif kind == "smw_stomp_bones":
+                target_wav = os.path.join(self.sounds_dir, "smw_stomp_bones.wav")
+            elif kind == "smw_save_menu":
+                target_wav = os.path.join(self.sounds_dir, "smw_save_menu.wav")
+            elif kind == "smw_vine":
+                target_wav = os.path.join(self.sounds_dir, "smw_vine.wav")
             elif kind:
                 target_wav = os.path.join(self.sounds_dir, f"{kind}.wav")
 

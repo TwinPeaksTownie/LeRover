@@ -21,8 +21,8 @@ class RoverController:
         self,
         serial_port: Optional[str] = None,
         baudrate: int = 115200,
-        max_pulse_offset: int = 125,
-        accel_ramp_rate: float = 0.12,
+        max_pulse_offset: int = 175,
+        accel_ramp_rate: float = 0.20,
         watchdog_timeout: float = 1.0,
         mock_mode: bool = False
     ) -> None:
@@ -37,7 +37,7 @@ class RoverController:
             self.serial_port = serial_port
 
         self.baudrate = baudrate
-        self.max_pulse_offset = max_pulse_offset  # +/- 125 us -> 1375 to 1625 us (indoor driving)
+        self.max_pulse_offset = max_pulse_offset  # +/- 175 us -> 1325 to 1675 us (smooth calibrated driving)
 
         self.accel_ramp_rate = accel_ramp_rate
         self.watchdog_timeout = watchdog_timeout

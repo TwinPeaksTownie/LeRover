@@ -197,6 +197,7 @@ def run_simulation():
         # TEST 4: Drive Forward in ROVER Mode -> Verify UART CMD Output
         # -------------------------------------------------------------
         print("\n--- TEST 4: Throttle Forward (norm_y = 1.0) in ROVER Mode ---")
+        app.rover_drive_active_time = 0.0  # Fast-forward startup countdown lockout for simulation
         captured_uart_packets.clear()
         drive_start = time.time()
         while time.time() - drive_start < 0.3:
@@ -246,6 +247,7 @@ def run_simulation():
         # TEST 7: 3.0s Button A Hold to Return to AUX Mode
         # -------------------------------------------------------------
         print("\n--- TEST 7: 3.0s Button A Hold -> Return to AUX Mode ---")
+        app.control_mode = "ROVER"  # Set to ROVER mode to test 3s toggle back to AUX
         MockAudioHandler.dispatched_sounds.clear()
         start_t = time.time()
         while time.time() - start_t < 3.2:

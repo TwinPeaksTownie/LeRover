@@ -13,9 +13,10 @@ from typing import Optional, Callable
 class BusPowerManager:
     """Dedicated manager for servo bus power monitoring and auto-recovery state machine."""
 
-    def __init__(self, ctrl=None, on_resync_callback: Optional[Callable[[], bool]] = None) -> None:
+    def __init__(self, ctrl=None, on_resync_callback: Optional[Callable[[], bool]] = None, is_busy_callback: Optional[Callable[[], bool]] = None) -> None:
         self.ctrl = ctrl
         self.on_resync_callback = on_resync_callback
+        self.is_busy_callback = is_busy_callback
         self.state: str = "CONNECTED"
         self.error_msg: Optional[str] = None
         self._lock = threading.Lock()
@@ -56,6 +57,9 @@ class BusPowerManager:
         while not self._stop_event.is_set():
             time.sleep(0.4)
             if not self.ctrl:
+                continue
+
+            if self.is_busy_callback and self.is_busy_callback():
                 continue
 
             v7 = None

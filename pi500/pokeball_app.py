@@ -100,13 +100,8 @@ class PokeballApp(BaseApp):
         self.rover_drive_active_time: float = 0.0  # Startup lockout (sound duration + 1.0s safety delay)
         self.last_rover_interaction_time: float = 0.0  # 30-second inactivity timeout tracker
 
-        # Rover controller instance
-        if rover_ctrl is not None:
-            self.rover_ctrl = rover_ctrl
-        elif RoverController is not None:
-            self.rover_ctrl = RoverController()
-        else:
-            self.rover_ctrl = None
+        # Rover controller instance (prefer backend.rover_ctrl when run() is called)
+        self.rover_ctrl = rover_ctrl
 
         self.preset_angles = [-165.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 165.0]
         self.preset_index = 4
@@ -259,7 +254,6 @@ class PokeballApp(BaseApp):
                         self.rover_drive_active_time = now + 4.25  # 3.25s audio + 1.0s safety delay = 4.25s lockout
                         self.last_rover_interaction_time = now
                         if self.rover_ctrl:
-                            self.rover_ctrl.start()
                             self.rover_ctrl.stop()
                         play_chime("mario_kart_start")
                         self.logger.info("🏎️ [MODE SWITCH] Switched to ROVER DRIVE MODE! Mario Kart countdown active (drive output unlocks in 4.25s).")
@@ -406,6 +400,12 @@ class PokeballApp(BaseApp):
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         self.backend = backend
+        if backend and getattr(backend, "rover_ctrl", None) is not None:
+            self.rover_ctrl = backend.rover_ctrl
+        elif self.rover_ctrl is None and RoverController is not None:
+            self.rover_ctrl = RoverController()
+            self.rover_ctrl.start()
+
         if not BLEAK_AVAILABLE:
             self.logger.error("bleak package not installed; Poké Ball App cannot run.")
             self.error = "bleak package missing"
@@ -464,7 +464,7 @@ class PokeballApp(BaseApp):
                         await asyncio.sleep(3.0)
             finally:
                 if self.rover_ctrl:
-                    self.rover_ctrl.shutdown()
+                    self.rover_ctrl.stop()
                 if self.connect_chime_played:
                     play_chime("disconnect")
                     self.connect_chime_played = False

@@ -1,0 +1,33 @@
+{
+  "name": "sequence_demo",
+  "title": "Standard Demo Sequence",
+  "description": "Smooth cycle through Demo presets: pose_1 -> ready -> roar -> pose_1.",
+  "mode": "demo",
+  "steps": [
+    {
+      "step_name": "to_ready",
+      "preset": "ready",
+      "arm_duration": 1.5,
+      "audio": {
+        "kind": "smw_vine",
+        "timing": "start",
+        "delay_sec": 0.0,
+        "stop_previous": true
+      }
+    },
+    {
+      "step_name": "to_roar",
+      "preset": "roar",
+      "arm_duration": 1.5
+    },
+    {
+      "step_name": "pause",
+      "pause_sec": 0.8
+    },
+    {
+      "step_name": "to_home",
+      "preset": "pose_1",
+      "arm_duration": 1.5
+    }
+  ]
+}
