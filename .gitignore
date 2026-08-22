@@ -19,6 +19,10 @@ web.log
 *.log
 *.tmp
 .env
+config/wifi_networks.json
+*wifi_secrets*
+*wifi_config*.json
+secrets/
 
 # Agent Metadata & Internal Docs
 .agents/

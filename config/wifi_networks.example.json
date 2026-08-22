@@ -1,0 +1,10 @@
+{
+  "networks": [
+    {
+      "ssid": "YOUR_WIFI_SSID",
+      "psk": "YOUR_WIFI_PASSWORD",
+      "priority": 10,
+      "autoconnect": true
+    }
+  ]
+}
