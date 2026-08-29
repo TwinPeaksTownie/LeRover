@@ -190,11 +190,21 @@ class AudioTapDetector:
             except Exception as ex:
                 logging.warning("Direct paplay error for %s: %s", kind, ex)
 
+    def _get_api_url(self) -> str:
+        try:
+            try:
+                from network_resolver import get_current_pi500_ip
+            except ImportError:
+                from pi4b.network_resolver import get_current_pi500_ip
+            ip = get_current_pi500_ip(port=8085)
+            return f"http://{ip}:8085"
+        except Exception:
+            return self.pi500_url
+
     def _dispatch_action(self, count: int, intervals: List[int], max_amp: int) -> None:
-        """Executes arm actions corresponding to 1, 2, 3, or 4+ taps and mutes listener during response."""
+        """Dispatches verified clack/tap actions based on count."""
         now = time.time()
-        logging.info("[AudioTapDetector ACTION] Executing action for %d tap(s) (intervals=%s ms, peak=%d)",
-                     count, intervals, max_amp)
+        api_url = self._get_api_url()
 
         if count == 1:
             # 1 Snap: Limp Mode (Torque Off)
@@ -204,7 +214,7 @@ class AudioTapDetector:
             try:
                 payload = json.dumps({"enable": False}).encode("utf-8")
                 req = urllib.request.Request(
-                    f"{self.pi500_url}/api/arm/torque",
+                    f"{api_url}/api/arm/torque",
                     data=payload,
                     headers={"Content-Type": "application/json"},
                 )
@@ -221,7 +231,7 @@ class AudioTapDetector:
             self._play_sound("smw_save_menu")
             try:
                 req = urllib.request.Request(
-                    f"{self.pi500_url}/api/arm/capture_pose",
+                    f"{api_url}/api/arm/capture_pose",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                 )
@@ -240,7 +250,7 @@ class AudioTapDetector:
             try:
                 payload = json.dumps({"duration": 1.0}).encode("utf-8")
                 req = urllib.request.Request(
-                    f"{self.pi500_url}/api/arm/resume_last_pose",
+                    f"{api_url}/api/arm/resume_last_pose",
                     data=payload,
                     headers={"Content-Type": "application/json"},
                 )
@@ -257,7 +267,7 @@ class AudioTapDetector:
             self.mute(12.0)
             try:
                 req = urllib.request.Request(
-                    f"{self.pi500_url}/api/arm/attack_sequence",
+                    f"{api_url}/api/arm/attack_sequence",
                     data=b"{}",
                     headers={"Content-Type": "application/json"},
                 )

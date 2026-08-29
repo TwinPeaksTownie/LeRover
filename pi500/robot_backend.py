@@ -50,10 +50,20 @@ APPS_PRESETS_DIR = APPS_DIR / "presets"
 APPS_SEQUENCES_DIR = APPS_DIR / "sequences"
 SERIAL_LOCK = threading.RLock()
 NAME_TO_ID = {v: k for k, v in MOTOR_NAMES.items()}
-PI4B_SOUND_URL = "http://192.168.0.86:8082/api/play_sound"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
 
 
-def dispatch_audio_event(kind: str = "connect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
+def get_pi4b_sound_url() -> str:
+    pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
+    return f"http://{pi4b_ip}:8082/api/play_sound"
+
+
+def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
     def _work():
         try:
@@ -65,7 +75,7 @@ def dispatch_audio_event(kind: str = "connect", wav_path: Optional[str] = None, 
                 "stop_previous": stop_previous
             }).encode("utf-8")
             req = urllib.request.Request(
-                PI4B_SOUND_URL,
+                get_pi4b_sound_url(),
                 data=payload,
                 headers={"Content-Type": "application/json"}
             )
@@ -112,24 +122,13 @@ def load_aux_calibration() -> Dict[str, Any]:
     Ensures calibration_aux.json exists and returns dynamic calibration dict.
     """
     fpath = Path(AUX_CALIB_FILE)
-    if fpath.exists():
-        try:
-            with open(fpath, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            logging.warning("Failed to read calibration_aux.json: %s", e)
-
-    default_aux = {
-        "7": {"min_ticks": 0, "max_ticks": 4095, "center_ticks": 2048},
-        "8": {"min_ticks": 3, "max_ticks": 4800},
-    }
-    try:
-        fpath.parent.mkdir(parents=True, exist_ok=True)
-        with open(fpath, "w") as f:
-            json.dump(default_aux, f, indent=2)
-    except Exception as e:
-        logging.warning("Failed to write default calibration_aux.json: %s", e)
-    return default_aux
+    if not fpath.exists():
+        raise FileNotFoundError(f"Mandatory auxiliary calibration file not found at {fpath}")
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if "7" not in data or "8" not in data:
+        raise ValueError(f"Corrupt auxiliary calibration in {fpath}: Servos 7 and 8 entries required.")
+    return data
 
 
 def ticks_to_degrees_s7(ticks: int, center_ticks: int = 2048) -> float:
@@ -341,10 +340,8 @@ class RobotBackend:
             try:
                 with open(STATE_FILE, "r") as f:
                     data = json.load(f)
-                    for sid_str, pos in data.items():
-                        sid = int(sid_str)
-                        if sid == 8:
-                            self.gantry_position = int(pos)
+                    if "8" in data:
+                        self.gantry_position = int(data["8"])
                 logging.info(f"Loaded persistent Gantry Motor 8 state from {STATE_FILE}: {data}")
             except Exception as e:
                 logging.error(f"Failed to load state file: {e}")
@@ -551,28 +548,43 @@ class RobotBackend:
         logging.error("Failed to read Servo 7 position from hardware after retries.")
         return None
 
-    def sync_servo8_position(self) -> Optional[int]:
-        """Ensures Motor 8 dead reckoning state is clamped to calibrated rail bounds [3, 4800]."""
+    def get_s7_center_ticks(self) -> int:
+        if not hasattr(self, "aux_calibration") or "7" not in self.aux_calibration or "center_ticks" not in self.aux_calibration["7"]:
+            raise RuntimeError("Servo 7 calibration missing in calibration_aux.json")
+        return int(self.aux_calibration["7"]["center_ticks"])
+
+    def get_s8_bounds(self) -> Tuple[int, int]:
+        if not hasattr(self, "aux_calibration") or "8" not in self.aux_calibration or "min_ticks" not in self.aux_calibration["8"] or "max_ticks" not in self.aux_calibration["8"]:
+            raise RuntimeError("Servo 8 gantry calibration missing in calibration_aux.json")
+        return int(self.aux_calibration["8"]["min_ticks"]), int(self.aux_calibration["8"]["max_ticks"])
+
+    def sync_motor8_dead_reckoning(self, pos: Optional[int] = None) -> Optional[int]:
+        """Synchronizes Motor 8's absolute position baseline with dead reckoning state."""
+        return self.sync_servo8_position(pos)
+
+    def sync_servo8_position(self, pos: Optional[int] = None) -> Optional[int]:
+        """Synchronizes Motor 8 dead reckoning state and saves to persistent storage."""
         with self.lock:
             if not self.ctrl:
                 self.servos[8]["connected"] = False
                 self.servos[8]["error"] = "AuxiliaryServoController uninitialized"
                 return None
 
-            curr = self.servos[8]["pos"]
+            curr = pos if pos is not None else self.servos[8]["pos"]
             if curr is None:
                 self.servos[8]["connected"] = False
                 self.servos[8]["error"] = "Dead reckoning state uninitialized"
                 logging.error("Cannot sync Motor 8: dead reckoning position state is uninitialized.")
                 return None
 
-            gantry_min = self.aux_calibration.get("8", {}).get("min_ticks", 3)
-            gantry_max = self.aux_calibration.get("8", {}).get("max_ticks", 4800)
+            gantry_min, gantry_max = self.get_s8_bounds()
             real_pos = max(gantry_min, min(gantry_max, int(curr)))
+
             self.servos[8]["pos"] = real_pos
             self.servos[8]["raw"] = real_pos % 4096
             self.servos[8]["connected"] = True
             self.servos[8]["error"] = None
+            self.aux_positions[8] = real_pos
             logging.info(f"Synchronized Motor 8 dead reckoning baseline: {real_pos} ticks")
             self.save_state()
             return real_pos
@@ -720,6 +732,46 @@ class RobotBackend:
                     self.follower_active = False
                 logging.info("Arm torque disarmed on Servos 1-6 (limp mode).")
             return True
+
+    def disable_all_torque(self) -> bool:
+        """Immediately disarms torque on Arm Servos 1-6 and Aux Servos 7-8."""
+        logging.info("Disarming torque across all servos (1-8)...")
+        # 1. Disable Arm Servos 1-6
+        try:
+            self.set_arm_torque(False)
+        except Exception as e:
+            logging.warning("Error disabling arm torque: %s", e)
+
+        # 2. Disable Aux Servos 7 and 8
+        try:
+            if self.ctrl:
+                with SERIAL_LOCK:
+                    self.ctrl.set_torque(7, False)
+                    self.ctrl.set_torque(8, False)
+                with self.lock:
+                    self.servos[7]["torque"] = False
+                    self.servos[8]["torque"] = False
+                    self.torque_state[7] = False
+                    self.torque_state[8] = False
+        except Exception as e:
+            logging.warning("Error disabling aux servo torque: %s", e)
+
+        # 3. Direct broadcast packet to ensure no Feetech servo keeps driving
+        try:
+            ser = getattr(self.bus.port_handler, "ser", None) if self.bus else None
+            if not ser and self.ctrl and hasattr(self.ctrl, "ser"):
+                ser = self.ctrl.ser
+            if ser and hasattr(ser, "write"):
+                with SERIAL_LOCK:
+                    pkt = [0xFF, 0xFF, 0xFE, 4, 3, 40, 0]
+                    pkt.append((~sum(pkt[2:])) & 0xFF)
+                    ser.write(bytes(pkt))
+                    if hasattr(ser, "flush"):
+                        ser.flush()
+        except Exception as e:
+            logging.warning("Broadcast torque disable warning: %s", e)
+
+        return True
 
     def get_arm_presets(self, mode: str = "normal") -> Dict[str, Any]:
         """Loads and returns the presets dictionary for specified mode ('normal', 'demo', 'angry')."""
@@ -966,7 +1018,14 @@ class RobotBackend:
                 self.servos[sid]["torque"] = True
 
         arm_motor_names = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+        for mname in arm_motor_names:
+            if mname not in start_norm or start_norm[mname] is None:
+                return False, f"Incomplete motor read: '{mname}' missing from bus telemetry"
+            if mname not in target_norm or target_norm[mname] is None:
+                return False, f"Incomplete target pose: '{mname}' missing from target specification"
+
         dt = max(0.008, duration / steps)
+        consecutive_write_failures = 0
         for s in range(1, steps + 1):
             if stop_event and stop_event.is_set():
                 return False, "Interpolation aborted by stop signal"
@@ -975,8 +1034,8 @@ class RobotBackend:
             smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
             interp_frame = {}
             for mname in arm_motor_names:
-                s_val = float(start_norm.get(mname, target_norm.get(mname, 0.0)))
-                t_val = float(target_norm.get(mname, 0.0))
+                s_val = float(start_norm[mname])
+                t_val = float(target_norm[mname])
                 val = s_val + (t_val - s_val) * smooth_alpha
                 if mname == "gripper":
                     clamped = max(0.0, min(100.0, val))
@@ -988,8 +1047,13 @@ class RobotBackend:
                 if self.bus and hasattr(self.bus, "sync_write"):
                     try:
                         self.bus.sync_write("Goal_Position", interp_frame)
+                        consecutive_write_failures = 0
                     except Exception as e:
-                        logging.debug("sync_write Goal_Position error: %s", e)
+                        consecutive_write_failures += 1
+                        logging.warning("sync_write Goal_Position warning (failure %d): %s", consecutive_write_failures, e)
+                        if consecutive_write_failures >= 3:
+                            logging.error("Aborting move: 3 consecutive bus write failures encountered")
+                            return False, "Bus write failure threshold exceeded"
             time.sleep(dt)
 
         with SERIAL_LOCK:
@@ -1013,9 +1077,11 @@ class RobotBackend:
         return True, "OK"
 
     def move_to_specific_arm_preset(
-        self, preset_name: str, duration: float = 1.0, steps: int = 40, mode: str = "normal"
+        self, preset_name: str, duration: float = 1.0, steps: Optional[int] = None, mode: str = "normal"
     ) -> Tuple[bool, str]:
         """Moves arm to a specific preset name in mode-specific JSON with smooth cosine S-curve interpolation."""
+        if steps is None:
+            steps = max(10, int(duration * 40))
         presets = self.get_arm_presets(mode=mode)
         if preset_name not in presets:
             # Also try default 'normal' if not found in requested mode
@@ -1075,7 +1141,7 @@ class RobotBackend:
         stop_event: Optional[threading.Event] = None,
     ) -> None:
         """Synchronously interpolates arm posture (Motors 1-6) and sweeps Servo 7 (pedestal) in lockstep under SERIAL_LOCK."""
-        center_s7 = self.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self, "aux_calibration") else 2048
+        center_s7 = self.get_s7_center_ticks()
         with SERIAL_LOCK:
             if not self.bus:
                 return
@@ -1112,7 +1178,7 @@ class RobotBackend:
                         pass
                 if self.ctrl:
                     try:
-                        self.ctrl.write_goal_raw(7, s7_tick, speed=0)
+                        self.ctrl.write_goal_raw(7, s7_tick, speed=500)
                     except Exception:
                         pass
                 with self.lock:
@@ -1212,7 +1278,7 @@ class RobotBackend:
         self._sequence_running = True
 
         try:
-            center_s7 = self.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self, "aux_calibration") else 2048
+            center_s7 = self.get_s7_center_ticks()
             steps = seq_data.get("steps", [])
             for idx, step in enumerate(steps):
                 if self._sequence_stop_event.is_set():
@@ -1232,8 +1298,8 @@ class RobotBackend:
 
                 # Check if this step commands both arm preset and Servo 7
                 preset = step.get("preset")
-                has_s7 = "servo7_deg" in step or "s7_deg" in step
-                s7_deg = float(step.get("servo7_deg", step.get("s7_deg", 0.0))) if has_s7 else None
+                has_s7 = "servo7_deg" in step
+                s7_deg = float(step["servo7_deg"]) if has_s7 else None
 
                 if preset and (s7_deg is not None):
                     arm_dur = float(step.get("arm_duration", step.get("duration", 1.5)))
@@ -1261,77 +1327,83 @@ class RobotBackend:
             self._sequence_running = False
 
     def execute_attack_sequence(self) -> Tuple[bool, str]:
-        """Executes the full 8-step Piranha Plant Attack choreography:
-        1. Lunge forward with ~1m rover drive burst
-        2. Quick pedestal rotation right (Servo 7 to +90° / 3072 ticks)
-        3. Pedestal spin back left to center (0.0° / 2048 ticks) while playing smw_blargg audio
-        4. Smooth move to 'ready' stance while sweeping pedestal left to -90° (1024 ticks) over 2.0s
-        5. Transition into roar posture
-        6. Snap jaw open, play T-Rex roar audio, simultaneous pedestal return (-90° -> 0°) and Motor 1 pan sweep in lockstep
-        7. 0.5s pause after audio completes
-        8. Smooth return to pose_1
-        """
+        """Executes the full 8-step Piranha Plant Attack choreography."""
         self.stop_sequence()
         self._sequence_stop_event.clear()
         self._sequence_running = True
 
         try:
-            center_s7 = self.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self, "aux_calibration") else 2048
+            center_s7 = self.get_s7_center_ticks()
 
-            # Load Demo presets for keyframes
+            # Load Demo presets for keyframes strictly from disk JSON
             demo_presets = self.get_arm_presets(mode="demo")
-            lunge_norm = demo_presets.get("lunge", {}).get("normalized", {"shoulder_pan": 0.0, "shoulder_lift": 35.0, "elbow_flex": -40.0, "wrist_flex": 30.0, "wrist_roll": 0.0, "gripper": 70.0})
-            ready_norm = demo_presets.get("ready", {}).get("normalized", {"shoulder_pan": 0.0, "shoulder_lift": -25.0, "elbow_flex": 45.0, "wrist_flex": -20.0, "wrist_roll": 0.0, "gripper": 20.0})
-            roar_norm = demo_presets.get("roar", {}).get("normalized", {"shoulder_pan": 0.0, "shoulder_lift": -50.0, "elbow_flex": 60.0, "wrist_flex": -50.0, "wrist_roll": 0.0, "gripper": 100.0})
-            home_norm = demo_presets.get("pose_1", {}).get("normalized", {"shoulder_pan": 0.0, "shoulder_lift": 0.0, "elbow_flex": 0.0, "wrist_flex": 0.0, "wrist_roll": 0.0, "gripper": 0.0})
+            required_keyframes = ["lunge", "ready", "roar", "pose_1"]
+            for rk in required_keyframes:
+                if rk not in demo_presets or not demo_presets[rk].get("normalized"):
+                    dispatch_audio_event(kind="smw_pipe", stop_previous=True)
+                    err_msg = f"Attack sequence aborted: Required keyframe '{rk}' is missing from presets_demo.json"
+                    logging.error(err_msg)
+                    return False, err_msg
 
-            # Step 1: Lunge & Rover burst (~1m)
+            lunge_norm = demo_presets["lunge"]["normalized"]
+            ready_norm = demo_presets["ready"]["normalized"]
+            roar_norm = demo_presets["roar"]["normalized"]
+            home_norm = demo_presets["pose_1"]["normalized"]
+
+            # Step 1: Lunge + Rover Drive burst
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
-            logging.info("[ATTACK SEQ] Step 1: Lunge forward and Rover drive burst ~1m")
-            if self.rover_ctrl:
-                threading.Thread(target=self._drive_burst_helper, args=(0.85, 1.0), daemon=True).start()
-            self.interpolate_arm_norm(lunge_norm, duration=0.8, steps=30, stop_event=self._sequence_stop_event)
-            time.sleep(0.2)
+            logging.info("[ATTACK SEQ] Step 1: Lunge forward")
+            dispatch_audio_event(kind="connect", stop_previous=True)
+            t_drive = threading.Thread(target=self._drive_burst_helper, kwargs={"throttle": 0.85, "duration_sec": 1.0}, daemon=True)
+            t_drive.start()
+            self.interpolate_arm_norm(lunge_norm, duration=1.0, steps=30, stop_event=self._sequence_stop_event)
 
-            # Step 2: Pedestal spin right to +90.0° fast (~3072 ticks)
+            # Step 2: Pedestal right (+90°)
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
-            logging.info("[ATTACK SEQ] Step 2: Platform Servo 7 to +90.0 deg fast")
-            target_s7_right = degrees_to_ticks_s7(90.0, center_ticks=center_s7)
-            self.move_target(7, target_s7_right, speed=700)
+            logging.info("[ATTACK SEQ] Step 2: Quick pedestal snap to +90°")
+            target_s7_r = degrees_to_ticks_s7(90.0, center_ticks=center_s7)
+            self.move_target(7, target_s7_r, speed=1000)
+            time.sleep(0.3)
+
+            # Step 3: Pedestal center (0.0°) + SMW blargg audio
+            if self._sequence_stop_event.is_set():
+                return False, "Aborted"
+            logging.info("[ATTACK SEQ] Step 3: Pedestal return to center 0.0°")
+            dispatch_audio_event(kind="smw_blargg", stop_previous=True)
+            target_s7_c = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
+            self.move_target(7, target_s7_c, speed=1000)
             time.sleep(0.4)
 
-            # Step 3: Pedestal spin back left to center (0.0°) while playing smw_blargg audio
+            # Step 4: Sweep pedestal left (-90°) while moving arm to 'ready' stance
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
-            logging.info("[ATTACK SEQ] Step 3: Play smw_blargg audio and spin pedestal back to center 0.0 deg")
-            dispatch_audio_event(kind="smw_blargg", wav_path="smw_blargg.wav", stop_previous=True)
+            logging.info("[ATTACK SEQ] Step 4: Coordinated sweep to -90° in 'ready' stance")
+            self._execute_arm_and_pedestal_sweep(
+                start_s7_deg=0.0,
+                end_s7_deg=-90.0,
+                target_arm_norm=ready_norm,
+                duration_sec=2.0,
+                steps=40,
+                stop_event=self._sequence_stop_event
+            )
+
+            # Step 5: Transition into roar posture
+            if self._sequence_stop_event.is_set():
+                return False, "Aborted"
+            logging.info("[ATTACK SEQ] Step 5: Transition to 'roar' posture")
+            self.interpolate_arm_norm(roar_norm, duration=0.8, steps=25, stop_event=self._sequence_stop_event)
+
+            # Step 6: T-Rex Roar audio + simultaneous pedestal return & Motor 1 pan sweep
+            if self._sequence_stop_event.is_set():
+                return False, "Aborted"
+            logging.info("[ATTACK SEQ] Step 6: Triggering T-Rex Roar audio and coordinated pan sweep")
+            dispatch_audio_event(kind="trex_roar", stop_previous=True)
+
             target_s7_center = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
-            self.move_target(7, target_s7_center, speed=500)
-            time.sleep(1.0)
+            self.move_target(7, target_s7_center, speed=250)
 
-            # Step 4: Move to 'ready' stance while sweeping pedestal left to -90.0° (~1024 ticks) over 2.0s
-            if self._sequence_stop_event.is_set():
-                return False, "Aborted"
-            target_s7_left = degrees_to_ticks_s7(-90.0, center_ticks=center_s7)
-            logging.info("[ATTACK SEQ] Step 4: Move to Ready stance & sweep pedestal left to -90.0 deg over 2.0s")
-            self.move_target(7, target_s7_left, speed=500)
-            self.interpolate_arm_norm(ready_norm, duration=2.0, steps=35, stop_event=self._sequence_stop_event)
-
-            # Step 5: Transition to Roar posture
-            if self._sequence_stop_event.is_set():
-                return False, "Aborted"
-            logging.info("[ATTACK SEQ] Step 5: Move to Roar posture")
-            self.interpolate_arm_norm(roar_norm, duration=0.8, steps=30, stop_event=self._sequence_stop_event)
-
-            # Step 6: Jaw open + Roar sound + Pedestal return to center (-90 -> 0) + Motor 1 pan sweep (max -> home) in simultaneous lockstep
-            if self._sequence_stop_event.is_set():
-                return False, "Aborted"
-            target_s7_center_roar = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
-            logging.info("[ATTACK SEQ] Step 6: Play T-Rex roar audio, simultaneous pedestal (-90->0) & Motor 1 max->home sweep")
-            dispatch_audio_event(kind="trex_roar", wav_path="trex_roar_isolated.wav", stop_previous=True)
-            self.move_target(7, target_s7_center_roar, speed=350)
             self._execute_roar_pan_sweep(
                 target_pan=100.0,
                 min_duration_sec=1.5,
@@ -1339,7 +1411,7 @@ class RobotBackend:
                 stop_event=self._sequence_stop_event
             )
 
-            # Step 7: 0.5s pause post-audio completion (audio duration is 4.21s; sweep was 3.0s; remainder ~1.21s + 0.5s = 1.75s)
+            # Step 7: 0.5s pause post-audio completion
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
             logging.info("[ATTACK SEQ] Step 7: Settle pause (0.5s post-audio)")
@@ -1368,8 +1440,7 @@ class RobotBackend:
         self, sid: int, target_pos: int, step_size: int = 50, speed: int = 400, max_t: int = 1000
     ) -> Tuple[bool, str]:
         if sid == 8:
-            gantry_min = self.aux_calibration.get("8", {}).get("min_ticks", 3)
-            gantry_max = self.aux_calibration.get("8", {}).get("max_ticks", 4800)
+            gantry_min, gantry_max = self.get_s8_bounds()
             target_pos = max(gantry_min, min(gantry_max, int(target_pos)))
 
         with self.lock:
@@ -1397,38 +1468,32 @@ class RobotBackend:
             ctrl.set_torque(sid, True, max_torque_enable=max_t)
 
             if sid == 8:
-                gantry_min = self.aux_calibration.get("8", {}).get("min_ticks", 3)
-                gantry_max = self.aux_calibration.get("8", {}).get("max_ticks", 4800)
+                gantry_min, gantry_max = self.get_s8_bounds()
                 target_pos = max(gantry_min, min(gantry_max, int(target_pos)))
+
                 with self.lock:
                     curr_pos = self.servos[8]["pos"]
                 if curr_pos is None:
                     logging.error("Rejected move for Servo 8: Dead reckoning position state is uninitialized.")
                     return False, "Hardware Error: Motor 8 position uninitialized."
+
                 delta = target_pos - curr_pos
+                if delta != 0:
+                    res = ctrl.set_position_multiturn(8, delta, speed=speed)
+                    if res is None:
+                        logging.error("Rejected move for Servo 8: Hardware write failed (12V Power OFF or Bus Error).")
+                        return False, "Hardware write failed: No response from Motor 8 (Verify 12V Power Supply is ON)."
 
-                if delta == 0:
-                    return True, "OK"
-
-                curr_hw = ctrl.get_position_multiturn(8)
-                if curr_hw is None:
-                    logging.error("Failed to read Motor 8 hardware position phase for offset calculation.")
-                    return False, "Hardware Error: Failed to read Motor 8 position phase."
-
-                hw_target = curr_hw + delta
-                res = ctrl.set_position_multiturn(8, hw_target, speed=speed)
-                if res is None:
-                    logging.error(f"Rejected move for Servo {sid}: Hardware write failed (12V Power OFF or Bus Error).")
-                    return False, "Hardware write failed: No response from Motor 8 (Verify 12V Power Supply is ON)."
-
-                with self.lock:
-                    self.servos[8]["pos"] = target_pos
-                    self.servos[8]["raw"] = target_pos % 4096
-                    self.servos[8]["torque"] = True
-                    self.servos[8]["connected"] = True
+                    with self.lock:
+                        self.servos[8]["pos"] = target_pos
+                        self.servos[8]["raw"] = target_pos % 4096
+                        self.servos[8]["torque"] = True
+                        self.servos[8]["connected"] = True
+                        self.aux_positions[8] = target_pos
+                    self.save_state()
             else:
                 if sid == 7:
-                    center_t = self.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self, "aux_calibration") else 2048
+                    center_t = self.get_s7_center_ticks()
                     deg = ticks_to_degrees_s7(target_pos, center_ticks=center_t)
                     clamped_deg = max(-165.0, min(165.0, deg))
                     target_pos = degrees_to_ticks_s7(clamped_deg, center_ticks=center_t)
@@ -1483,12 +1548,8 @@ class RobotBackend:
                 logging.warning("Error shutting down rover controller: %s", e)
         if self.power_mgr:
             self.power_mgr.stop()
-        try:
-            if self.bus and hasattr(self.bus, "disable_torque"):
-                with SERIAL_LOCK:
-                    self.bus.disable_torque(num_retry=2)
-        except Exception as e:
-            logging.error(f"Error disabling motor torque: {e}")
+
+        self.disable_all_torque()
 
         try:
             if self.bus and hasattr(self.bus, "disconnect"):

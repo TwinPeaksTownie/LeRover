@@ -1,21 +1,21 @@
 {
   "pose_1": {
-    "timestamp": 1724240000.0,
+    "timestamp": 1787353369.445704,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": 0.0,
-      "elbow_flex": 0.0,
-      "wrist_flex": 0.0,
-      "wrist_roll": 0.0,
-      "gripper": 0.0
+      "shoulder_pan": -0.41,
+      "shoulder_lift": -61.32,
+      "elbow_flex": 8.9,
+      "wrist_flex": 69.45,
+      "wrist_roll": 0.26,
+      "gripper": 9.0
     },
     "raw_ticks": {
-      "1": 2048,
-      "2": 2048,
-      "3": 2048,
-      "4": 2048,
-      "5": 2048,
-      "6": 2048
+      "1": 2095,
+      "2": 1371,
+      "3": 1341,
+      "4": 2785,
+      "5": 1985,
+      "6": 1586
     },
     "aux": {
       "7": 2048,
@@ -23,16 +23,23 @@
     }
   },
   "lunge": {
-    "timestamp": 1724240001.0,
+    "timestamp": 1787354630.409301,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": 35.0,
-      "elbow_flex": -40.0,
-      "wrist_flex": 30.0,
-      "wrist_roll": 0.0,
-      "gripper": 70.0
+      "shoulder_pan": -40.04,
+      "shoulder_lift": -61.24,
+      "elbow_flex": 94.22,
+      "wrist_flex": -38.3,
+      "wrist_roll": 0.52,
+      "gripper": 41.04
     },
-    "raw_ticks": {},
+    "raw_ticks": {
+      "1": 1557,
+      "2": 1372,
+      "3": 2271,
+      "4": 1526,
+      "5": 1990,
+      "6": 2049
+    },
     "aux": {
       "7": 2048,
       "8": 3300

@@ -7,221 +7,34 @@
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Overlander 4 Touch Controller</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: manipulation;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #000000;
-            color: #ffffff;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            padding: 0;
-        }
-
-        /* Left Navigation Rail (120px Wide, 480px Full Height) */
-        .left-rail {
-            width: 120px;
-            height: 100vh;
-            background: #0d0d0d;
-            border-right: 2px solid #222222;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            padding: 5px;
-            flex-shrink: 0;
-            box-sizing: border-box;
-        }
-
-        .rail-btn {
-            flex: 1;
-            background: #181818;
-            border: 2px solid #333333;
-            color: #888888;
-            font-size: 13.5px;
-            font-weight: 900;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            gap: 2px;
-        }
-
-        .rail-btn.active {
-            background: #00e5ff;
-            color: #000000;
-            border-color: #00e5ff;
-        }
-
-        /* Main Workspace (680px Wide x 480px Tall) */
-        .workspace {
-            flex-grow: 1;
-            width: 680px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 6px;
-            gap: 6px;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-
-        .tab-panel {
-            display: none;
-            width: 100%;
-            height: 100%;
-            flex-direction: column;
-            gap: 6px;
-            box-sizing: border-box;
-        }
-
-        .tab-panel.active {
-            display: flex;
-        }
-
-        /* Compact Telemetry Bar (No redundant title labels, 32px height) */
-        .telemetry-bar {
-            height: 32px;
-            background: #111111;
-            border: 1.5px solid #252525;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0 10px;
-            flex-shrink: 0;
-        }
-
-        .header-readout {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 21px;
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: 0.5px;
-        }
-
-        /* Massive Touch Action Grid */
-        .giant-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            flex-grow: 1;
-        }
-
-        .btn-action {
-            background: #181818;
-            border: 3px solid #444444;
-            color: #ffffff;
-            font-size: 22px;
-            font-weight: 900;
-            border-radius: 12px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 8px;
-            line-height: 1.2;
-            min-height: 85px;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        #panelApps .btn-action {
-            min-height: unset;
-            padding: 4px;
-            border-radius: 8px;
-        }
-
-        .btn-action:active, .btn-action.touch-active {
-            background: #00e5ff;
-            color: #000000;
-            border-color: #00e5ff;
-            transform: scale(0.97);
-        }
-
-        .btn-orange {
-            border-color: #ff9900;
-            color: #ffffff;
-            background: #ff9900;
-            text-shadow: 0px 2px 4px rgba(0,0,0,0.4);
-        }
-
-        .btn-orange:active {
-            background: #181818;
-            color: #ff9900;
-            border-color: #ff9900;
-            text-shadow: none;
-        }
-
-        .btn-red {
-            border-color: #ff3344;
-            color: #ffffff;
-            background: #ff3344;
-            text-shadow: 0px 2px 4px rgba(0,0,0,0.4);
-        }
-
-        .btn-red:active {
-            background: #220000;
-            color: #ff3344;
-            border-color: #ff3344;
-            text-shadow: none;
-        }
-
-        .btn-cyan {
-            border-color: #00e5ff;
-            color: #000000;
-            background: #00e5ff;
-            text-shadow: none;
-        }
-
-        .btn-cyan:active {
-            background: #181818;
-            color: #00e5ff;
-            border-color: #00e5ff;
-            text-shadow: none;
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
-    <!-- Left Vertical Navigation Rail (130px Wide x 480px Tall) -->
+    <!-- Left Navigation Rail -->
     <div class="left-rail">
-        <button id="railBtnGantry" class="rail-btn" onclick="switchTab('gantry')">
+        <button id="railBtnGantry" class="rail-btn">
             <span style="font-size: 22px;">⚙️</span>
-            <span>leSpiner</span>
+            <span>GANTRY</span>
         </button>
 
-        <button id="railBtnControls" class="rail-btn" onclick="switchTab('controls')">
+        <button id="railBtnControls" class="rail-btn">
             <span style="font-size: 22px;">🦾</span>
             <span>CONTROLS</span>
         </button>
 
-        <button id="railBtnApps" class="rail-btn active" onclick="switchTab('apps')">
+        <button id="railBtnApps" class="rail-btn active">
             <span style="font-size: 22px;">📱</span>
             <span>APPS</span>
         </button>
 
-        <button id="railBtnPower" class="rail-btn" onclick="switchTab('power')">
+        <button id="railBtnPower" class="rail-btn">
             <span style="font-size: 22px;">⚡</span>
             <span>BACKEND</span>
         </button>
     </div>
 
-    <!-- Main Unobstructed Workspace -->
+    <!-- Main Workspace -->
     <div class="workspace">
 
         <!-- TAB 1: ⚙️ GANTRY & PEDESTAL -->
@@ -232,16 +45,19 @@
 
             <div class="giant-grid" style="grid-template-rows: repeat(3, 1fr);">
                 <!-- Top Row: Orange Buttons for Pedestal Motor 7 (+/- 45 Deg Rotation) -->
-                <button class="btn-action btn-orange" onclick="rotatePedestal('left')">↺ ROTATE PEDESTAL<br>LEFT (-45°)</button>
-                <button class="btn-action btn-orange" onclick="rotatePedestal('right')">ROTATE PEDESTAL ↻<br>(+45°)</button>
+                <button id="pedestalLeftBtn" class="btn-action btn-orange">↺ ROTATE PEDESTAL<br>LEFT (-45°)</button>
+                <button id="pedestalRightBtn" class="btn-action btn-orange">ROTATE PEDESTAL ↻<br>(+45°)</button>
 
                 <!-- Middle Row: Step Moves for LeSlide Gantry Motor 8 (500 Ticks) -->
-                <button class="btn-action btn-cyan" onclick="nudgeSlider(-500)">◀ STEP LEFT<br>(-500 TICKS)</button>
-                <button class="btn-action btn-cyan" onclick="nudgeSlider(500)">STEP RIGHT ▶<br>(+500 TICKS)</button>
+                <button id="gantryStepLeftBtn" class="btn-action btn-cyan">◀ STEP LEFT<br>(-500 TICKS)</button>
+                <button id="gantryStepRightBtn" class="btn-action btn-cyan">STEP RIGHT ▶<br>(+500 TICKS)</button>
 
-                <!-- Bottom Row: Max Bounds for LeSlide Gantry Motor 8 -->
-                <button class="btn-action btn-cyan" onclick="moveGantryMaxLeft()">⏪ MAX LEFT<br>(3 TICKS)</button>
-                <button class="btn-action btn-cyan" onclick="moveGantryMaxRight()">MAX RIGHT ⏩<br>(4800 TICKS)</button>
+                <!-- Bottom Row: Max Bounds & Center for LeSlide Gantry Motor 8 -->
+                <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <button id="gantryMaxLeftBtn" class="btn-action btn-cyan">⏪ MAX LEFT<br>(3 TICKS)</button>
+                    <button id="gantryCenterBtn" class="btn-action btn-cyan">⏺ CENTER<br>(2400 TICKS)</button>
+                    <button id="gantryMaxRightBtn" class="btn-action btn-cyan">MAX RIGHT ⏩<br>(4800 TICKS)</button>
+                </div>
             </div>
         </div>
 
@@ -253,11 +69,21 @@
 
             <div class="giant-grid" style="grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; height: 110px;">
                 <!-- Left: Leader -->
-                <button id="leaderBtn" class="btn-action" onclick="toggleMacLeader()">🍎<br>START LEADER</button>
+                <button id="leaderBtn" class="btn-action">
+                    <span id="leaderBtnIcon">🍎</span><br>
+                    <span id="leaderBtnText">START LEADER</span>
+                </button>
                 <!-- Center: Teleop -->
-                <button id="followerBtn" class="btn-action" onclick="togglePi500Follower()">🦾<br>START TELEOP</button>
+                <button id="followerBtn" class="btn-action">
+                    <span id="followerBtnIcon">🦾</span><br>
+                    <span id="followerBtnText">START TELEOP</span>
+                </button>
                 <!-- Right: Pokéball -->
-                <button id="pokeballBtn" class="btn-action" onclick="togglePokeballTeleop()">🔴<br>START POKÉBALL</button>
+                <button id="pokeballBtn" class="btn-action">
+                    <span id="pokeballBtnIcon">🔴</span><br>
+                    <span id="pokeballBtnTitle">START POKÉBALL</span>
+                    <span id="pokeballBtnSub" style="display:none; font-size:11px; font-weight:normal;"></span>
+                </button>
             </div>
         
             <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
@@ -289,1096 +115,395 @@
                 <div id="appsStatus" class="header-readout" style="font-size: 15px; color: #00e5ff;">ROBOT APPS IDLE</div>
             </div>
 
-            <!-- Two-Column Workspace: Left Controls & Right Full-Height Telemetry -->
-            <div style="display: grid; grid-template-columns: 1fr 140px; gap: 6px; flex-grow: 1; min-height: 0; width: 100%;">
-                
-                <!-- Left Column Workspace -->
-                <div style="display: flex; flex-direction: column; min-height: 0; min-width: 0; width: 100%; height: 100%;">
+            <!-- VIEW A: Top-Level 3-Button Launcher (Default View) -->
+            <div id="appsViewLauncher" style="display: flex; flex-direction: column; gap: 10px; height: calc(100% - 32px); justify-content: center; padding: 6px 16px;">
+                <button id="launchClackerBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 3px solid #00e5ff; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🪴</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #00e5ff; font-weight: 900;">PIRANHA POSE</div>
+                        <div style="font-size: 12px; color: #a0c8e0; font-weight: 600;">Multi-Mode Presets, Sequence Engine & Acoustic Clack Control</div>
+                    </div>
+                </button>
+
+                <button id="launchStudioBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #2d2400, #1a1500); border: 3px solid #ffaa00; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🔧</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #ffaa00; font-weight: 900;">SERVO STUDIO</div>
+                        <div style="font-size: 12px; color: #e0cca0; font-weight: 600;">Live Motor Calibration & Diagnostics (:8086)</div>
+                    </div>
+                </button>
+
+                <button id="launchBeatBanditBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #380e45, #1d0724); border: 3px solid #a855f7; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🎧</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #a855f7; font-weight: 900;">BEAT BANDIT</div>
+                        <div style="font-size: 12px; color: #e9cbfd; font-weight: 600;">YouTube Music Audio Analysis & Choreographer</div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- VIEW B: Dedicated Piranha Pose Interface (Controls & Presets + Telemetry Sidebar) -->
+            <div id="appsViewClacker" style="display: none; height: calc(100% - 32px); min-height: 0; width: 100%;">
+                <div style="display: grid; grid-template-columns: 1fr 140px; gap: 6px; flex-grow: 1; min-height: 0; width: 100%; height: 100%;">
                     
-                    <!-- MODE A: Primary Launchers, 4 Action Buttons, Sensitivities & Open Presets -->
-                    <div id="appsModeControls" style="display: flex; flex-direction: column; gap: 6px; height: 100%;">
-                        <!-- Top Launchers Row -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; height: 75px; flex-shrink: 0;">
-                            <button id="clackPoseBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px;" onclick="toggleClackPose()">
-                                <span style="font-size: 20px;">👏</span><br>Start Clack Pose
+                    <!-- Left Column Workspace -->
+                    <div style="display: flex; flex-direction: column; min-height: 0; min-width: 0; width: 100%; height: 100%;">
+                        
+                        <!-- Top Nav / Action Bar inside Piranha Pose: Top-Left Pink Back Button & Engage Button -->
+                        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                            <button id="clackerBackBtn" class="btn-action btn-back">
+                                ◀ BACK
                             </button>
-                            <button id="studioBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px;" onclick="toggleServoStudio()">
-                                <span style="font-size: 20px;">🔧</span><br>Start Calibration
-                            </button>
-                        </div>
-
-                        <!-- Middle 4 Action Buttons -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 150px; flex-shrink: 0;">
-                            <button class="btn-action" style="background:#2b0e10; border:2.5px solid #ff3344; color:#ff4455; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;" onclick="armLimpMode()">
-                                Cut Torque
-                            </button>
-                            <button class="btn-action" style="background:#2d2400; border:2.5px solid #ffd700; color:#ffd700; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;" onclick="armSavePose()">
-                                Hold
-                            </button>
-                            <button class="btn-action" style="background:#0a1e36; border:2.5px solid #0099ff; color:#0099ff; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;" onclick="commitOfficialPreset()">
-                                Save Preset
-                            </button>
-                            <button class="btn-action" style="background:#0a2612; border:2.5px solid #00ff66; color:#00ff66; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;" onclick="armResumePose()">
-                                Go Back
+                            <button id="clackPoseBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px; border-radius: 8px; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff;">
+                                <span id="clackPoseBtnText">🪴 START PIRANHA POSE</span>
+                                <span id="clackPoseBtnSub" style="display:block; font-size:10.5px; color:#aaa;">Presets, Sequences & Clacks</span>
                             </button>
                         </div>
 
-                        <!-- Sensitivity / Thresholds Boxes -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; height: 75px; flex-shrink: 0;">
-                            <button id="sensLowBtn" class="btn-action" style="font-size:16px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;" onclick="setClackThreshold(7500)">
-                                Low
-                            </button>
-                            <button id="sensNormBtn" class="btn-action" style="font-size:16px; font-weight:900; background:#181818; border:2px solid #00e5ff; color:#00e5ff; border-radius:6px; cursor:pointer;" onclick="setClackThreshold(5200)">
-                                Normal
-                            </button>
-                            <button id="sensHiBtn" class="btn-action" style="font-size:16px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;" onclick="setClackThreshold(3500)">
-                                Hi
+                        <!-- MODE A: 4 Action Buttons, Sensitivities & Open Presets -->
+                        <div id="appsModeControls" style="display: flex; flex-direction: column; gap: 6px; height: calc(100% - 50px);">
+                            <!-- Middle 4 Action Buttons -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 155px; flex-shrink: 0;">
+                                <button id="armLimpBtn" class="btn-action" style="background:#2b0e10; border:2.5px solid #ff3344; color:#ff4455; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Cut Torque
+                                </button>
+                                <button id="armSaveBtn" class="btn-action" style="background:#2d2400; border:2.5px solid #ffd700; color:#ffd700; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Hold
+                                </button>
+                                <button id="commitPresetBtn" class="btn-action" style="background:#0a1e36; border:2.5px solid #0099ff; color:#0099ff; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Save Preset
+                                </button>
+                                <button id="armResumeBtn" class="btn-action" style="background:#0a2612; border:2.5px solid #00ff66; color:#00ff66; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Go Back
+                                </button>
+                            </div>
+
+                            <!-- Sensitivity / Thresholds Boxes -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; height: 55px; flex-shrink: 0;">
+                                <button id="sensLowBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                    Low
+                                </button>
+                                <button id="sensNormBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #00e5ff; color:#00e5ff; border-radius:6px; cursor:pointer;">
+                                    Normal
+                                </button>
+                                <button id="sensHiBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                    Hi
+                                </button>
+                            </div>
+
+                            <!-- Bottom Button to switch to Presets Grid Mode -->
+                            <button id="openPresetsModeBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:17px; font-weight:900; border-radius:8px; cursor:pointer; height:65px; flex-shrink:0;">
+                                📂 OPEN PRESETS (1-11)
                             </button>
                         </div>
 
-                        <!-- Bottom Button to switch to Presets Grid Mode -->
-                        <button class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer; height:75px; flex-shrink:0;" onclick="switchAppsMode('presets')">
-                            📂 OPEN PRESETS (1-11)
-                        </button>
+                        <!-- MODE B: Multi-Mode Presets Grid & Sequence Engine -->
+                        <div id="appsModePresets" style="display: none; flex-direction: column; gap: 5px; height: calc(100% - 50px);">
+                            <!-- Top Toolbar: Mode Tabs + Overwrite Toggle -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1.3fr; gap: 4px; height: 38px; flex-shrink: 0;">
+                                <button id="modeTabNormal" class="btn-action" style="font-size:12px; font-weight:900; background:#004488; border:2px solid #00e5ff; color:#fff; border-radius:6px; cursor:pointer;">NORMAL</button>
+                                <button id="modeTabDemo" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DEMO</button>
+                                <button id="modeTabAngry" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">ANGRY</button>
+                                <button id="modeTabDance" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DANCE</button>
+                                <button id="overwriteModeBtn" class="btn-action" style="font-size:12px; font-weight:900; background:#1c1c1c; border:2px solid #777; color:#ddd; border-radius:6px; cursor:pointer;">✏️ OVERWRITE: OFF</button>
+                            </div>
+
+                            <!-- 4x3 Grid (12 cells) -->
+                            <div id="presetsGridContainer" style="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 4px; flex-grow: 1; min-height: 0;">
+                                <!-- Dynamically populated -->
+                            </div>
+
+                            <!-- Bottom Action Row: Play Sequence / Attack Demo + Return Button -->
+                            <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 5px; height: 45px; flex-shrink: 0;">
+                                <button id="seqPlayBtn" class="btn-action" style="background:#0a3a1a; border:2.5px solid #00ff66; color:#00ff66; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                    ▶️ PLAY SEQUENCE
+                                </button>
+                                <button id="presetsReturnBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                    ◀ CONTROLS
+                                </button>
+                            </div>
+                        </div>
+
                     </div>
 
-                    <!-- MODE B: Multi-Mode Presets Grid & Sequence Engine -->
-                    <div id="appsModePresets" style="display: none; flex-direction: column; gap: 5px; height: 100%;">
-                        <!-- Top Toolbar: Mode Tabs + Overwrite Toggle -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 4px; height: 42px; flex-shrink: 0;">
-                            <button id="modeTabNormal" class="btn-action" style="font-size:12px; font-weight:900; background:#004488; border:2px solid #00e5ff; color:#fff; border-radius:6px; cursor:pointer;" onclick="setPresetsMode('normal')">NORMAL</button>
-                            <button id="modeTabDemo" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;" onclick="setPresetsMode('demo')">DEMO</button>
-                            <button id="modeTabAngry" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;" onclick="setPresetsMode('angry')">ANGRY</button>
-                            <button id="overwriteModeBtn" class="btn-action" style="font-size:12px; font-weight:900; background:#1c1c1c; border:2px solid #777; color:#ddd; border-radius:6px; cursor:pointer;" onclick="toggleOverwriteMode()">✏️ OVERWRITE: OFF</button>
+                    <!-- Right Column: Full-Height Dedicated Unified Telemetry Sidebar -->
+                    <div style="background: #0d0d0d; border: 1.5px solid #282828; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #333; padding-bottom: 3px;">
+                            <span style="font-size: 11px; font-weight: 900; color: #00e5ff; white-space: nowrap;">TELEMETRY</span>
+                            <span id="clackPoseBadge" style="font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 3px; background: #222; color: #888;">STOPPED</span>
                         </div>
-
-                        <!-- 4x3 Grid (12 cells) -->
-                        <div id="presetsGridContainer" style="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 5px; flex-grow: 1; min-height: 0;">
-                            <!-- Dynamically populated -->
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Servos</div>
+                            <div style="display: flex; flex-direction: column; gap: 2.5px; font-family: monospace; font-size: 11px;">
+                                <div style="display:flex; justify-content:space-between;"><span>1 (Pan):</span> <strong id="telemServo1" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>2 (Lift):</span> <strong id="telemServo2" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>3 (Elbow):</span> <strong id="telemServo3" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>4 (WristF):</span> <strong id="telemServo4" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>5 (WristR):</span> <strong id="telemServo5" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>6 (Grip):</span> <strong id="telemServo6" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>7 (Ped):</span> <strong id="telemServo7" style="color:#ffaa00;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>8 (Gantry):</span> <strong id="telemServo8" style="color:#00e5ff;">--</strong></div>
+                            </div>
                         </div>
-
-                        <!-- Bottom Action Row: Play Sequence / Attack Demo + Magenta Return Button -->
-                        <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 5px; height: 50px; flex-shrink: 0;">
-                            <button id="seqPlayBtn" class="btn-action" style="background:#0a3a1a; border:2.5px solid #00ff66; color:#00ff66; font-size:15px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="triggerSequenceAction()">
-                                ▶️ PLAY SEQUENCE
-                            </button>
-                            <button class="btn-action" style="background:#d80073; border:2.5px solid #ff0099; color:#ffffff; font-size:15px; font-weight:900; border-radius:8px; cursor:pointer; text-shadow:0px 2px 4px rgba(0,0,0,0.5);" onclick="switchAppsMode('controls')">
-                                ◀ Return
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Right Column: Full-Height Dedicated Unified Telemetry Sidebar -->
-                <div style="background: #0d0d0d; border: 1.5px solid #282828; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0;">
-                    
-                    <!-- Header -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #333; padding-bottom: 3px;">
-                        <span style="font-size: 11px; font-weight: 900; color: #00e5ff; white-space: nowrap;">TELEMETRY</span>
-                        <span id="clackPoseBadge" style="font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 3px; background: #222; color: #888;">STOPPED</span>
-                    </div>
-
-                    <!-- Section: Servos (Numbered 1 to 8, bold normalized values with zero clutter) -->
-                    <div style="display: flex; flex-direction: column; gap: 3px;">
-                        <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Servos</div>
-                        <div style="display: flex; flex-direction: column; gap: 3px; font-family: monospace; font-size: 11px;">
-                            <div style="display:flex; justify-content:space-between;"><span>1 (Pan):</span> <strong id="telemServo1" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>2 (Lift):</span> <strong id="telemServo2" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>3 (Elbow):</span> <strong id="telemServo3" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>4 (WristF):</span> <strong id="telemServo4" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>5 (WristR):</span> <strong id="telemServo5" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>6 (Grip):</span> <strong id="telemServo6" style="color:#00ff66;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>7 (Ped):</span> <strong id="telemServo7" style="color:#ffaa00;">--</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>8 (Gantry):</span> <strong id="telemServo8" style="color:#00e5ff;">--</strong></div>
-                        </div>
-                    </div>
-
-                    <!-- Section: Microphone (3 dedicated vertical lines) -->
-                    <div style="border-top: 1px solid #222; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
-                        <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Microphone</div>
-                        <div style="display: flex; flex-direction: column; gap: 2px; font-family: monospace; font-size: 10.5px; color: #aaa;">
-                            <div style="display:flex; justify-content:space-between;"><span>Peak:</span> <strong id="clackPeakDisplay" style="color:#00e5ff;">0</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>Noise:</span> <strong id="clackNoiseDisplay" style="color:#888;">0</strong></div>
-                            <div style="display:flex; justify-content:space-between;"><span>Gate:</span> <strong id="clackThreshDisplay" style="color:#ffaa00;">5200</strong></div>
+                        <div style="border-top: 1px solid #222; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                            <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Microphone</div>
+                            <div style="display: flex; flex-direction: column; gap: 2px; font-family: monospace; font-size: 10.5px; color: #aaa;">
+                                <div style="display:flex; justify-content:space-between;"><span>Peak:</span> <strong id="clackPeakDisplay" style="color:#00e5ff;">0</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>Noise:</span> <strong id="clackNoiseDisplay" style="color:#888;">0</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>Gate:</span> <strong id="clackThreshDisplay" style="color:#ffaa00;">5200</strong></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- VIEW C: Dedicated Servo Studio Panel -->
+            <div id="appsViewStudio" style="display: none; flex-direction: column; gap: 10px; height: calc(100% - 32px); padding: 6px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="studioBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffaa00; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        🔧 SERVO CALIBRATION STUDIO
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1; justify-content: center;">
+                    <button id="studioBtn" class="btn-action" style="font-size: 20px; font-weight: 900; border-radius: 12px; height: 100px; background: #1a1a1a; border: 3px solid #444;">
+                        <span id="studioBtnIcon" style="font-size: 28px;">🔧</span><br>
+                        <span id="studioBtnText">START SERVO STUDIO</span><br>
+                        <span id="studioBtnSub" style="font-size: 12px; color: #ffcc88;">(CALIBRATION ON PORT 8086)</span>
+                    </button>
+
+                    <div style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:14px; font-weight:900; color:#fff;">STUDIO WEB SERVICE:</span>
+                            <span id="studioBadge" style="font-size:13px; font-weight:900; padding:3px 10px; border-radius:6px; background:#222; color:#888;">STOPPED</span>
+                        </div>
+                        <div style="font-family: monospace; font-size: 14px; color: #00e5ff;">
+                            URL: http://&lt;PI500_IP&gt;:8086 (Port 8086)
+                        </div>
+                        <div style="font-size: 12px; color: #aaa; line-height: 1.4;">
+                            * Provides isolated single-servo testing, torque toggles, and EEPROM calibration registers without conflicting with teleop loops.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW D: Dedicated Beat Bandit Panel (YouTube Music Choreographer) -->
+            <div id="appsViewBeatBandit" style="display: none; flex-direction: column; flex-grow: 1; height: calc(100% - 32px); min-height: 0; width: 100%; gap: 6px;">
+                
+                <!-- Row 1: Top Nav Action Bar: Top-Left Pink Back Button & Title Banner -->
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; flex-shrink: 0;">
+                    <button id="bbBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <button id="bbAppToggleBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px; border-radius: 8px; background: linear-gradient(135deg, #2e1065, #1d0724); border: 2px solid #a855f7; color: #fff;">
+                        <span id="bbAppToggleBtnText">🎧 START BEAT BANDIT</span>
+                        <span id="bbAppToggleBtnSub" style="display:block; font-size:10.5px; color:#c084fc;">Audio Choreography & Timeline Engine</span>
+                    </button>
+                </div>
+
+                <!-- Row 2: YouTube URL Input & Action Row (40px height) -->
+                <div style="display: grid; grid-template-columns: 1fr 110px; gap: 8px; height: 40px; flex-shrink: 0;">
+                    <input type="text" id="bbUrlInput" placeholder="Paste YouTube / YouTube Music URL..." value="https://youtu.be/_uu_izpVSEc?si=X62QxvffzOgTJNW9" style="height: 100%; background: #111; border: 2px solid #444; border-radius: 8px; color: #fff; padding: 0 14px; font-size: 13px; font-family: monospace; box-sizing: border-box;">
+                    <button id="bbFetchBtn" class="btn-action" style="height: 100%; background: linear-gradient(135deg, #2e1065, #3b0764); border: 2px solid #a855f7; color: #f3e8ff; font-weight: 900; font-size: 15px; border-radius: 8px; min-height: 0; padding: 0; box-shadow: 0 3px 10px rgba(168,85,247,0.25);">
+                        LOAD
+                    </button>
+                </div>
+
+                <!-- Row 3: Songs 2x2 Grid (2/3 width) + DANCE/STOP Button (1/3 width) (180px height) -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; height: 180px; flex-shrink: 0;">
+                    <!-- Left: 2x2 Songs Box -->
+                    <div style="display: flex; flex-direction: column; background: #0e0e14; border: 1.5px solid #333348; border-radius: 10px; padding: 6px 10px; min-width: 0; justify-content: space-between; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; height: 24px;">
+                            <span style="font-size: 11px; font-weight: 900; color: #a855f7; letter-spacing: 0.5px;">OFFLINE AUDIO TRACKS</span>
+                            <button id="bbPageBtn" class="btn-action" style="font-size: 10.5px; font-weight: 900; padding: 2px 10px; height: 22px; border-radius: 4px; min-height: 0; background: #1f1235; border: 1.5px solid #a855f7; color: #f3e8ff;">NEXT ⏭️</button>
+                        </div>
+                        <div id="bbTracksList" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 136px; min-height: 0;">
+                            <!-- Dynamically loaded -->
+                        </div>
+                    </div>
+
+                    <!-- Right: Big DANCE / STOP Button -->
+                    <button id="bbMainDanceBtn" class="btn-action" style="background: linear-gradient(135deg, #7928ca, #ff0080); border: 2.5px solid #ff00cc; color: #fff; font-weight: 900; font-size: 20px; border-radius: 10px; height: 100%; min-height: 0; box-shadow: 0 4px 14px rgba(255,0,128,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;">
+                        <span id="bbMainDanceIcon" style="font-size: 30px;">⚡</span>
+                        <span id="bbMainDanceText">DANCE</span>
+                    </button>
+                </div>
+
+                <!-- Row 4: Performance HUD -->
+                <div style="display: flex; flex-direction: column; justify-content: space-between; background: #0c0c14; border: 1.5px solid #a855f7; border-radius: 10px; padding: 6px 12px; flex-grow: 1; min-height: 0; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 8px;">
+                            <span id="bbTrackTitle" style="font-size: 14px; font-weight: 900; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">Soda Pop</span>
+                            <span id="bbTrackArtist" style="font-size: 11.5px; font-weight: 700; color: #a855f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Saja Boys</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="bbBeatCounter" style="font-size: 11.5px; color: #00e5ff; font-family: monospace; font-weight: 800;">Beat 0/0</span>
+                            <span id="bbStateBadge" style="font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px; background: #222; color: #888;">IDLE</span>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div style="height: 5px; background: #1c1c24; border-radius: 3px; overflow: hidden; border: 1px solid #333;">
+                        <div id="bbProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #a855f7, #ff00cc); transition: width 0.1s linear;"></div>
+                    </div>
+
+                    <!-- 4 Live Telemetry Chips -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                        <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 3px 6px; text-align: center;">
+                            <span style="font-size: 8.5px; color: #777; display: block; text-transform: uppercase;">TEMPO</span>
+                            <strong id="bbBpmDisplay" style="font-size: 12px; color: #00e5ff; font-family: monospace;">-- BPM</strong>
+                        </div>
+                        <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 3px 6px; text-align: center;">
+                            <span style="font-size: 8.5px; color: #777; display: block; text-transform: uppercase;">VOCAL JAW</span>
+                            <strong id="bbJawDisplay" style="font-size: 12px; color: #ff00cc; font-family: monospace;">0%</strong>
+                        </div>
+                        <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 3px 6px; text-align: center;">
+                            <span style="font-size: 8.5px; color: #777; display: block; text-transform: uppercase;">PEDESTAL</span>
+                            <strong id="bbS7Display" style="font-size: 12px; color: #00ff66; font-family: monospace;">0.0°</strong>
+                        </div>
+                        <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 3px 6px; text-align: center;">
+                            <span style="font-size: 8.5px; color: #777; display: block; text-transform: uppercase;">MOVE</span>
+                            <strong id="bbMoveDisplay" style="font-size: 11px; color: #ffaa00; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Rest Stance</strong>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
         </div>
 
-
-        <!-- TAB 4: ⚡ POWER & TOOLS -->
-        <div id="panelPower" class="tab-panel">
-            <div class="telemetry-bar">
-                <div id="powerStatus" class="header-readout" style="color: #00ff66;">PI 500 ONLINE</div>
+        <!-- TAB 4: ⚡ BACKEND & TOOLS -->
+        <div id="panelPower" class="tab-panel" style="flex-direction: column; gap: 6px; height: 100%;">
+            <div class="telemetry-bar" style="height: 26px; flex-shrink: 0;">
+                <div id="powerStatus" class="header-readout" style="font-size: 15px; color: #00ff66;">PI 500 ONLINE</div>
             </div>
 
-            <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;">
-                <button class="btn-action btn-red" onclick="triggerPi500PowerOn()">⚡ WAKE PI 500<br>(WAKE-ON-LAN)</button>
-                <button id="masterDaemonBtn" class="btn-action btn-cyan" onclick="triggerPi500MasterDaemonRestart()">🤖 RESTART MASTER DAEMON<br>(PI 500 PORT 8085)</button>
-                <button id="roverStandaloneBtn" class="btn-action btn-cyan" onclick="togglePokeballRoverStandalone()">🏎️ START POKÉBALL ROVER<br>(NO 12V REQ)</button>
-                <button class="btn-action btn-red" onclick="triggerEmergencyKillAll()">🛑 STOP ALL<br>PROCESSES</button>
+            <!-- VIEW 1: Main 2-Button Backend Launcher -->
+            <div id="backendViewMain" style="display: flex; flex-direction: column; gap: 12px; height: calc(100% - 32px); justify-content: center; padding: 12px 16px;">
+                <button id="backendPowerMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #3a0d10, #1f0406); border: 3px solid #ff3344; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
+                    <span style="font-size: 42px;">⚡</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 22px; font-weight: 900; color: #ff4455;">POWER MANAGEMENT</div>
+                        <div style="font-size: 12.5px; color: #ffaaaa; font-weight: 600;">Restart Master Daemon, Wake Pi 500, Stop All Processes</div>
+                    </div>
+                </button>
+
+                <button id="backendConfigMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #051833); border: 3px solid #0099ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
+                    <span style="font-size: 42px;">⚙️</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 22px; font-weight: 900; color: #00e5ff;">CONFIG</div>
+                        <div style="font-size: 12.5px; color: #a0c8e0; font-weight: 600;">Volume Overrides, Clack Gate, Throttle Cap & Arm Speed</div>
+                    </div>
+                </button>
             </div>
+
+            <!-- VIEW 2: Power Management Sub-View -->
+            <div id="backendViewPower" style="display: none; flex-direction: column; gap: 8px; height: calc(100% - 32px); padding: 4px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="powerBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: #220508; border: 2px solid #ff3344; color: #ff4455; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        ⚡ POWER MANAGEMENT
+                    </div>
+                </div>
+
+                <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; flex-grow: 1;">
+                    <button id="masterDaemonBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset;">
+                        <span id="masterDaemonBtnText">🤖 RESTART DAEMON</span><br><span id="masterDaemonBtnSub" style="font-size:11px; color:#ffccaa;">(PI 500 PORT 8085)</span>
+                    </button>
+                    <button id="wifiRestoreBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset; border-color:#00ff66; color:#00ff66;">
+                        📡 RESTORE WI-FI<br><span style="font-size:11px; color:#aaffcc;">(RECONNECT NETWORK)</span>
+                    </button>
+                    <button id="pi500PowerOnBtn" class="btn-action btn-red" style="font-size: 16px; min-height: unset;">
+                        ⚡ WAKE PI 500<br><span style="font-size:11px; color:#ffccaa;">(WAKE-ON-LAN)</span>
+                    </button>
+                    <button id="wifiDisableBtn" class="btn-action btn-orange" style="font-size: 16px; min-height: unset;">
+                        🚫 TEST OFFLINE<br><span style="font-size:11px; color:#ffeebb;">(DISABLE WI-FI 10M)</span>
+                    </button>
+                    <button id="emergencyKillBtn" class="btn-action btn-red" style="grid-column: span 2; font-size: 16px; min-height: unset; background:#330005; border-color:#ff0033;">
+                        🛑 STOP ALL PROCESSES<br><span style="font-size:11px; color:#ffaaaa;">(EMERGENCY PROCESS KILL)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 3: Config Sub-View -->
+            <div id="backendViewConfig" style="display: none; flex-direction: column; gap: 6px; height: calc(100% - 32px); padding: 2px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="configBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: #051833; border: 2px solid #0099ff; color: #00e5ff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        ⚙️ SYSTEM CONFIGURATION
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; flex-grow: 1; min-height: 0;">
+                    <!-- Config 1: Sensitivity Threshold -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
+                            <span id="cfgSensVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">5200</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <button id="cfgSensLow" class="btn-action cfg-btn">Low</button>
+                            <button id="cfgSensNorm" class="btn-action cfg-btn">Normal</button>
+                            <button id="cfgSensHi" class="btn-action cfg-btn">Hi</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 2: Volume -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
+                            <span id="cfgVolVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">100%</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgVol50" class="btn-action cfg-btn">50%</button>
+                            <button id="cfgVol75" class="btn-action cfg-btn">75%</button>
+                            <button id="cfgVol100" class="btn-action cfg-btn">100%</button>
+                            <button id="cfgVol150" class="btn-action cfg-btn">150% 🚀</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 3: Max Speed -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
+                            <span id="cfgSpeedVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">35% (175µs)</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgSpeed35" class="btn-action cfg-btn">35%</button>
+                            <button id="cfgSpeed50" class="btn-action cfg-btn">50%</button>
+                            <button id="cfgSpeed70" class="btn-action cfg-btn">70%</button>
+                            <button id="cfgSpeed100" class="btn-action cfg-btn">100%</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 4: Arm Speed -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
+                            <span id="cfgArmVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">1.0s</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgArm03" class="btn-action cfg-btn">0.3s</button>
+                            <button id="cfgArm06" class="btn-action cfg-btn">0.6s</button>
+                            <button id="cfgArm10" class="btn-action cfg-btn">1.0s</button>
+                            <button id="cfgArm15" class="btn-action cfg-btn">1.5s</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
     </div>
 
-    <script>
-        let currentVerifiedPos = 2503;
-        let isLeaderRunning = false;
-        let isFollowerRunning = false;
-        let isPokeballRunning = false;
-        let isRoverStandaloneRunning = false;
-        let isMasterDaemonRunning = true;
-        let isStudioRunning = false;
-        let isClackPoseRunning = false;
-        let currentAppsMode = 'controls';
-        let currentPresetsPage = 1;
-        let currentPresetMode = 'normal';
-        let isOverwriteModeActive = false;
-        let cachedPresetsList = {};
-
-        function switchTab(tabId) {
-            try { localStorage.setItem('active_tab', tabId); } catch(e) {}
-            document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-
-            if (tabId === 'gantry') {
-                document.getElementById('railBtnGantry').classList.add('active');
-                document.getElementById('panelGantry').classList.add('active');
-            } else if (tabId === 'controls') {
-                document.getElementById('railBtnControls').classList.add('active');
-                document.getElementById('panelControls').classList.add('active');
-            } else if (tabId === 'apps') {
-                document.getElementById('railBtnApps').classList.add('active');
-                document.getElementById('panelApps').classList.add('active');
-                fetchPresetsList();
-            } else if (tabId === 'power') {
-                document.getElementById('railBtnPower').classList.add('active');
-                document.getElementById('panelPower').classList.add('active');
-            }
-        }
-
-        try {
-            const savedTab = localStorage.getItem('active_tab') || 'apps';
-            if (['gantry', 'controls', 'apps', 'power'].includes(savedTab)) {
-                switchTab(savedTab);
-            }
-            const savedMode = localStorage.getItem('apps_mode') || 'controls';
-            switchAppsMode(savedMode);
-        } catch(e) {}
-
-        function setHeaderAlert(msg) {
-            const el = document.getElementById('sliderValDisplay');
-            if (el) {
-                el.innerHTML = '<span style="color:#ff3344; font-weight:900;">⚡ ' + (msg || '12V POWER OFF') + '</span>';
-            }
-        }
-
-        function renderButtonStates() {
-            const followerBtn = document.getElementById('followerBtn');
-            if (followerBtn) {
-                followerBtn.style.borderColor = isFollowerRunning ? '#00ff66' : '#444444';
-                followerBtn.style.color = isFollowerRunning ? '#00ff66' : '#ffffff';
-                followerBtn.innerHTML = isFollowerRunning ? '🦾<br>STOP TELEOP' : '🦾<br>START TELEOP';
-            }
-
-            const leaderBtn = document.getElementById('leaderBtn');
-            if (leaderBtn) {
-                leaderBtn.style.borderColor = isLeaderRunning ? '#00e5ff' : '#444444';
-                leaderBtn.style.color = isLeaderRunning ? '#00e5ff' : '#ffffff';
-                leaderBtn.innerHTML = isLeaderRunning ? '🍎<br>STOP LEADER' : '🍎<br>START LEADER';
-            }
-
-            const studioBtn = document.getElementById('studioBtn');
-            if (studioBtn) {
-                studioBtn.style.borderColor = isStudioRunning ? '#ffaa00' : '#444444';
-                studioBtn.style.color = isStudioRunning ? '#ffaa00' : '#ffffff';
-                studioBtn.innerHTML = isStudioRunning ? '🔧 STOP CALIBRATION<br><span style="font-size:10.5px; color:#ffccaa;">(ACTIVE)</span>' : '🔧 START CALIBRATION<br><span style="font-size:10.5px; color:#aaa;">Servo Studio</span>';
-            }
-
-            const clackPoseBtn = document.getElementById('clackPoseBtn');
-            const clackPoseBadge = document.getElementById('clackPoseBadge');
-            const appsStatus = document.getElementById('appsStatus');
-            if (clackPoseBtn) {
-                clackPoseBtn.style.borderColor = isClackPoseRunning ? '#00e5ff' : '#444444';
-                clackPoseBtn.style.color = isClackPoseRunning ? '#00e5ff' : '#ffffff';
-                clackPoseBtn.style.background = isClackPoseRunning ? 'rgba(0, 229, 255, 0.15)' : '#181818';
-                clackPoseBtn.innerHTML = isClackPoseRunning ? '🟢 STOP CLACK POSE<br><span style="font-size:10.5px; color:#aaffcc;">(LISTENING)</span>' : '👏 START CLACK POSE<br><span style="font-size:10.5px; color:#aaa;">Audio Calibrator</span>';
-            }
-            if (clackPoseBadge) {
-                clackPoseBadge.innerText = isClackPoseRunning ? 'LISTENING' : 'STOPPED';
-                clackPoseBadge.style.color = isClackPoseRunning ? '#00ff66' : '#888888';
-                clackPoseBadge.style.background = isClackPoseRunning ? '#113311' : '#222222';
-            }
-            if (appsStatus) {
-                if (isClackPoseRunning) {
-                    appsStatus.innerText = 'CLACK POSE LISTENING';
-                    appsStatus.style.color = '#00ff66';
-                } else if (isStudioRunning) {
-                    appsStatus.innerText = 'CALIBRATION STUDIO ACTIVE';
-                    appsStatus.style.color = '#ffaa00';
-                } else {
-                    appsStatus.innerText = 'ROBOT APPS IDLE';
-                    appsStatus.style.color = '#888888';
-                }
-            }
-
-            const roverBtn = document.getElementById('roverStandaloneBtn');
-            if (roverBtn) {
-                if (isRoverStandaloneRunning) {
-                    roverBtn.style.borderColor = '#00ff66';
-                    roverBtn.style.color = '#00ff66';
-                    roverBtn.style.background = 'rgba(0, 255, 102, 0.15)';
-                    roverBtn.innerHTML = '🟢 STOP POKÉBALL ROVER<br><span style="font-size:11px; color:#aaffcc;">(ACTIVE - NO 12V REQ)</span>';
-                } else {
-                    roverBtn.style.borderColor = '#00e5ff';
-                    roverBtn.style.color = '#ffffff';
-                    roverBtn.style.background = '#181818';
-                    roverBtn.innerHTML = '🏎️ START POKÉBALL ROVER<br><span style="font-size:11px; color:#88ccff;">(STANDALONE - NO 12V REQ)</span>';
-                }
-            }
-
-            const masterBtn = document.getElementById('masterDaemonBtn');
-            if (masterBtn) {
-                if (isMasterDaemonRunning) {
-                    masterBtn.style.borderColor = '#00ff66';
-                    masterBtn.style.color = '#00ff66';
-                    masterBtn.style.background = 'rgba(0, 255, 102, 0.12)';
-                    masterBtn.innerHTML = '🟢 STOP MASTER DAEMON<br><span style="font-size:10.5px; color:#aaffcc;">(PORT 8085 RUNNING)</span>';
-                } else {
-                    masterBtn.style.borderColor = '#ffaa00';
-                    masterBtn.style.color = '#ffffff';
-                    masterBtn.style.background = '#181818';
-                    masterBtn.innerHTML = '🤖 START MASTER DAEMON<br><span style="font-size:10.5px; color:#ffcc88;">(DAEMON STOPPED)</span>';
-                }
-            }
-        }
-
-        function pollTelemetry() {
-            fetch('/api/status?t=' + Date.now(), { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
-                .then(r => {
-                    if (!r.ok) {
-                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
-                        document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
-                        document.getElementById('teleopStatus').style.color = '#ff3344';
-                        isFollowerRunning = false;
-                        isLeaderRunning = false;
-                        isPokeballRunning = false;
-                        renderButtonStates();
-                        return null;
-                    }
-                    return r.json();
-                })
-                .then(data => {
-                    if (!data) {
-                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
-                        document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
-                        document.getElementById('teleopStatus').style.color = '#ff3344';
-                        isFollowerRunning = false;
-                        isLeaderRunning = false;
-                        isPokeballRunning = false;
-                        renderButtonStates();
-                        return;
-                    }
-                    // 1. Motor Position Readout (Tab 1)
-                    if (data.closed_loop_verified && data.hardware_telemetry && data.hardware_telemetry.servos) {
-                        const servos = data.hardware_telemetry.servos;
-                        const m7 = servos['7'];
-                        const m8 = servos['8'];
-                        let readouts = [];
-                        if (m7 && m7.angle !== undefined) {
-                            readouts.push('<span style="color:#ff9900;">Pedestal: ' + m7.angle + '°</span>');
-                        } else {
-                            readouts.push('<span style="color:#ff9900;">Pedestal: --°</span>');
-                        }
-                        if (m8 && m8.pos !== undefined) {
-                            currentVerifiedPos = m8.pos;
-                            readouts.push('<span style="color:#00e5ff;">Gantry: ' + m8.pos + ' ticks</span>');
-                        } else {
-                            readouts.push('<span style="color:#00e5ff;">Gantry: --</span>');
-                        }
-                        document.getElementById('sliderValDisplay').innerHTML = readouts.join(' <span style="color:#666;">|</span> ');
-                    } else {
-                        document.getElementById('sliderValDisplay').innerHTML = '<span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span>';
-                    }
-
-                    const ht = data.hardware_telemetry || {};
-                    const ams = ht.app_manager_status || {};
-                    let activeAppName = ht.current_app || ams.current_app;
-                    if (!activeAppName && Array.isArray(ht.apps)) {
-                        const runningAppObj = ht.apps.find(a => a.is_running);
-                        if (runningAppObj) activeAppName = runningAppObj.name;
-                    }
-                    const currentApp = activeAppName;
-                    const telemLeader = ht.leader;
-                    const telemFollower = ht.follower;
-                    
-                    isStudioRunning = (currentApp === 'servo_studio_app');
-                    isClackPoseRunning = (currentApp === 'clack_pose_app') || (data.clack_pose && !!data.clack_pose.running);
-                    isFollowerRunning = (currentApp === 'teleop_app');
-                    isLeaderRunning = !!((data.leader && data.leader.running) || (telemLeader && telemLeader.running));
-                    
-                    const teleopEl = document.getElementById('teleopStatus');
-                    if (teleopEl) {
-                        if (isStudioRunning) {
-                            teleopEl.innerText = 'CALIBRATION ACTIVE';
-                            teleopEl.style.color = '#ffaa00';
-                        } else if (isFollowerRunning) {
-                            teleopEl.innerText = 'TELEOP ACTIVE';
-                            teleopEl.style.color = '#00ff66';
-                        } else if (data.daemon_running) {
-                            teleopEl.innerText = 'DAEMON READY';
-                            teleopEl.style.color = '#00e5ff';
-                        } else {
-                            teleopEl.innerText = 'DAEMON OFF';
-                            teleopEl.style.color = '#ff3344';
-                        }
-                    }
-
-                    const pkData = data.pokeball || {};
-                    isPokeballRunning = (currentApp === 'pokeball_teleop_app') || !!pkData.running || !!(ht.pokeball && ht.pokeball.running);
-                    const isPokeballConnected = !!pkData.connected;
-                    const pkTelem = pkData.telemetry || (data.hardware_telemetry && data.hardware_telemetry.pokeball);
-
-                    const pkrData = data.pokeball_rover || {};
-                    isRoverStandaloneRunning = !!pkrData.running;
-                    isMasterDaemonRunning = !!data.daemon_running;
-
-                    // Parse Pokeball Live Telemetry & Badge
-                    if (pkTelem || pkData) {
-                        const badge = document.getElementById('pbConnectBadge');
-                        const joy = document.getElementById('pbJoyReadout');
-                        const dir = document.getElementById('pbDirReadout');
-                        const rawHex = document.getElementById('pbRawHex');
-                        const pkt = document.getElementById('pbPktReadout');
-                        const btnA = document.getElementById('pbBtnA');
-                        const btnB = document.getElementById('pbBtnB');
-
-                        const activeTelem = pkTelem || pkData;
-
-                        if (badge) {
-                            if (isPokeballConnected) {
-                                badge.innerText = '🟢 CONNECTED';
-                                badge.style.background = 'rgba(0,255,102,0.2)';
-                                badge.style.color = '#00ff66';
-                            } else if (isPokeballRunning) {
-                                badge.innerText = '🔴 SEARCHING (NOT CONNECTED)';
-                                badge.style.background = 'rgba(255,51,68,0.2)';
-                                badge.style.color = '#ff3344';
-                            } else {
-                                badge.innerText = '⚪ DISCONNECTED';
-                                badge.style.background = '#222';
-                                badge.style.color = '#888';
-                            }
-                        }
-
-                        if (dir && activeTelem) dir.innerText = (activeTelem.x_direction || 'CENTER').toUpperCase();
-                        if (joy && activeTelem) joy.innerText = `x_val=${activeTelem.x_val !== undefined ? activeTelem.x_val : 7}, y_val=${activeTelem.y_val !== undefined ? activeTelem.y_val : 118}`;
-                        if (rawHex && activeTelem) rawHex.innerText = activeTelem.raw_hex || '--';
-                        if (pkt && activeTelem) pkt.innerText = activeTelem.packet_count || 0;
-                        
-                        if (btnA && activeTelem) {
-                            const isTopActive = activeTelem.button_top || activeTelem.button_a;
-                            btnA.style.background = isTopActive ? '#ff3344' : '#222';
-                            btnA.style.color = isTopActive ? '#fff' : '#666';
-                        }
-                        if (btnB && activeTelem) {
-                            const isStickActive = activeTelem.button_stick || activeTelem.button_b;
-                            btnB.style.background = isStickActive ? '#00ff66' : '#222';
-                            btnB.style.color = isStickActive ? '#000' : '#666';
-                        }
-                    }
-
-                    // Parse Clack Pose Acoustic Calibration Telemetry
-                    const cpData = data.clack_pose || {};
-                    const peakEl = document.getElementById('clackPeakDisplay');
-                    const noiseEl = document.getElementById('clackNoiseDisplay');
-                    const threshEl = document.getElementById('clackThreshDisplay');
-                    const classEl = document.getElementById('clackClassDisplay');
-                    if (peakEl && cpData.current_peak !== undefined) peakEl.innerText = cpData.current_peak;
-                    if (noiseEl && cpData.noise_floor !== undefined) noiseEl.innerText = cpData.noise_floor;
-                    if (threshEl && cpData.peak_threshold !== undefined) threshEl.innerText = cpData.peak_threshold;
-                    if (classEl && cpData.last_classification) classEl.innerText = cpData.last_classification;
-
-                    // Populate Right Column Servo Readouts (1-8)
-                    const servos = (data.hardware_telemetry && data.hardware_telemetry.servos) || data.servos || {};
-                    for (let i = 1; i <= 8; i++) {
-                        const s = servos[i] || {};
-                        const el = document.getElementById('telemServo' + i);
-                        if (el) {
-                            if (i <= 6) {
-                                const norm = (s.normalized !== undefined && s.normalized !== null) ? s.normalized : s.norm;
-                                if (norm !== undefined && norm !== null) {
-                                    const sign = norm > 0 ? '+' : '';
-                                    el.innerText = sign + Number(norm).toFixed(0) + '%';
-                                    el.style.color = '#00ff66';
-                                } else {
-                                    el.innerText = '--';
-                                    el.style.color = '#666';
-                                }
-                            } else if (i === 7) {
-                                const deg = (s.deg !== undefined && s.deg !== null) ? s.deg : (s.pos !== undefined && s.pos !== null ? ((s.pos - 2048) * 360 / 4096).toFixed(0) : '--');
-                                const sign = Number(deg) > 0 ? '+' : '';
-                                el.innerText = deg !== '--' ? (sign + deg + '°') : '--';
-                                el.style.color = '#ffaa00';
-                            } else if (i === 8) {
-                                el.innerText = (s.pos !== undefined && s.pos !== null) ? s.pos : '--';
-                                el.style.color = '#00e5ff';
-                            }
-                        }
-                    }
-
-                    renderButtonStates();
-
-                    const pokeballBtn = document.getElementById('pokeballBtn');
-                    if (pokeballBtn) {
-                        if (!isPokeballRunning) {
-                            pokeballBtn.style.borderColor = '#444444';
-                            pokeballBtn.style.color = '#ffffff';
-                            pokeballBtn.style.background = '#181818';
-                            pokeballBtn.innerHTML = '🔴<br>START POKÉBALL';
-                        } else if (isPokeballConnected) {
-                            pokeballBtn.style.borderColor = '#00ff66';
-                            pokeballBtn.style.color = '#00ff66';
-                            pokeballBtn.style.background = 'rgba(0, 255, 102, 0.15)';
-                            pokeballBtn.innerHTML = '🟢<br>POKÉBALL CONNECTED<br><span style="font-size:11px; font-weight:normal; color:#aaffcc;">(Click to Stop)</span>';
-                        } else {
-                            pokeballBtn.style.borderColor = '#ff3344';
-                            pokeballBtn.style.color = '#ff3344';
-                            pokeballBtn.style.background = 'rgba(255, 51, 68, 0.15)';
-                            pokeballBtn.innerHTML = '🔴<br>SEARCHING BLE...<br><span style="font-size:11px; font-weight:normal; color:#ff8899;">Press Button to Wake</span>';
-                        }
-                    }
-
-                    // 3. Power status (Tab 3)
-                    const pStatus = document.getElementById('powerStatus');
-                    if (pStatus) {
-                        if (data.pi500_online) {
-                            const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
-                            const pogoState = (ht.pogo_connected) ? 'POGO: CONNECTED' : 'POGO: DISCONNECTED';
-                            if (data.daemon_running) {
-                                pStatus.innerText = `PI 500 ONLINE | 12V: ${volt} | ${pogoState}`;
-                                pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#ffaa00';
-                            } else {
-                                pStatus.innerText = 'PI 500 ONLINE | DAEMON OFF';
-                                pStatus.style.color = '#ffaa00';
-                            }
-                        } else {
-                            pStatus.innerText = 'PI 500 OFFLINE';
-                            pStatus.style.color = '#ff3344';
-                        }
-                    }
-
-                    if (currentAppsMode === 'presets' || isClackPoseRunning) {
-                        fetchPresetsList();
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('sliderValDisplay').innerText = 'Pedestal: --° | Gantry: --';
-                    document.getElementById('sliderValDisplay').style.color = '#888888';
-                    document.getElementById('teleopStatus').innerText = 'DAEMON OFF';
-                    document.getElementById('teleopStatus').style.color = '#ff3344';
-                    isFollowerRunning = false;
-                    isLeaderRunning = false;
-                    isPokeballRunning = false;
-                    renderButtonStates();
-                });
-        }
-
-        setInterval(pollTelemetry, 400);
-        pollTelemetry();
-
-        function rotatePedestal(direction) {
-            const dirStr = direction === 'left' ? 'LEFT (-45°)' : 'RIGHT (+45°)';
-            document.getElementById('sliderValDisplay').innerText = 'STEPPING ' + dirStr + '...';
-            document.getElementById('sliderValDisplay').style.color = '#ff9900';
-            fetch('/api/pedestal_step', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ direction: direction })
-            })
-            .then(async r => {
-                const data = await r.json().catch(() => ({}));
-                if (!r.ok || data.status === 'error') {
-                    setHeaderAlert(data.message || data.error || 'SERVO UNRESPONSIVE');
-                } else {
-                    if (data.at_limit && data.message && data.message.includes('limit reached')) {
-                        setHeaderAlert(data.message.toUpperCase());
-                    }
-                    setTimeout(pollTelemetry, 250);
-                }
-            })
-            .catch(() => setHeaderAlert('NETWORK ERROR'));
-        }
-
-        function sendSliderMove(targetVal) {
-            document.getElementById('sliderValDisplay').innerText = targetVal + ' ticks (SENDING...)';
-            document.getElementById('sliderValDisplay').style.color = '#f8d800';
-            fetch('/api/slider', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: 8, target: parseInt(targetVal), value: parseInt(targetVal) })
-            })
-            .then(async r => {
-                const data = await r.json().catch(() => ({}));
-                if (!r.ok || data.status === 'error') {
-                    setHeaderAlert(data.message || data.error || 'GANTRY UNRESPONSIVE');
-                } else {
-                    setTimeout(pollTelemetry, 150);
-                }
-            })
-            .catch(() => setHeaderAlert('NETWORK ERROR'));
-        }
-
-        function nudgeSlider(delta) {
-            let targetVal = currentVerifiedPos + delta;
-            targetVal = Math.max(3, Math.min(4800, targetVal));
-            sendSliderMove(targetVal);
-        }
-
-        function moveGantryMaxLeft() {
-            sendSliderMove(3);
-        }
-
-        function moveGantryMaxRight() {
-            sendSliderMove(4800);
-        }
-
-        function toggleMacLeader() {
-            const action = isLeaderRunning ? 'stop' : 'start';
-            const btn = document.getElementById('leaderBtn');
-            if (btn) {
-                btn.style.borderColor = '#ffaa00';
-                btn.style.color = '#ffaa00';
-                btn.innerHTML = action === 'stop' ? '🍎<br>STOPPING...' : '🍎<br>STARTING...';
-            }
-            fetch('/api/mac_leader_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            }).then(() => setTimeout(pollTelemetry, 600));
-        }
-
-        function togglePi500Follower() {
-            const action = isFollowerRunning ? 'stop' : 'start';
-            const btn = document.getElementById('followerBtn');
-            if (btn) {
-                btn.style.borderColor = '#ffaa00';
-                btn.style.color = '#ffaa00';
-                btn.innerHTML = action === 'stop' ? '🦾<br>STOPPING...' : '🦾<br>STARTING...';
-            }
-            fetch('/api/pi500_follower_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            }).then(() => setTimeout(pollTelemetry, 600));
-        }
-
-        function togglePokeballTeleop() {
-            const action = isPokeballRunning ? 'stop' : 'start';
-            fetch('/api/pokeball_teleop_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            }).then(() => setTimeout(pollTelemetry, 300));
-        }
-
-        function toggleServoStudio() {
-            const action = isStudioRunning ? 'stop' : 'start';
-            const btn = document.getElementById('studioBtn');
-            if (btn) {
-                btn.style.borderColor = '#ffaa00';
-                btn.style.color = '#ffaa00';
-                btn.innerHTML = action === 'stop' ? '🔧<br>STOPPING...' : '🔧<br>STARTING...';
-            }
-            isStudioRunning = (action === 'start');
-            fetch('/api/servo_studio_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            }).then(() => setTimeout(pollTelemetry, 300));
-        }
-
-        function toggleClackPose() {
-            const action = isClackPoseRunning ? 'stop' : 'start';
-            const btn = document.getElementById('clackPoseBtn');
-            if (btn) {
-                btn.style.opacity = '0.5';
-                btn.innerHTML = action === 'start' ? '⌛ STARTING...' : '⌛ STOPPING...';
-            }
-            fetch('/api/clack_pose_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            })
-            .then(r => r.json())
-            .then(d => {
-                if (d.running !== undefined) isClackPoseRunning = d.running;
-                if (btn) btn.style.opacity = '1.0';
-                renderButtonStates();
-                setTimeout(pollTelemetry, 300);
-            })
-            .catch(() => {
-                if (btn) btn.style.opacity = '1.0';
-            });
-        }
-
-        function setClackThreshold(val) {
-            const bLow = document.getElementById('sensLowBtn');
-            const bNorm = document.getElementById('sensNormBtn');
-            const bHi = document.getElementById('sensHiBtn');
-            if (bLow) { bLow.style.borderColor = (val === 7500) ? '#00e5ff' : '#555'; bLow.style.color = (val === 7500) ? '#00e5ff' : '#fff'; }
-            if (bNorm) { bNorm.style.borderColor = (val === 5200) ? '#00e5ff' : '#555'; bNorm.style.color = (val === 5200) ? '#00e5ff' : '#fff'; }
-            if (bHi) { bHi.style.borderColor = (val === 3500) ? '#00e5ff' : '#555'; bHi.style.color = (val === 3500) ? '#00e5ff' : '#fff'; }
-            fetch('/api/clack_pose_threshold', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ threshold: val })
-            }).then(r => r.json()).then(() => setTimeout(pollTelemetry, 200));
-        }
-
-        function armLimpMode() {
-            fetch('/api/arm/torque', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enable: false })
-            }).then(() => setTimeout(pollTelemetry, 300));
-        }
-
-        function armSavePose() {
-            fetch('/api/arm/capture_pose', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            }).then(r => r.json()).then(d => {
-                setTimeout(pollTelemetry, 200);
-            });
-        }
-
-        function commitOfficialPreset() {
-            fetch('/api/arm/commit_preset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: currentPresetMode })
-            }).then(r => r.json()).then(d => {
-                fetchPresetsList();
-                setTimeout(pollTelemetry, 300);
-            });
-        }
-
-        function armResumePose() {
-            fetch('/api/arm/resume_last_pose', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ duration: 1.0, mode: currentPresetMode })
-            }).then(() => setTimeout(pollTelemetry, 400));
-        }
-
-        function switchAppsMode(mode) {
-            currentAppsMode = mode;
-            try { localStorage.setItem('apps_mode', mode); } catch(e) {}
-            const controlsEl = document.getElementById('appsModeControls');
-            const presetsEl = document.getElementById('appsModePresets');
-            if (mode === 'presets') {
-                if (controlsEl) controlsEl.style.display = 'none';
-                if (presetsEl) presetsEl.style.display = 'flex';
-                currentPresetsPage = 1;
-                fetchPresetsList();
-            } else {
-                if (controlsEl) controlsEl.style.display = 'flex';
-                if (presetsEl) presetsEl.style.display = 'none';
-            }
-        }
-
-        function setPresetsMode(mode) {
-            currentPresetMode = mode;
-            ['normal', 'demo', 'angry'].forEach(m => {
-                const tab = document.getElementById('modeTab' + m.charAt(0).toUpperCase() + m.slice(1));
-                if (tab) {
-                    if (m === mode) {
-                        tab.style.background = '#004488';
-                        tab.style.border = '2px solid #00e5ff';
-                        tab.style.color = '#ffffff';
-                    } else {
-                        tab.style.background = '#181818';
-                        tab.style.border = '2px solid #555555';
-                        tab.style.color = '#888888';
-                    }
-                }
-            });
-
-            const seqBtn = document.getElementById('seqPlayBtn');
-            if (seqBtn) {
-                if (mode === 'demo') {
-                    seqBtn.innerHTML = '☠️ 4-CLICK ATTACK DEMO';
-                    seqBtn.style.background = '#3b0d10';
-                    seqBtn.style.border = '2.5px solid #ff3344';
-                    seqBtn.style.color = '#ff4455';
-                } else {
-                    seqBtn.innerHTML = `▶️ PLAY ${mode.toUpperCase()} SEQ`;
-                    seqBtn.style.background = '#0a3a1a';
-                    seqBtn.style.border = '2.5px solid #00ff66';
-                    seqBtn.style.color = '#00ff66';
-                }
-            }
-
-            currentPresetsPage = 1;
-            fetchPresetsList();
-        }
-
-        function toggleOverwriteMode() {
-            isOverwriteModeActive = !isOverwriteModeActive;
-            const btn = document.getElementById('overwriteModeBtn');
-            const appsStatus = document.getElementById('appsStatus');
-            if (btn) {
-                if (isOverwriteModeActive) {
-                    btn.innerHTML = '⚠️ OVERWRITE: ON';
-                    btn.style.background = '#551100';
-                    btn.style.border = '2px solid #ff5500';
-                    btn.style.color = '#ffaa00';
-                    if (appsStatus) {
-                        appsStatus.innerText = 'OVERWRITE ACTIVE: CLICK SLOT TO REPLACE';
-                        appsStatus.style.color = '#ffaa00';
-                    }
-                } else {
-                    btn.innerHTML = '✏️ OVERWRITE: OFF';
-                    btn.style.background = '#1c1c1c';
-                    btn.style.border = '2px solid #777777';
-                    btn.style.color = '#dddddd';
-                    if (appsStatus) {
-                        appsStatus.innerText = 'READY';
-                        appsStatus.style.color = '#00e5ff';
-                    }
-                }
-            }
-            renderPresetsGrid();
-        }
-
-        function getModeSlots(mode, presets) {
-            const slots = [];
-            if (mode === 'demo') {
-                const demoDefs = [
-                    { key: 'pose_1', label: '1: HOME', num: 1 },
-                    { key: 'lunge', label: '2: LUNGE', num: 2 },
-                    { key: 'ready', label: '3: READY', num: 3 },
-                    { key: 'roar', label: '4: ROAR', num: 4 },
-                ];
-                demoDefs.forEach(d => {
-                    slots.push({
-                        key: d.key,
-                        label: d.label,
-                        num: d.num,
-                        isSaved: !!presets[d.key],
-                    });
-                });
-                for (let i = 5; i <= 11; i++) {
-                    const key = `pose_${i}`;
-                    slots.push({
-                        key: key,
-                        label: `${i}`,
-                        num: i,
-                        isSaved: !!presets[key],
-                    });
-                }
-            } else if (mode === 'angry') {
-                for (let i = 1; i <= 11; i++) {
-                    const key = `pose_${i}`;
-                    slots.push({
-                        key: key,
-                        label: `${i}`,
-                        num: i,
-                        isSaved: !!presets[key],
-                    });
-                }
-            } else {
-                for (let i = 1; i <= 11; i++) {
-                    const key = `pose_${i}`;
-                    slots.push({
-                        key: key,
-                        label: `${i}`,
-                        num: i,
-                        isSaved: !!presets[key],
-                    });
-                }
-            }
-            return slots;
-        }
-
-        function triggerOverwritePreset(presetName, label) {
-            const appsStatus = document.getElementById('appsStatus');
-            if (appsStatus) {
-                appsStatus.innerText = `OVERWRITING ${label}...`;
-                appsStatus.style.color = '#ffaa00';
-            }
-            fetch('/api/arm/overwrite_preset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: presetName, mode: currentPresetMode })
-            })
-            .then(r => r.json())
-            .then(d => {
-                fetch('/api/play_sound', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ kind: 'smw_save_menu' })
-                });
-                if (appsStatus) {
-                    appsStatus.innerText = `✅ OVERWROTE ${label} (${currentPresetMode.toUpperCase()})`;
-                    appsStatus.style.color = '#00ff66';
-                }
-                toggleOverwriteMode();
-                fetchPresetsList();
-                setTimeout(pollTelemetry, 300);
-            })
-            .catch(err => {
-                if (appsStatus) {
-                    appsStatus.innerText = `OVERWRITE ERROR: ${err}`;
-                    appsStatus.style.color = '#ff3344';
-                }
-            });
-        }
-
-        function triggerSequenceAction() {
-            const appsStatus = document.getElementById('appsStatus');
-            if (currentPresetMode === 'demo') {
-                if (appsStatus) {
-                    appsStatus.innerText = '☠️ EXECUTING 4-CLICK ATTACK DEMO...';
-                    appsStatus.style.color = '#ff3344';
-                }
-                fetch('/api/arm/attack_sequence', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                }).then(() => setTimeout(pollTelemetry, 1000));
-            } else {
-                if (appsStatus) {
-                    appsStatus.innerText = `▶️ EXECUTING ${currentPresetMode.toUpperCase()} SEQUENCE...`;
-                    appsStatus.style.color = '#00ff66';
-                }
-                fetch('/api/arm/execute_sequence', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sequence: 'sequence_' + currentPresetMode, mode: currentPresetMode })
-                }).then(() => setTimeout(pollTelemetry, 1000));
-            }
-        }
-
-        function renderPresetsGrid() {
-            const container = document.getElementById('presetsGridContainer');
-            if (!container) return;
-
-            const presets = cachedPresetsList || {};
-            const slots = getModeSlots(currentPresetMode, presets);
-
-            let html = '';
-            const btnBg = isOverwriteModeActive ? '#4a1500' : '#0066cc';
-            const btnBorder = isOverwriteModeActive ? '#ff5500' : '#3399ff';
-            const btnColor = isOverwriteModeActive ? '#ffaa00' : '#ffffff';
-
-            if (currentPresetsPage === 1) {
-                slots.forEach(slot => {
-                    const isSaved = slot.isSaved;
-                    const displayLabel = isOverwriteModeActive ? `✏️ ${slot.label}` : slot.label;
-                    const fSize = slot.label.length > 3 ? '13px' : '22px';
-                    if (isSaved) {
-                        html += `<button class="btn-action" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:pointer; padding:2px;" onclick="triggerMoveToPreset('${slot.key}', '${slot.label}')">${displayLabel}</button>`;
-                    } else if (isOverwriteModeActive) {
-                        html += `<button class="btn-action" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:pointer; padding:2px;" onclick="triggerMoveToPreset('${slot.key}', '${slot.label}')">+ ${slot.label}</button>`;
-                    } else {
-                        html += `<button class="btn-action" style="background:#181818; border:2px solid #3a3a3a; color:#777777; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:not-allowed; padding:2px;">${slot.label}</button>`;
-                    }
-                });
-
-                let maxPoseNum = 0;
-                for (const k of Object.keys(presets)) {
-                    if (k.startsWith('pose_')) {
-                        const num = parseInt(k.replace('pose_', ''), 10);
-                        if (!isNaN(num) && num > maxPoseNum) maxPoseNum = num;
-                    }
-                }
-                const hasNext = maxPoseNum >= 12;
-                if (hasNext) {
-                    html += `<button class="btn-action" style="background:#ff9900; border:2.5px solid #ffaa00; color:#000000; font-size:16px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="changePresetsPage(2)">Next ▶</button>`;
-                } else {
-                    html += `<button class="btn-action" style="background:#281808; border:2px solid #5a3810; color:#885520; font-size:16px; font-weight:900; border-radius:8px; cursor:not-allowed;">Next ▶</button>`;
-                }
-            } else {
-                const startNum = 12 + (currentPresetsPage - 2) * 10;
-                const endNum = 11 + (currentPresetsPage - 1) * 10;
-                const nextStartNum = endNum + 1;
-
-                for (let num = startNum; num <= startNum + 8; num++) {
-                    const key = `pose_${num}`;
-                    const isSaved = !!presets[key];
-                    const label = `${num}`;
-                    const displayLabel = isOverwriteModeActive ? `✏️ ${label}` : label;
-                    if (isSaved) {
-                        html += `<button class="btn-action" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="triggerMoveToPreset('${key}', '${label}')">${displayLabel}</button>`;
-                    } else if (isOverwriteModeActive) {
-                        html += `<button class="btn-action" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="triggerMoveToPreset('${key}', '${label}')">+${label}</button>`;
-                    } else {
-                        html += `<button class="btn-action" style="background:#181818; border:2px solid #3a3a3a; color:#777777; font-size:22px; font-weight:900; border-radius:8px; cursor:not-allowed;">${label}</button>`;
-                    }
-                }
-
-                html += `<button class="btn-action" style="background:#ff9900; border:2.5px solid #ffaa00; color:#000000; font-size:16px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="changePresetsPage(${currentPresetsPage - 1})">◀ Prev</button>`;
-
-                const num10 = endNum;
-                const key10 = `pose_${num10}`;
-                const isSaved10 = !!presets[key10];
-                const label10 = `${num10}`;
-                const displayLabel10 = isOverwriteModeActive ? `✏️ ${label10}` : label10;
-                if (isSaved10) {
-                    html += `<button class="btn-action" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="triggerMoveToPreset('${key10}', '${label10}')">${displayLabel10}</button>`;
-                } else if (isOverwriteModeActive) {
-                    html += `<button class="btn-action" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="triggerMoveToPreset('${key10}', '${label10}')">+${label10}</button>`;
-                } else {
-                    html += `<button class="btn-action" style="background:#181818; border:2px solid #3a3a3a; color:#777777; font-size:22px; font-weight:900; border-radius:8px; cursor:not-allowed;">${label10}</button>`;
-                }
-
-                let maxPoseNum = 0;
-                for (const k of Object.keys(presets)) {
-                    if (k.startsWith('pose_')) {
-                        const num = parseInt(k.replace('pose_', ''), 10);
-                        if (!isNaN(num) && num > maxPoseNum) maxPoseNum = num;
-                    }
-                }
-                const hasNext = maxPoseNum >= nextStartNum;
-                if (hasNext) {
-                    html += `<button class="btn-action" style="background:#ff9900; border:2.5px solid #ffaa00; color:#000000; font-size:16px; font-weight:900; border-radius:8px; cursor:pointer;" onclick="changePresetsPage(${currentPresetsPage + 1})">Next ▶</button>`;
-                } else {
-                    html += `<button class="btn-action" style="background:#281808; border:2px solid #5a3810; color:#885520; font-size:16px; font-weight:900; border-radius:8px; cursor:not-allowed;">Next ▶</button>`;
-                }
-            }
-
-            container.innerHTML = html;
-        }
-
-        function changePresetsPage(newPage) {
-            currentPresetsPage = Math.max(1, newPage);
-            renderPresetsGrid();
-        }
-
-        function triggerMoveToPreset(presetName, label) {
-            if (isOverwriteModeActive) {
-                triggerOverwritePreset(presetName, label);
-                return;
-            }
-            const appsStatus = document.getElementById('appsStatus');
-            if (appsStatus) {
-                appsStatus.innerText = `MOVING TO ${label}...`;
-                appsStatus.style.color = '#00ff66';
-            }
-            fetch('/api/arm/move_to_preset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: presetName, duration: 1.0, mode: currentPresetMode })
-            })
-            .then(r => r.json())
-            .then(d => {
-                setTimeout(() => {
-                    if (appsStatus) {
-                        appsStatus.innerText = `ARRIVED AT ${label}`;
-                        appsStatus.style.color = '#00e5ff';
-                    }
-                    pollTelemetry();
-                }, 1000);
-            })
-            .catch(() => {
-                if (appsStatus) {
-                    appsStatus.innerText = `MOVE ERROR: ${label}`;
-                    appsStatus.style.color = '#ff3344';
-                }
-            });
-        }
-
-        function fetchPresetsList() {
-            fetch('/api/arm/presets?mode=' + currentPresetMode + '&t=' + Date.now())
-                .then(r => r.json())
-                .then(data => {
-                    cachedPresetsList = data.presets || {};
-                    if (currentAppsMode === 'presets') {
-                        renderPresetsGrid();
-                    }
-                })
-                .catch(() => {});
-        }
-
-        function triggerPi500PowerOn() {
-            fetch('/api/pi500_poweron', { method: 'POST' }).then(() => setTimeout(pollTelemetry, 500));
-        }
-
-        function triggerPi500MasterDaemonRestart() {
-            const action = isMasterDaemonRunning ? 'stop' : 'start';
-            const btn = document.getElementById('masterDaemonBtn');
-            if (btn) {
-                btn.style.opacity = '0.5';
-                btn.innerHTML = action === 'stop' ? '⌛ STOPPING DAEMON...' : '⌛ STARTING DAEMON...';
-            }
-            fetch('/api/pi500_master_daemon_restart', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            }).then(r => r.json()).then(d => {
-                if (btn) btn.style.opacity = '1.0';
-                if (action === 'stop') {
-                    isMasterDaemonRunning = false;
-                } else {
-                    isMasterDaemonRunning = true;
-                    isRoverStandaloneRunning = false;
-                }
-                renderButtonStates();
-                setTimeout(pollTelemetry, 1500);
-            }).catch(() => {
-                if (btn) {
-                    btn.style.opacity = '1.0';
-                    btn.innerHTML = '❌ DAEMON ERROR';
-                }
-            });
-        }
-
-        function togglePokeballRoverStandalone() {
-            const action = isRoverStandaloneRunning ? 'stop' : 'start';
-            const btn = document.getElementById('roverStandaloneBtn');
-            if (btn) {
-                btn.style.opacity = '0.5';
-                btn.innerHTML = action === 'start' ? '⌛ STARTING ROVER...' : '⌛ STOPPING ROVER...';
-            }
-            fetch('/api/pokeball_rover_toggle', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            })
-            .then(r => r.json())
-            .then(d => {
-                if (d.running !== undefined) isRoverStandaloneRunning = d.running;
-                if (action === 'start') {
-                    isMasterDaemonRunning = false;
-                }
-                if (btn) btn.style.opacity = '1.0';
-                renderButtonStates();
-                setTimeout(pollTelemetry, 500);
-            })
-            .catch(() => {
-                if (btn) btn.style.opacity = '1.0';
-            });
-        }
-
-        function triggerEmergencyKillAll() {
-            fetch('/api/kill_all', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'kill_all' })
-            }).then(() => {
-                fetch('/api/pokeball_rover_toggle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'stop' })
-                });
-            }).then(() => setTimeout(pollTelemetry, 500));
-        }
-    </script>
+    <!-- Main ES Module Entry Point -->
+    <script type="module" src="./js/app.js"></script>
 </body>
 </html>

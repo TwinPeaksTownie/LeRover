@@ -9,7 +9,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Type, List
-from robot_backend import RobotBackend, SERIAL_LOCK
+from robot_backend import RobotBackend, SERIAL_LOCK, dispatch_audio_event
 
 
 @dataclass
@@ -156,6 +156,7 @@ class AppManager:
             self.lock.acquire(app_name)
         except RuntimeError as e:
             self.logger.error(f"Failed to acquire lock for '{app_name}': {e}")
+            dispatch_audio_event(kind="incorrect")
             return False
 
         self.active_app = app_instance
@@ -168,6 +169,7 @@ class AppManager:
         except Exception as e:
             self.logger.error(f"App '{app_name}' setup failed: {e}")
             app_instance.error = str(e)
+            dispatch_audio_event(kind="incorrect")
             self.lock.release(app_name)
             self.active_app = None
             self.current_app_name = None
@@ -180,11 +182,18 @@ class AppManager:
             except Exception as e:
                 self.logger.error(f"Application '{app_name}' crashed: {e}", exc_info=True)
                 app_instance.error = str(e)
+                dispatch_audio_event(kind="incorrect")
             finally:
                 try:
                     app_instance.teardown(self.backend)
                 except Exception as te:
                     self.logger.warning(f"App '{app_name}' teardown warning: {te}")
+                with self.lock._lock:
+                    if self.current_app_name == app_name:
+                        self.active_app = None
+                        self.current_app_name = None
+                        if self.lock._owner == app_name:
+                            self.lock._owner = None
                 self.logger.info(f"Application '{app_name}' loop exited.")
 
         app_instance.thread = threading.Thread(target=_runner, daemon=True)
@@ -195,7 +204,7 @@ class AppManager:
         """Reachy Mini 5-stage Shutdown Compliance Protocol:
         1. Signal stop_event
         2. Wait for worker loop exit (join timeout 3.0s)
-        3. Force disarm / reset hardware state if needed
+        3. Execute app teardown hook
         4. Release RobotAppLock
         5. Reset active app state
         """
@@ -212,13 +221,11 @@ class AppManager:
                 if app_inst.thread.is_alive():
                     self.logger.warning(f"App '{app_name}' thread did not exit within 3.0s timeout.")
 
-            # Stage 3: Hardware safe reset / disarm
+            # Stage 3: App teardown hook
             try:
-                if self.backend and self.backend.bus and hasattr(self.backend.bus, "disable_torque"):
-                    with SERIAL_LOCK:
-                        self.backend.bus.disable_torque(num_retry=1)
-            except Exception as e:
-                self.logger.warning(f"Hardware reset during '{app_name}' shutdown warning: {e}")
+                app_inst.teardown(self.backend)
+            except Exception as te:
+                self.logger.warning(f"App '{app_name}' teardown warning: {te}")
 
             # Stage 4: Release mutex lock
             self.lock.release(app_name)

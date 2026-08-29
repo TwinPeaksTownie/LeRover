@@ -2,26 +2,30 @@
 """Single Responsibility TelemetryPollerService module for Pi 4B.
 Runs a 500ms background loop to poll ICMP ping and HTTP status endpoints from Pi 500 (:8085)
 and Mac Mini (:8086), maintaining a thread-safe status cache for consumption by the API gateway.
+Dynamically resolves target IPs via network_resolver.
 """
 
 import json
 import logging
+import os
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-PI500_IP = "192.168.0.130"
-MAC_IP = "192.168.0.2"
+try:
+    import network_resolver
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
 
 
 class TelemetryPollerService:
     """Dedicated background poller for Pi 500 and Mac Mini hardware telemetry."""
 
-    def __init__(self, pi500_ip: str = PI500_IP, mac_ip: str = MAC_IP) -> None:
-        self.pi500_ip = pi500_ip
-        self.mac_ip = mac_ip
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -35,6 +39,7 @@ class TelemetryPollerService:
             "daemon_running": False,
             "hardware_telemetry": None,
             "last_telemetry_time": 0,
+            "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
         }
 
     def start(self) -> None:
@@ -68,27 +73,30 @@ class TelemetryPollerService:
 
     def _poll_loop(self) -> None:
         while not self._stop_event.is_set():
-            # 1. ICMP ping check for Pi 500 physical reachability
-            pi500_online = False
-            try:
-                res = subprocess.run(["ping", "-c", "1", "-W", "1", self.pi500_ip], capture_output=True)
-                pi500_online = (res.returncode == 0)
-            except Exception:
-                pi500_online = False
+            p500_ip = network_resolver.get_pi500_ip(prefer_port=8085)
+            mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
+            conn_mode = network_resolver.get_active_connection_mode()
+
+            # 1. Reachability check
+            pi500_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
 
             with self._lock:
                 self.status_cache["pi500_online"] = pi500_online
+                self.status_cache["connection_mode"] = conn_mode
+                self.status_cache["resolved_pi500_ip"] = p500_ip
+                self.status_cache["resolved_mac_ip"] = mac_ip
 
             # 2. Poll Pi 500 Master Daemon over HTTP 8085
             try:
-                req = urllib.request.Request(f"http://{self.pi500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
+                req = urllib.request.Request(f"http://{p500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
                 with urllib.request.urlopen(req, timeout=1.0) as response:
                     if response.status == 200:
                         data = json.loads(response.read().decode())
                         with self._lock:
                             self.status_cache["hardware_telemetry"] = data
                             self.status_cache["last_telemetry_time"] = time.time()
-                            self.status_cache["daemon_running"] = bool(data.get("hardware_connected", True))
+                            self.status_cache["daemon_running"] = True
+                            self.status_cache["hardware_connected"] = bool(data.get("hardware_connected", False))
                             if isinstance(data, dict):
                                 self.status_cache["follower"] = data.get("follower", {"running": False, "pid": ""})
                                 self.status_cache["pokeball"] = data.get("pokeball", {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""})
@@ -101,7 +109,7 @@ class TelemetryPollerService:
 
             # 3. Poll Mac Mini Leader API over HTTP 8086
             try:
-                mac_req = urllib.request.Request(f"http://{self.mac_ip}:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
+                mac_req = urllib.request.Request(f"http://{mac_ip}:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
                 with urllib.request.urlopen(mac_req, timeout=1.0) as mac_resp:
                     if mac_resp.status == 200:
                         mac_data = json.loads(mac_resp.read().decode())

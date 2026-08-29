@@ -23,8 +23,22 @@ from servo_studio_app import ServoStudioApp
 from pokeball_app import PokeballApp
 import threading
 
-MAC_API_URL = "http://192.168.0.2:8086"
-PI4B_SOUND_URL = "http://192.168.0.86:8082/api/play_sound"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
+
+
+def get_mac_api_url() -> str:
+    mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
+    return f"http://{mac_ip}:8086"
+
+
+def get_pi4b_sound_url() -> str:
+    pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
+    return f"http://{pi4b_ip}:8082/api/play_sound"
 
 _leader_cache_lock = threading.Lock()
 _cached_leader_data = {"running": False, "pid": "", "connected": False, "error": None}
@@ -36,7 +50,7 @@ def _background_leader_poller():
     global _cached_leader_data
     while True:
         try:
-            req = urllib.request.Request(f"{MAC_API_URL}/api/status", headers={"User-Agent": "SO101-MasterApi"})
+            req = urllib.request.Request(f"{get_mac_api_url()}/api/status", headers={"User-Agent": "SO101-MasterApi"})
             with urllib.request.urlopen(req, timeout=0.8) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode())
@@ -58,12 +72,12 @@ def ensure_leader_poller_started():
         _leader_poll_thread.start()
 
 
-def play_chime(kind: str = "connect") -> None:
+def play_chime(kind: str = "incorrect") -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
     def _work():
         try:
             payload = json.dumps({"kind": kind}).encode("utf-8")
-            req = urllib.request.Request(PI4B_SOUND_URL, data=payload, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass
         except Exception as e:
@@ -126,9 +140,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 leader_data = dict(_cached_leader_data)
 
             with self.backend.lock:
-                aux_calib_8 = getattr(self.backend, "aux_calibration", {}).get("8", {})
-                left_b = aux_calib_8.get("min_ticks", 3)
-                right_b = aux_calib_8.get("max_ticks", 4800)
+                left_b, right_b = self.backend.get_s8_bounds()
                 gantry_pos = self.backend.gantry_position
 
                 span = max(1, abs(right_b - left_b))
@@ -161,7 +173,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 servos_map = arm_data
                 s7_pos = self.backend.aux_positions.get(7)
                 s7_raw = self.backend.raw_positions.get(7)
-                c7 = self.backend.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self.backend, "aux_calibration") else 2048
+                c7 = self.backend.get_s7_center_ticks()
                 servos_map["7"] = {
                     "pos": s7_pos,
                     "raw": s7_raw,
@@ -206,11 +218,61 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     "pokeball": pokeball_data,
                     "servos": servos_map,
                 }
+                bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+                if bb_app and hasattr(bb_app, "get_status"):
+                    resp["beat_bandit"] = bb_app.get_status()
+                else:
+                    resp["beat_bandit"] = {
+                        "state": "IDLE",
+                        "is_running": False,
+                        "track": None,
+                        "progress": 0.0,
+                        "tempo": 0.0,
+                        "current_beat": 0,
+                        "total_beats": 0,
+                        "energy_level": "IDLE",
+                        "current_move": "Rest Stance",
+                        "vocal_power": 0.0,
+                        "s7_angle_deg": 0.0,
+                    }
             self._send_json(resp)
         elif parsed.path in ["/api/apps", "/api/apps/list"]:
             self._send_json({"status": "ok", "apps": self.app_manager.list_apps()})
         elif parsed.path == "/api/apps/status":
             self._send_json({"status": "ok", "app_manager": self.app_manager.get_status()})
+        elif parsed.path == "/api/apps/beat_bandit/status":
+            bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+            st = bb_app.get_status() if (bb_app and hasattr(bb_app, "get_status")) else {"state": "IDLE", "is_running": False}
+            self._send_json({"status": "ok", "beat_bandit": st})
+        elif parsed.path == "/api/apps/beat_bandit/tracks":
+            bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+            if not bb_app:
+                from beat_bandit_app import BeatBanditApp
+                temp_app = BeatBanditApp(running_on_pi=False)
+                tracks = temp_app.list_tracks()
+            else:
+                tracks = bb_app.list_tracks()
+            self._send_json({"status": "ok", "tracks": tracks})
+        elif parsed.path in ["/api/apps/beat_bandit/choreo", "/api/apps/beat_bandit/choreography"]:
+            query = urllib.parse.parse_qs(parsed.query)
+            track_id = query.get("track_id", [None])[0]
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            if not track_id:
+                bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+                if bb_app and bb_app.active_track:
+                    track_id = bb_app.active_track.get("track_id")
+                else:
+                    manifest = studio_mgr._load_manifest()
+                    if manifest:
+                        track_id = list(manifest.keys())[0]
+            if not track_id:
+                return self._send_json({"status": "error", "message": "No track ID available"}, 400)
+            try:
+                choreo = studio_mgr.get_track_choreography(track_id)
+                self._send_json({"status": "ok", "choreography": choreo})
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
         elif parsed.path == "/api/arm/presets":
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
@@ -304,7 +366,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     "message": msg
                 })
 
-            center_s7 = self.backend.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self.backend, "aux_calibration") else 2048
+            center_s7 = self.backend.get_s7_center_ticks()
             val = center_s7
             query = urllib.parse.parse_qs(parsed.query)
             if "angle" in body:
@@ -322,12 +384,21 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             if "id" not in body:
                 return self._send_json({"status": "error", "message": "Missing required 'id' parameter"}, 400)
             sid = int(body["id"])
-            center_s7 = self.backend.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self.backend, "aux_calibration") else 2048
-            if "angle" in body and sid == 7:
-                target_pos = degrees_to_ticks_s7(float(body["angle"]), center_ticks=center_s7)
+            if sid == 7:
+                center_s7 = self.backend.get_s7_center_ticks()
+                if "angle" in body:
+                    target_pos = degrees_to_ticks_s7(float(body["angle"]), center_ticks=center_s7)
+                elif "target" in body:
+                    target_pos = int(body["target"])
+                else:
+                    return self._send_json({"status": "error", "message": "Missing 'angle' or 'target' for Servo 7"}, 400)
+            elif sid == 8:
+                if "target" not in body:
+                    return self._send_json({"status": "error", "message": "Missing 'target' for Servo 8"}, 400)
+                target_pos = int(body["target"])
             else:
-                default_target = center_s7 if sid == 7 else 2503
-                target_pos = int(body.get("target", default_target))
+                return self._send_json({"status": "error", "message": f"Invalid auxiliary motor ID {sid}"}, 400)
+
             ok, msg = self.backend.move_target(sid, target_pos, step_size=50, speed=400, max_t=500)
             if not ok:
                 self._send_json({"status": "error", "message": msg}, 400)
@@ -373,13 +444,15 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 return self._send_json({"status": "error", "message": "Missing required 'id' or 'pos' parameter"}, 400)
             sid = int(body["id"])
             pos = int(body["pos"])
-            with self.backend.lock:
-                if sid == 8:
-                    self.backend.gantry_position = pos
-                else:
+            if sid == 8:
+                synced_val = self.backend.sync_servo8_position(pos)
+                if synced_val is None:
+                    return self._send_json({"status": "error", "message": "Failed to sync Motor 8 state"}, 500)
+            else:
+                with self.backend.lock:
                     self.backend.aux_positions[sid] = pos
                     self.backend.raw_positions[sid] = pos % 4096
-                self.backend.save_state()
+                    self.backend.save_state()
             self._send_json({"status": "ok", "id": sid, "synced_pos": pos})
 
         elif parsed.path == "/api/calibration":
@@ -419,41 +492,32 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             action = body.get("action", "toggle")
             try:
                 post_data = json.dumps({"action": action}).encode("utf-8")
-                req = urllib.request.Request(f"{MAC_API_URL}/api/leader_toggle", data=post_data, headers={"Content-Type": "application/json"})
+                req = urllib.request.Request(f"{get_mac_api_url()}/api/leader_toggle", data=post_data, headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=1.5) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     self._send_json(data, resp.status)
             except Exception as e:
                 self._send_json({"status": "error", "message": f"Mac HTTP API error: {e}"}, 500)
 
-        elif parsed.path == "/api/servo_studio_toggle":
-            action = body.get("action", "toggle")
-            is_running = (self.app_manager.current_app_name == "servo_studio_app")
-            if action == "toggle":
-                action = "stop" if is_running else "start"
-
-            if action in ["stop", "kill"]:
-                self.app_manager.stop_app("servo_studio_app")
-                self._send_json({"status": "ok", "action": action, "running": False})
-            elif action == "start":
-                self.backend.follower_active = False
-                studio_app = ServoStudioApp(port=8086)
-                self.app_manager.start_app(studio_app)
-                self._send_json({"status": "ok", "action": "start", "running": True})
-
         elif parsed.path == "/api/apps/start":
-            app_name = body.get("name")
+            app_name = body.get("name") or body.get("app")
             if not app_name:
+                play_chime("incorrect")
                 return self._send_json({"error": "Missing required 'name' parameter"}, 400)
             ok = self.app_manager.start_app_by_name(app_name)
+            if ok:
+                play_chime("connect")
+            else:
+                play_chime("incorrect")
             self._send_json({"status": "ok" if ok else "error", "app_name": app_name, "running": ok})
 
         elif parsed.path == "/api/apps/stop":
-            app_name = body.get("name")
+            app_name = body.get("name") or body.get("app")
             if app_name:
                 self.app_manager.stop_app(app_name)
             else:
                 self.app_manager.stop_all()
+            play_chime("disconnect")
             self._send_json({"status": "ok", "message": f"Stopped app {app_name if app_name else 'all'}"})
 
         elif parsed.path == "/api/pokeball_teleop_toggle":
@@ -464,9 +528,26 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("pokeball_teleop_app")
+                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
                 ok = self.app_manager.start_app_by_name("pokeball_teleop_app")
+                play_chime("connect" if ok else "incorrect")
+                self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
+
+        elif parsed.path == "/api/servo_studio_toggle":
+            action = body.get("action", "toggle")
+            is_running = (self.app_manager.current_app_name == "servo_studio_app")
+            if action == "toggle":
+                action = "stop" if is_running else "start"
+
+            if action in ["stop", "kill"]:
+                self.app_manager.stop_app("servo_studio_app")
+                play_chime("disconnect")
+                self._send_json({"status": "ok", "action": action, "running": False})
+            else:
+                ok = self.app_manager.start_app_by_name("servo_studio_app")
+                play_chime("connect" if ok else "incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
         elif parsed.path == "/api/clack_pose_toggle":
@@ -477,11 +558,123 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("clack_pose_app")
+                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
                 ok = self.app_manager.start_app_by_name("clack_pose_app")
+                play_chime("connect" if ok else "incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
+        elif parsed.path == "/api/beat_bandit_toggle":
+            action = body.get("action", "toggle")
+            is_running = (self.app_manager.current_app_name == "beat_bandit_app")
+            if action == "toggle":
+                action = "stop" if is_running else "start"
+
+            if action in ["stop", "kill"]:
+                self.app_manager.stop_app("beat_bandit_app")
+                play_chime("disconnect")
+                self._send_json({"status": "ok", "action": action, "running": False})
+            else:
+                ok = self.app_manager.start_app_by_name("beat_bandit_app")
+                play_chime("connect" if ok else "incorrect")
+                self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
+
+        elif parsed.path == "/api/apps/beat_bandit/start":
+            if not self.backend:
+                play_chime("incorrect")
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            url_or_id = body.get("url") or body.get("track_id")
+            if not url_or_id:
+                play_chime("incorrect")
+                return self._send_json({"status": "error", "message": "Missing required parameter 'url' or 'track_id'"}, 400)
+
+            start_sec = float(body.get("start_sec", 0.0))
+            end_sec = float(body.get("end_sec")) if (body.get("end_sec") is not None and str(body.get("end_sec")) != "") else None
+            loop = bool(body.get("loop", False))
+            
+            # Require beat_bandit_app to be explicitly running
+            if self.app_manager.current_app_name != "beat_bandit_app":
+                play_chime("incorrect")
+                return self._send_json({"status": "error", "message": "Beat Bandit App is not running. Please start the app first."}, 400)
+
+            bb_app = self.app_manager.active_app
+            if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):
+                res = bb_app.start_track_by_url_or_id(self.backend, url_or_id, start_sec=start_sec, end_sec=end_sec, loop=loop)
+                self._send_json(res)
+            else:
+                play_chime("incorrect")
+                self._send_json({"status": "error", "message": "Failed to activate BeatBanditApp"}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/stop":
+            bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+            if bb_app and hasattr(bb_app, "stop_dance"):
+                bb_app.stop_dance()
+            self._send_json({"status": "ok", "action": "stopped"})
+
+        elif parsed.path == "/api/apps/beat_bandit/save_choreo":
+            track_id = body.get("track_id")
+            choreo = body.get("choreography")
+            if not track_id or not choreo:
+                return self._send_json({"status": "error", "message": "Missing required fields 'track_id' and 'choreography'"}, 400)
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                res = studio_mgr.save_track_choreography(track_id, choreo)
+                bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+                if bb_app and bb_app.active_track and bb_app.active_track.get("track_id") == track_id:
+                    bb_app.active_track["choreography"] = choreo
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/auto_generate":
+            track_id = body.get("track_id")
+            style = body.get("style", "balanced")
+            if not track_id:
+                return self._send_json({"status": "error", "message": "Missing 'track_id'"}, 400)
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                choreo = studio_mgr.auto_generate_choreography(track_id, style=style)
+                self._send_json({"status": "ok", "choreography": choreo})
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/preview_pose":
+            pose = body.get("pose")
+            if not pose:
+                return self._send_json({"status": "error", "message": "Missing 'pose' dictionary"}, 400)
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                res = studio_mgr.preview_pose_on_robot(self.backend, pose)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/capture_pose":
+            pose_name = body.get("name", f"pose_{int(time.time())}")
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                res = studio_mgr.capture_arm_current_pose(self.backend, pose_name)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/preview_movement":
+            channel = body.get("channel")
+            target_val = body.get("target")
+            if not channel or target_val is None:
+                return self._send_json({"status": "error", "message": "Missing 'channel' or 'target' parameter"}, 400)
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                res = studio_mgr.preview_movement_block(self.backend, channel, target_val)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
         elif parsed.path == "/api/arm/torque":
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
@@ -552,6 +745,15 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             ok, msg = self.backend.move_to_specific_arm_preset(preset_name=preset_name, duration=duration, mode=mode)
             self._send_json({"status": "ok" if ok else "error", "name": preset_name, "mode": mode, "message": msg}, 200 if ok else 400)
 
+        elif parsed.path == "/api/arm/move_norm":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            target = body.get("target") or body.get("normalized") or body
+            duration = float(body.get("duration", 1.5))
+            steps = int(body.get("steps", max(10, int(duration * 40))))
+            ok, msg = self.backend.interpolate_arm_norm(target, duration=duration, steps=steps)
+            self._send_json({"status": "ok" if ok else "error", "message": msg, "target": target}, 200 if ok else 400)
+
         elif parsed.path in ["/api/arm/execute_sequence", "/api/arm/sequence"]:
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
@@ -575,19 +777,15 @@ class MasterApiHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/kill_all":
             try:
                 post_data = json.dumps({"action": "stop"}).encode("utf-8")
-                req = urllib.request.Request(f"{MAC_API_URL}/api/leader_toggle", data=post_data, headers={"Content-Type": "application/json"})
+                req = urllib.request.Request(f"{get_mac_api_url()}/api/leader_toggle", data=post_data, headers={"Content-Type": "application/json"})
                 urllib.request.urlopen(req, timeout=1.0)
             except Exception as e:
                 logging.warning(f"Kill all Mac leader HTTP error: {e}")
 
-            try:
-                if self.backend.bus and hasattr(self.backend.bus, "disable_torque"):
-                    with SERIAL_LOCK:
-                        self.backend.bus.disable_torque(num_retry=2)
-            except Exception as e:
-                logging.warning(f"Kill all torque disarm warning: {e}")
+            if self.backend:
+                self.backend.disable_all_torque()
+                self.backend.follower_active = False
 
-            self.backend.follower_active = False
             self.app_manager.stop_all()
             self._send_json({"status": "ok", "message": "All teleoperation processes killed and torque disarmed."})
 

@@ -40,7 +40,17 @@ except ImportError:
 MAC_ADDRESS = "58:2F:40:8D:50:71"
 INPUT_UUID = "6675e16c-f36d-4567-bb55-6b51e27a23e6"
 TELEMETRY_FILE = "/tmp/pokeball_rover_telemetry.json"
-PI4B_SOUND_URL = "http://192.168.0.86:8082/api/play_sound"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
+
+
+def get_pi4b_sound_url() -> str:
+    pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
+    return f"http://{pi4b_ip}:8082/api/play_sound"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("pokeball_rover_standalone")
@@ -51,7 +61,7 @@ def play_chime(kind: str = "connect") -> None:
     def _work():
         try:
             payload = json.dumps({"kind": kind}).encode("utf-8")
-            req = urllib.request.Request(PI4B_SOUND_URL, data=payload, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass
         except Exception as e:
@@ -70,9 +80,32 @@ class StandalonePokeballRover:
         self.client: Optional[BleakClient] = None
         self.counter = 0
 
-        # Initialize RoverController with auto-port detection (/dev/ttyAMA0 on Pi 500)
+        # Initialize RoverController with configurable speed cap and steering trim
+        max_pulse_offset = 175
+        self.steering_trim: float = 0.0
+        self.trim_stick_latched: bool = False
+
+        config_paths = ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json", os.path.join(workspace_root, "config", "rover_config.json")]
+        for cp in config_paths:
+            if os.path.exists(cp):
+                try:
+                    with open(cp, "r") as f:
+                        cfg = json.load(f)
+                        if "max_pulse_offset" in cfg:
+                            max_pulse_offset = int(cfg["max_pulse_offset"])
+                        elif "max_speed_pct" in cfg:
+                            pct = float(cfg["max_speed_pct"])
+                            max_pulse_offset = int(500 * (pct / 100.0))
+                        if "steering_trim" in cfg:
+                            self.steering_trim = float(cfg["steering_trim"])
+                    logger.info("Loaded config from %s: max_pulse_offset=%d us, steering_trim=%+.3f", cp, max_pulse_offset, self.steering_trim)
+                    break
+                except Exception as e:
+                    logger.warning("Could not read %s: %s", cp, e)
+
         if RoverController is not None:
-            self.rover_ctrl = RoverController(serial_port=serial_port, baudrate=115200)
+            self.rover_ctrl = RoverController(serial_port=serial_port, baudrate=115200, max_pulse_offset=max_pulse_offset)
+            self.rover_ctrl.set_steering_trim(self.steering_trim)
         else:
             self.rover_ctrl = None
 
@@ -83,6 +116,7 @@ class StandalonePokeballRover:
             "packets": 0,
             "norm_x": 0.0,
             "norm_y": 0.0,
+            "steering_trim": self.steering_trim,
             "direction": "center",
             "raw_hex": "",
             "btn_a": False,
@@ -97,6 +131,31 @@ class StandalonePokeballRover:
         self.is_braking = False
         self.is_armed = False
         self.arm_lockout_until = 0.0
+
+    def _adjust_trim(self, delta: float) -> None:
+        """Adjusts the steering trim by delta, updates RoverController, persists config, and triggers coin sound."""
+        self.steering_trim = round(max(-0.25, min(0.25, self.steering_trim + delta)), 3)
+        if self.rover_ctrl:
+            self.rover_ctrl.set_steering_trim(self.steering_trim)
+
+        self._save_rover_config()
+        play_chime("connect")  # On Pi 4B audio service, "connect" plays smw_coin.wav
+        logger.info("🎯 Steering Trim calibrated (%+.2f) -> New trim: %+.3f (Left: %+.1f%%, Right: %+.1f%%). Triggered coin feedback.",
+                    delta, self.steering_trim, -self.steering_trim * 100, self.steering_trim * 100)
+
+    def _save_rover_config(self) -> None:
+        """Persists current rover speed and steering trim to /tmp and persistent config."""
+        cfg_dict = {
+            "max_pulse_offset": self.rover_ctrl.max_pulse_offset if self.rover_ctrl else 175,
+            "steering_trim": self.steering_trim
+        }
+        for path in ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json"]:
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    json.dump(cfg_dict, f, indent=2)
+            except Exception as e:
+                logger.debug("Failed to write config to %s: %s", path, e)
 
     def notification_handler(self, sender: Any, data: bytearray) -> None:
         try:
@@ -116,11 +175,19 @@ class StandalonePokeballRover:
             norm_x = max(-1.0, min(1.0, x_offset / 2048.0))
             norm_y = max(-1.0, min(1.0, y_offset / 2048.0))
 
-            # Deadzone filter
-            if abs(norm_x) < 0.08:
+            # 10% Deadzone filter with smooth linear remapping
+            DEADZONE = 0.10
+            if abs(norm_x) <= DEADZONE:
                 norm_x = 0.0
-            if abs(norm_y) < 0.08:
+            else:
+                sign_x = 1.0 if norm_x > 0 else -1.0
+                norm_x = sign_x * ((abs(norm_x) - DEADZONE) / (1.0 - DEADZONE))
+
+            if abs(norm_y) <= DEADZONE:
                 norm_y = 0.0
+            else:
+                sign_y = 1.0 if norm_y > 0 else -1.0
+                norm_y = sign_y * ((abs(norm_y) - DEADZONE) / (1.0 - DEADZONE))
 
             # Direction classification
             if norm_x < -0.35:
@@ -152,14 +219,33 @@ class StandalonePokeballRover:
                 else:
                     logger.info("🏎️ Drivetrain already armed.")
 
-            # Top Red Button tap -> Instant Emergency Brake / Zero Wheels
-            if btn_top and not self.last_btn_top:
-                if self.rover_ctrl:
-                    self.rover_ctrl.stop()
-                self.is_braking = True
-                logger.info("🛑 Emergency Brake engaged via Top Red Button!")
-            elif not btn_top and self.last_btn_top:
-                self.is_braking = False
+            # Top Red Button (Button B) Tap & Hold Logic:
+            # While Red Button is held down:
+            # 1. Wheels are stopped (Braking active)
+            # 2. Deflecting Stick Right (norm_x > 0.40) nudges trim by +0.01 (+1% right bias)
+            # 3. Deflecting Stick Left (norm_x < -0.40) nudges trim by -0.01 (-1% left bias)
+            # 4. Plays SMW coin sound on Pi 4B for each registered notch
+            if btn_top:
+                if not self.last_btn_top:
+                    if self.rover_ctrl:
+                        self.rover_ctrl.stop()
+                    self.is_braking = True
+                    logger.info("🛑 Emergency Brake / Calibration mode engaged via Top Red Button!")
+
+                # Live trim calibration gesture while holding Red Button
+                if norm_x > 0.40 and not self.trim_stick_latched:
+                    self._adjust_trim(+0.01)
+                    self.trim_stick_latched = True
+                elif norm_x < -0.40 and not self.trim_stick_latched:
+                    self._adjust_trim(-0.01)
+                    self.trim_stick_latched = True
+                elif abs(norm_x) < 0.20:
+                    self.trim_stick_latched = False
+            else:
+                if self.last_btn_top:
+                    self.is_braking = False
+                    self.trim_stick_latched = False
+                    logger.info("🛑 Brake released. Resuming active drive mode with steering_trim=%+.3f", self.steering_trim)
 
             # Dispatch drive command if armed and past the countdown lockout
             if self.rover_ctrl:
@@ -181,6 +267,7 @@ class StandalonePokeballRover:
                 "packets": self.counter,
                 "norm_x": round(norm_x, 3),
                 "norm_y": round(norm_y, 3),
+                "steering_trim": self.steering_trim,
                 "direction": direction,
                 "raw_hex": data.hex().upper(),
                 "btn_a": btn_stick,

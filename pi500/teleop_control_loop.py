@@ -19,7 +19,17 @@ PORT_ZMQ_CMD = 5555
 PORT_ZMQ_OBS = 5556
 WATCHDOG_TIMEOUT_MS = 500
 MAX_LOOP_FREQ_HZ = 60
-MAC_API_URL = "http://192.168.0.2:8086"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
+
+
+def get_mac_api_url() -> str:
+    mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
+    return f"http://{mac_ip}:8086"
 
 CACHED_LEADER_STATUS = {"running": False, "pid": ""}
 
@@ -80,7 +90,7 @@ class TeleopControlApp(BaseApp):
         while not stop_event.is_set():
             try:
                 req = urllib.request.Request(
-                    f"{MAC_API_URL}/api/status", headers={"User-Agent": "SO101-TeleopApp"}
+                    f"{get_mac_api_url()}/api/status", headers={"User-Agent": "SO101-TeleopApp"}
                 )
                 with urllib.request.urlopen(req, timeout=0.8) as response:
                     if response.status == 200:

@@ -1,0 +1,71 @@
+{
+  "stand": {
+    "timestamp": 1787854607.0,
+    "normalized": {
+      "shoulder_pan": 2.46,
+      "shoulder_lift": -48.60,
+      "elbow_flex": -18.98,
+      "wrist_flex": 23.64,
+      "wrist_roll": 0.35,
+      "gripper": 0.0
+    },
+    "raw_ticks": {
+      "1": 2109,
+      "2": 1531,
+      "3": 1165,
+      "4": 2386,
+      "5": 1971,
+      "6": 1460
+    },
+    "aux": {
+      "7": 2041,
+      "8": 2401
+    }
+  },
+  "squat": {
+    "timestamp": 1787821625.8206272,
+    "normalized": {
+      "shoulder_pan": -0.11,
+      "shoulder_lift": -93.04,
+      "elbow_flex": 35.0,
+      "wrist_flex": 0.0,
+      "wrist_roll": -0.16,
+      "gripper": 0.42
+    },
+    "raw_ticks": {
+      "1": 2099,
+      "2": 997,
+      "3": 1600,
+      "4": 2048,
+      "5": 1977,
+      "6": 1462
+    },
+    "aux": {
+      "7": 2041,
+      "8": 2401
+    }
+  },
+  "tiptoe": {
+    "timestamp": 1787854668.0,
+    "normalized": {
+      "shoulder_pan": 2.55,
+      "shoulder_lift": -14.06,
+      "elbow_flex": -72.25,
+      "wrist_flex": -1.41,
+      "wrist_roll": 0.35,
+      "gripper": 0.0
+    },
+    "raw_ticks": {
+      "1": 2110,
+      "2": 1924,
+      "3": 559,
+      "4": 2101,
+      "5": 1971,
+      "6": 1503
+    },
+    "aux": {
+      "7": 2041,
+      "8": 2401
+    }
+  }
+}

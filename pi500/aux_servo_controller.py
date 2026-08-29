@@ -198,13 +198,15 @@ class AuxiliaryServoController:
             pkt_sp = [0xFF, 0xFF, servo_id, 5, 3, 46, vl, vh] # Reg 46 (Goal_Speed)
             self._send_and_read(pkt_sp, expected_res_len=6)
 
-    def write_goal_raw(self, servo_id: int, target_tick: int, speed: int = 0, goal_time: int = 0):
+    def write_goal_raw(self, servo_id: int, target_tick: int, speed: int = 500, goal_time: int = 0):
         """Writes raw goal position tick, goal time, and goal speed in a single consolidated serial packet."""
         target_tick = max(0, min(65535, int(target_tick)))
         val_l = target_tick & 0xFF
         val_h = (target_tick >> 8) & 0xFF
         gt_l = goal_time & 0xFF
         gt_h = (goal_time >> 8) & 0xFF
+        if speed <= 0 and goal_time == 0:
+            speed = 500
         sp_l = speed & 0xFF
         sp_h = (speed >> 8) & 0xFF
 

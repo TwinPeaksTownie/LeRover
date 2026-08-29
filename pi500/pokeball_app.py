@@ -49,7 +49,17 @@ MAC_ADDRESS = "58:2F:40:8D:50:71"
 INPUT_UUID = "6675e16c-f36d-4567-bb55-6b51e27a23e6"
 API_URL = "http://127.0.0.1:8085"
 TELEMETRY_FILE = "/tmp/pokeball_telemetry.json"
-PI4B_SOUND_URL = "http://192.168.0.86:8082/api/play_sound"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
+
+
+def get_pi4b_sound_url() -> str:
+    pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
+    return f"http://{pi4b_ip}:8082/api/play_sound"
 MARIO_SOUNDS_DIR = "/home/carson/mario_sounds"
 PLANT_VINE_SOUNDS = [
     "smw_vine.wav"
@@ -63,7 +73,7 @@ def play_chime(kind="connect"):
     def _work():
         try:
             payload = json.dumps({"kind": kind}).encode('utf-8')
-            req = urllib.request.Request(PI4B_SOUND_URL, data=payload, headers={'Content-Type': 'application/json'})
+            req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={'Content-Type': 'application/json'})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status != 200:
                     logging.warning(f"Audio request '{kind}' returned non-200 status: {resp.status}")

@@ -47,21 +47,21 @@
     },
     {
       "step_name": "5_transition_to_roar_posture",
-      "description": "Arm moves into the 'roar' position",
+      "description": "Arm moves into the 'roar' position while T-Rex roar audio starts playing",
       "preset": "roar",
-      "arm_duration": 0.8
-    },
-    {
-      "step_name": "6_jaw_open_roar_audio_and_motor1_sweep",
-      "description": "Jaw opens quickly, T-Rex roar audio plays with preemptive stop, pedestal rotates to center (-90 -> 0), and Motor 1 rotates max -> home over 3.0s",
-      "jaw_snap": 100.0,
+      "arm_duration": 0.3,
       "audio": {
         "kind": "trex_roar",
         "wav_path": "trex_roar_isolated.wav",
         "timing": "start",
         "delay_sec": 0.0,
         "stop_previous": true
-      },
+      }
+    },
+    {
+      "step_name": "6_jaw_open_roar_audio_and_motor1_sweep",
+      "description": "Jaw opens quickly, pedestal rotates to center (-90 -> 0), and Motor 1 rotates max -> home over 3.0s",
+      "jaw_snap": 100.0,
       "pedestal_to_center": true,
       "pedestal_duration": 3.0,
       "motor1_sweep": {

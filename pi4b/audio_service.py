@@ -47,7 +47,7 @@ class AudioPlaybackService:
         self._worker_thread.start()
         logging.info("Started AudioPlaybackService sequential FIFO consumer thread.")
 
-    def play_sound(self, kind: str = "connect", wav_path: Optional[str] = None) -> None:
+    def play_sound(self, kind: str = "incorrect", wav_path: Optional[str] = None) -> None:
         """Enqueues a pre-stored sound asset into the sequential FIFO queue."""
         if kind == "stop" or kind == "stop_audio":
             self.stop_all()
@@ -57,6 +57,8 @@ class AudioPlaybackService:
         if not target_wav or not os.path.exists(target_wav):
             if kind == "connect":
                 target_wav = os.path.join(self.sounds_dir, "smw_coin.wav")
+            elif kind in ("incorrect", "error", "invalid", "fallback"):
+                target_wav = os.path.join(self.sounds_dir, "smw_incorrect.wav")
             elif kind == "mario_kart_start":
                 target_mp3 = "/home/carson/mario_kart_start.mp3"
                 if os.path.exists(target_mp3):
@@ -77,6 +79,8 @@ class AudioPlaybackService:
                 target_wav = os.path.join(self.sounds_dir, "smw_vine.wav")
             elif kind:
                 target_wav = os.path.join(self.sounds_dir, f"{kind}.wav")
+                if not os.path.exists(target_wav):
+                    target_wav = os.path.join(self.sounds_dir, "smw_incorrect.wav")
 
         if target_wav and os.path.exists(target_wav):
             self._queue.put({"type": "asset_wav", "path": target_wav, "name": os.path.basename(target_wav)})

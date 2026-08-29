@@ -38,6 +38,7 @@ class RoverController:
 
         self.baudrate = baudrate
         self.max_pulse_offset = max_pulse_offset  # +/- 175 us -> 1325 to 1675 us (smooth calibrated driving)
+        self.steering_trim: float = 0.0  # [-0.25..0.25] throttle-scaled steering bias
 
         self.accel_ramp_rate = accel_ramp_rate
         self.watchdog_timeout = watchdog_timeout
@@ -66,6 +67,7 @@ class RoverController:
             "mode": "MOCK" if self.mock_mode else "DISCONNECTED",
             "left_out": 1500,
             "right_out": 1500,
+            "steering_trim": 0.0,
             "sbus_active": 0,
             "web_active": 0,
             "ch1": 1000,
@@ -79,6 +81,69 @@ class RoverController:
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
         self._mock_packet_sink = None  # Optional callback for simulator assertions
+
+        self._last_config_check: float = 0.0
+        self._check_config_reload()
+
+    def set_steering_trim(self, trim: float) -> None:
+        """Sets the steering trim bias factor [-0.25..0.25] in memory."""
+        with self._lock:
+            self.steering_trim = max(-0.25, min(0.25, float(trim)))
+            self.telemetry["steering_trim"] = round(self.steering_trim, 3)
+            logger.info("RoverController updated steering_trim: %+.3f", self.steering_trim)
+
+    def _check_config_reload(self) -> None:
+        """Polls /tmp/rover_config.json dynamically to allow runtime speed changes and trim adjustments without restart."""
+        config_paths = ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json"]
+        config_path = None
+        for cp in config_paths:
+            if os.path.exists(cp):
+                config_path = cp
+                break
+        if not config_path:
+            return
+        try:
+            with open(config_path, "r") as f:
+                content = f.read().strip()
+            if not content:
+                return
+            offset = None
+            trim = None
+            try:
+                import json
+                cfg = json.loads(content)
+                if isinstance(cfg, dict):
+                    if "max_pulse_offset" in cfg:
+                        offset = int(cfg["max_pulse_offset"])
+                    elif "max_speed_pct" in cfg:
+                        offset = int(500 * (float(cfg["max_speed_pct"]) / 100.0))
+                    if "steering_trim" in cfg:
+                        trim = float(cfg["steering_trim"])
+            except Exception:
+                import re
+                m_offset = re.search(r'max_pulse_offset[:\s]+(\d+)', content)
+                m_pct = re.search(r'max_speed_pct[:\s]+(\d+)', content)
+                m_trim = re.search(r'steering_trim[:\s]+([+-]?\d*(?:\.\d+)?)', content)
+                if m_offset:
+                    offset = int(m_offset.group(1))
+                elif m_pct:
+                    offset = int(500 * (float(m_pct.group(1)) / 100.0))
+                if m_trim and m_trim.group(1):
+                    trim = float(m_trim.group(1))
+
+            if offset is not None and 50 <= offset <= 500:
+                if offset != self.max_pulse_offset:
+                    self.max_pulse_offset = offset
+                    logger.info("RoverController updated live speed cap: max_pulse_offset=%d us", self.max_pulse_offset)
+
+            if trim is not None and -0.25 <= trim <= 0.25:
+                if trim != self.steering_trim:
+                    self.steering_trim = trim
+                    with self._lock:
+                        self.telemetry["steering_trim"] = round(self.steering_trim, 3)
+                    logger.info("RoverController updated live steering_trim: %+.3f", self.steering_trim)
+        except Exception as e:
+            logger.debug("Config reload check failed: %s", e)
 
     def start(self) -> None:
         """Starts the background 25 Hz UART heartbeat and control loop."""
@@ -176,6 +241,10 @@ class RoverController:
 
             # 2. Kinematics & Arcade Drive Mixing
             now = time.time()
+            if now - self._last_config_check > 0.5:
+                self._last_config_check = now
+                self._check_config_reload()
+
             with self._lock:
                 x = self._target_x
                 y = self._target_y
@@ -194,8 +263,11 @@ class RoverController:
             # y = throttle (+ forward, - reverse)
             # x = steering (+ right, - left)
             # Steering is inverted (-x) so positive x turns right
+            # steering_trim is scaled by throttle (+ values bias right to compensate for left veer)
             throttle = y
-            steering = -x
+            with self._lock:
+                trim = self.steering_trim
+            steering = -x + (trim * throttle)
 
             target_left = max(-1.0, min(1.0, throttle + steering))
             target_right = max(-1.0, min(1.0, throttle - steering))

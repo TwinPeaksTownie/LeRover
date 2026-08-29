@@ -16,11 +16,28 @@ import urllib.request
 import random
 import sys
 
-PORT = 8082
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
-PI500_IP = "192.168.0.130"
-PI500_HOST = "user@192.168.0.130"
-MAC_HOST = "twinpeakstownie@192.168.0.2"
+if DIRECTORY not in sys.path:
+    sys.path.insert(0, DIRECTORY)
+
+try:
+    import network_resolver
+except ImportError:
+    network_resolver = None
+
+PORT = 8082
+
+
+def get_current_pi500_ip(port=8085) -> str:
+    if network_resolver:
+        return network_resolver.get_pi500_ip(prefer_port=port)
+    return "10.0.0.1"
+
+
+def get_current_mac_ip(port=8086) -> str:
+    if network_resolver:
+        return network_resolver.get_mac_ip(prefer_port=port)
+    return "192.168.0.149"
 
 STATUS_CACHE = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
@@ -30,7 +47,8 @@ STATUS_CACHE = {
     "clack_pose": {"running": False},
     "pi500_online": False,
     "hardware_telemetry": None,
-    "last_telemetry_time": 0
+    "last_telemetry_time": 0,
+    "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
 }
 
 TAP_DETECTOR = None
@@ -49,7 +67,67 @@ PULSE_ENV = dict(os.environ)
 PULSE_ENV["XDG_RUNTIME_DIR"] = "/run/user/1000"
 PULSE_ENV["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
 
-def play_sound_helper(kind="connect", wav_path=None, stop_previous=False, delay_sec=0.0):
+CONFIG_FILE = os.path.join(DIRECTORY, "ui_config.json")
+DEFAULT_CONFIG = {
+    "clack_threshold": 5200,
+    "volume_pct": 100,
+    "rover_max_speed_pct": 35,
+    "arm_speed_sec": 1.0
+}
+
+def load_ui_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                cfg = json.load(f)
+                res = dict(DEFAULT_CONFIG)
+                res.update(cfg)
+                return res
+        except Exception:
+            pass
+    return dict(DEFAULT_CONFIG)
+
+def save_ui_config(cfg):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        print(f"Error saving config: {e}", flush=True)
+
+UI_CONFIG = load_ui_config()
+STATUS_CACHE["config"] = UI_CONFIG
+
+def set_system_volume(pct: int):
+    try:
+        val = max(0, min(150, int(pct)))
+        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{val}%"], env=PULSE_ENV, check=False)
+        subprocess.run(["amixer", "set", "Master", f"{val}%"], env=PULSE_ENV, check=False)
+        UI_CONFIG["volume_pct"] = val
+        STATUS_CACHE["config"] = UI_CONFIG
+        save_ui_config(UI_CONFIG)
+    except Exception as e:
+        print(f"Error setting volume: {e}", flush=True)
+
+def sync_rover_speed_config(pct: int):
+    val = max(10, min(100, int(pct)))
+    max_offset = int(500 * (val / 100.0))
+    UI_CONFIG["rover_max_speed_pct"] = val
+    STATUS_CACHE["config"] = UI_CONFIG
+    save_ui_config(UI_CONFIG)
+    try:
+        import base64
+        cfg_dict = {"max_speed_pct": val, "max_pulse_offset": max_offset}
+        cfg_data = json.dumps(cfg_dict)
+        with open("/tmp/rover_config.json", "w") as f:
+            f.write(cfg_data)
+        b64 = base64.b64encode(cfg_data.encode('utf-8')).decode('ascii')
+        p500_ip = get_current_pi500_ip(port=22)
+        cmd = f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 user@{p500_ip} \"echo {b64} | base64 -d > /tmp/rover_config.json\""
+        subprocess.Popen(cmd, shell=True)
+    except Exception as e:
+        print(f"Error syncing rover speed: {e}", flush=True)
+
+def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, delay_sec=0.0):
     def _work():
         try:
             if stop_previous or kind == "stop_audio" or kind in ("trex_roar", "trex_roar_isolated"):
@@ -71,6 +149,8 @@ def play_sound_helper(kind="connect", wav_path=None, stop_previous=False, delay_
             if not target_wav or not os.path.exists(target_wav):
                 if kind == "connect":
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_coin.wav")
+                elif kind in ("incorrect", "error", "invalid", "fallback"):
+                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
                 elif kind == "mario_kart_start":
                     target_mp3 = "/home/carson/mario_kart_start.mp3"
                     if os.path.exists(target_mp3):
@@ -89,6 +169,8 @@ def play_sound_helper(kind="connect", wav_path=None, stop_previous=False, delay_
                         target_wav = "/home/carson/trex_roar_isolated.wav"
                 elif kind:
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, f"{kind}.wav")
+                    if not os.path.exists(target_wav):
+                        target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
 
             if target_wav and os.path.exists(target_wav):
                 res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -100,25 +182,36 @@ def play_sound_helper(kind="connect", wav_path=None, stop_previous=False, delay_
 
 def poll_status_loop():
     while True:
-        # 1. Check Pi 500 physical host network reachability via ICMP ping
+        p500_ip = get_current_pi500_ip(port=8085)
+        mac_ip = get_current_mac_ip(port=8086)
+        conn_mode = network_resolver.get_active_connection_mode() if network_resolver else {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
+
+        # 1. Check Pi 500 physical host network reachability
         pi500_host_online = False
-        try:
-            res = subprocess.run(["ping", "-c", "1", "-W", "1", PI500_IP], capture_output=True)
-            pi500_host_online = (res.returncode == 0)
-        except Exception:
-            pi500_host_online = False
+        if network_resolver:
+            pi500_host_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
+        else:
+            try:
+                res = subprocess.run(["ping", "-c", "1", "-W", "1", p500_ip], capture_output=True)
+                pi500_host_online = (res.returncode == 0)
+            except Exception:
+                pi500_host_online = False
         
         STATUS_CACHE["pi500_online"] = pi500_host_online
+        STATUS_CACHE["connection_mode"] = conn_mode
+        STATUS_CACHE["resolved_pi500_ip"] = p500_ip
+        STATUS_CACHE["resolved_mac_ip"] = mac_ip
 
-        # 2. Poll Pi 500 Master Daemon over HTTP 8085 (500ms loop, zero stale telemetry retention)
+        # 2. Poll Pi 500 Master Daemon over HTTP 8085
         try:
-            req = urllib.request.Request(f"http://{PI500_IP}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
+            req = urllib.request.Request(f"http://{p500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
             with urllib.request.urlopen(req, timeout=1.0) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode())
                     STATUS_CACHE["hardware_telemetry"] = data
                     STATUS_CACHE["last_telemetry_time"] = time.time()
-                    STATUS_CACHE["daemon_running"] = bool(data.get("hardware_connected", True))
+                    STATUS_CACHE["daemon_running"] = True
+                    STATUS_CACHE["hardware_connected"] = bool(data.get("hardware_connected", False))
                     if isinstance(data, dict):
                         if "follower" in data and isinstance(data["follower"], dict):
                             STATUS_CACHE["follower"] = data["follower"]
@@ -133,14 +226,13 @@ def poll_status_loop():
                     STATUS_CACHE["follower"] = {"running": False, "pid": ""}
                     STATUS_CACHE["hardware_telemetry"] = None
         except Exception:
-            # Immediately clear telemetry cache on failure - never serve stale data
             STATUS_CACHE["daemon_running"] = False
             STATUS_CACHE["follower"] = {"running": False, "pid": ""}
             STATUS_CACHE["hardware_telemetry"] = None
 
         # 3. Poll Mac Leader directly over HTTP 8086
         try:
-            req_mac = urllib.request.Request("http://192.168.0.2:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
+            req_mac = urllib.request.Request(f"http://{mac_ip}:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
             with urllib.request.urlopen(req_mac, timeout=1.0) as response_mac:
                 if response_mac.status == 200:
                     mac_data = json.loads(response_mac.read().decode())
@@ -170,8 +262,12 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in ["/", "/index.html"]:
-            static_file = os.path.join(DIRECTORY, "static", "gantry_ui.html")
+        if parsed.path in ["/", "/index.html", "/gantry_ui.html"]:
+            static_file = os.path.join(DIRECTORY, "static", "index.html")
+            if not os.path.exists(static_file):
+                static_file = os.path.join(DIRECTORY, "static", "gantry_ui.html")
+            if not os.path.exists(static_file):
+                static_file = os.path.join(DIRECTORY, "index.html")
             if os.path.exists(static_file):
                 with open(static_file, "rb") as f:
                     content = f.read()
@@ -183,11 +279,28 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
                 return
-            elif os.path.exists(os.path.join(DIRECTORY, "index.html")):
-                with open(os.path.join(DIRECTORY, "index.html"), "rb") as f:
+
+        rel_path = parsed.path.lstrip("/")
+        if rel_path and not rel_path.startswith("api/"):
+            static_asset = os.path.join(DIRECTORY, "static", rel_path)
+            if os.path.isfile(static_asset):
+                mime_type = "application/octet-stream"
+                if rel_path.endswith(".css"):
+                    mime_type = "text/css"
+                elif rel_path.endswith(".js"):
+                    mime_type = "application/javascript"
+                elif rel_path.endswith(".json"):
+                    mime_type = "application/json"
+                elif rel_path.endswith(".html"):
+                    mime_type = "text/html"
+                elif rel_path.endswith(".png"):
+                    mime_type = "image/png"
+                elif rel_path.endswith(".svg"):
+                    mime_type = "image/svg+xml"
+                with open(static_asset, "rb") as f:
                     content = f.read()
                 self.send_response(200)
-                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Type", mime_type)
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("Expires", "0")
@@ -209,9 +322,17 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(resp).encode('utf-8'))
             return
 
-        if parsed.path in ["/api/arm/presets", "/api/arm/sequences"]:
+        if parsed.path == "/api/get_config":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
+            return
+
+        if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences"]:
             try:
-                req = urllib.request.Request(f"http://{PI500_IP}:8085{self.path}")
+                p500_ip = get_current_pi500_ip(port=8085)
+                req = urllib.request.Request(f"http://{p500_ip}:8085{self.path}")
                 with urllib.request.urlopen(req, timeout=1.5) as resp:
                     resp_body = resp.read()
                     self.send_response(resp.status)
@@ -220,10 +341,10 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(resp_body)
                     return
             except Exception as e:
-                self.send_response(500)
+                self.send_response(502)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+                self.wfile.write(json.dumps({"error": f"Failed to proxy to Pi 500: {e}"}).encode('utf-8'))
                 return
 
         return super().do_GET()
@@ -232,15 +353,99 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         global TAP_DETECTOR
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        content_type = self.headers.get("Content-Type", "")
         content_length = int(self.headers.get('Content-Length', 0))
+
+        if path == "/api/play_sound" and (content_type.startswith("audio/") or content_type.startswith("application/octet-stream")):
+            raw_audio = self.rfile.read(content_length) if content_length > 0 else b""
+            if raw_audio:
+                tmp_path = "/tmp/incoming_stream.wav"
+                with open(tmp_path, "wb") as f:
+                    f.write(raw_audio)
+                play_sound_helper(wav_path=tmp_path, stop_previous=True)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "mode": "stream_audio", "bytes": len(raw_audio)}).encode('utf-8'))
+                return
+
         body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
         try:
             req_data = json.loads(body) if body else {}
         except Exception:
             req_data = {}
 
+        if path == "/api/set_volume":
+            vol = req_data.get("volume", 100)
+            set_system_volume(vol)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "volume_pct": UI_CONFIG["volume_pct"]}).encode('utf-8'))
+            return
+
+        if path == "/api/set_config":
+            if "volume_pct" in req_data:
+                set_system_volume(req_data["volume_pct"])
+            if "clack_threshold" in req_data:
+                thresh = int(req_data["clack_threshold"])
+                UI_CONFIG["clack_threshold"] = thresh
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+                with TAP_DETECTOR_LOCK:
+                    if TAP_DETECTOR is not None:
+                        TAP_DETECTOR.set_threshold(thresh)
+            if "rover_max_speed_pct" in req_data:
+                sync_rover_speed_config(req_data["rover_max_speed_pct"])
+            if "arm_speed_sec" in req_data:
+                UI_CONFIG["arm_speed_sec"] = float(req_data["arm_speed_sec"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
+            return
+
+        if path in ["/api/wifi_disable", "/api/wifi_restore"]:
+            action = "enable" if path == "/api/wifi_restore" else "disable"
+            try:
+                script_path = "/home/carson/touch_ui/scripts/toggle_wifi_blacklist.py"
+                if not os.path.exists(script_path):
+                    script_path = os.path.join(DIRECTORY, "scripts", "toggle_wifi_blacklist.py")
+                if not os.path.exists(script_path):
+                    script_path = os.path.join(os.path.dirname(DIRECTORY), "scripts", "toggle_wifi_blacklist.py")
+                
+                subprocess.Popen([sys.executable, script_path, action])
+                if action == "enable":
+                    play_sound_helper(kind="connect")
+                else:
+                    play_sound_helper(kind="disconnect")
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "action": action, "message": f"Wi-Fi {action} command initiated"}).encode())
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+                return
+
         if path == "/api/play_sound":
-            kind = req_data.get("kind", "connect")
+            action = req_data.get("action")
+            kind = req_data.get("kind", "incorrect")
+            if action in ["stop", "clear"] or kind in ["stop", "stop_audio"]:
+                play_sound_helper(kind="stop_audio", stop_previous=True)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "action": "stopped"}).encode('utf-8'))
+                return
+
             wav_path = req_data.get("wav_path")
             stop_prev = bool(req_data.get("stop_previous", False))
             delay_s = float(req_data.get("delay_sec", 0.0))
@@ -260,6 +465,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 udp_sock.sendto(magic_payload, ('255.255.255.255', 9))
                 udp_sock.sendto(magic_payload, ('192.168.0.255', 9))
+                udp_sock.sendto(magic_payload, ('10.0.0.255', 9))
                 udp_sock.close()
                 subprocess.Popen(["wakeonlan", "-i", "eth0", "d8:3a:dd:8a:46:42"])
             except Exception as e:
@@ -363,14 +569,15 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                             self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
                             return
                     try:
+                        p500_ip = get_current_pi500_ip(port=8085)
                         req_p500 = urllib.request.Request(
-                            f"http://{PI500_IP}:8085/api/clack_pose_toggle",
+                            f"http://{p500_ip}:8085/api/clack_pose_toggle",
                             data=json.dumps({"action": "start"}).encode("utf-8"),
                             headers={"Content-Type": "application/json"}
                         )
                         urllib.request.urlopen(req_p500, timeout=1.5)
-                    except Exception:
-                        pass
+                    except Exception as p500_err:
+                        print(f"[ClackPose] Pi 500 start notify warning: {p500_err}", flush=True)
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -381,21 +588,22 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     if TAP_DETECTOR is not None:
                         try:
                             TAP_DETECTOR.stop()
-                        except Exception:
-                            pass
+                        except Exception as st_err:
+                            print(f"[ClackPose] TAP_DETECTOR stop warning: {st_err}", flush=True)
                         TAP_DETECTOR = None
                     STATUS_CACHE["clack_pose"] = {"running": False}
                     play_sound_helper(kind="disconnect")
 
                     try:
+                        p500_ip = get_current_pi500_ip(port=8085)
                         req_p500 = urllib.request.Request(
-                            f"http://{PI500_IP}:8085/api/clack_pose_toggle",
+                            f"http://{p500_ip}:8085/api/clack_pose_toggle",
                             data=json.dumps({"action": "stop"}).encode("utf-8"),
                             headers={"Content-Type": "application/json"}
                         )
                         urllib.request.urlopen(req_p500, timeout=1.5)
-                    except Exception:
-                        pass
+                    except Exception as p500_err:
+                        print(f"[ClackPose] Pi 500 stop notify warning: {p500_err}", flush=True)
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -425,35 +633,107 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps({"status": "ok", "message": "Detector not active"}).encode())
                     return
 
-        if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/kill_all"]:
+        if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/beat_bandit_toggle", "/api/kill_all"]:
             action = req_data.get("action", "toggle")
             if path == "/api/kill_all":
+                play_sound_helper(kind="stop_audio", stop_previous=True)
                 with TAP_DETECTOR_LOCK:
                     if TAP_DETECTOR is not None:
                         try:
                             TAP_DETECTOR.stop()
-                        except Exception:
-                            pass
+                        except Exception as k_err:
+                            print(f"[KillAll] Tap detector stop warning: {k_err}", flush=True)
                         TAP_DETECTOR = None
                 STATUS_CACHE["clack_pose"] = {"running": False}
 
+            if path in ["/api/pi500_follower_toggle", "/api/pokeball_teleop_toggle", "/api/servo_studio_toggle", "/api/beat_bandit_toggle"] and action != "stop":
+                with TAP_DETECTOR_LOCK:
+                    if TAP_DETECTOR is not None:
+                        try:
+                            TAP_DETECTOR.stop()
+                        except Exception as t_err:
+                            print(f"[Toggle] Tap detector stop warning: {t_err}", flush=True)
+                        TAP_DETECTOR = None
+                STATUS_CACHE["clack_pose"] = {"running": False}
+
+            if path == "/api/beat_bandit_toggle" and action in ["stop", "kill"]:
+                play_sound_helper(kind="stop_audio", stop_previous=True)
+
             try:
+                p500_ip = get_current_pi500_ip(port=8085)
+                mac_ip = get_current_mac_ip(port=8086)
                 if path == "/api/mac_leader_toggle":
-                    url = "http://192.168.0.2:8086/api/leader_toggle"
+                    url = f"http://{mac_ip}:8086/api/leader_toggle"
                 else:
-                    url = f"http://{PI500_IP}:8085{path}"
+                    url = f"http://{p500_ip}:8085{path}"
                 
                 post_data = json.dumps({"action": action}).encode('utf-8')
                 req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(req, timeout=3.0) as resp:
                     resp_body = resp.read()
                     try:
-                        st_req = urllib.request.Request(f"http://{PI500_IP}:8085/api/status")
+                        st_req = urllib.request.Request(f"http://{p500_ip}:8085/api/status")
                         with urllib.request.urlopen(st_req, timeout=1.0) as st_resp:
                             if st_resp.status == 200:
                                 STATUS_CACHE["hardware_telemetry"] = json.loads(st_resp.read().decode())
-                    except Exception:
-                        pass
+                    except Exception as st_err:
+                        print(f"[Telemetry] Status refresh warning: {st_err}", flush=True)
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(resp_body)
+                    return
+            except Exception as e:
+                play_sound_helper(kind="incorrect")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"HTTP endpoint error: {e}", "status": "failed"}).encode())
+                return
+
+        if path.startswith("/api/apps/"):
+            if path in ["/api/apps/beat_bandit/stop", "/api/apps/stop"]:
+                play_sound_helper(kind="stop_audio", stop_previous=True)
+                with TAP_DETECTOR_LOCK:
+                    if TAP_DETECTOR is not None:
+                        try:
+                            TAP_DETECTOR.stop()
+                        except Exception as b_err:
+                            print(f"[AppStop] Tap detector stop warning: {b_err}", flush=True)
+                        TAP_DETECTOR = None
+                STATUS_CACHE["clack_pose"] = {"running": False}
+
+            app_req_name = req_data.get("name", "") if isinstance(req_data, dict) else ""
+            if path == "/api/apps/start":
+                if app_req_name in ["clack_pose_app", "piranha_pose_app"]:
+                    with TAP_DETECTOR_LOCK:
+                        if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
+                            try:
+                                from audio_tap_detector import AudioTapDetector
+                                TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
+                                TAP_DETECTOR.start()
+                                STATUS_CACHE["clack_pose"] = {"running": True}
+                                play_sound_helper(kind="connect")
+                            except Exception as te:
+                                print(f"[ClackPose] AudioTapDetector start error: {te}", flush=True)
+                else:
+                    with TAP_DETECTOR_LOCK:
+                        if TAP_DETECTOR is not None:
+                            try:
+                                TAP_DETECTOR.stop()
+                            except Exception as t_err:
+                                print(f"[AppStart] Tap detector stop warning: {t_err}", flush=True)
+                            TAP_DETECTOR = None
+                    STATUS_CACHE["clack_pose"] = {"running": False}
+
+            try:
+                p500_ip = get_current_pi500_ip(port=8085)
+                url = f"http://{p500_ip}:8085{path}"
+                post_data = body.encode('utf-8')
+                req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
+                timeout_val = 240.0 if "stage_director" in path else 8.0
+                with urllib.request.urlopen(req, timeout=timeout_val) as resp:
+                    resp_body = resp.read()
                     self.send_response(resp.status)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
@@ -463,7 +743,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": f"HTTP endpoint error: {e}", "status": "failed"}).encode())
+                self.wfile.write(json.dumps({"error": f"Error proxying to Pi 500: {e}"}).encode('utf-8'))
                 return
 
         if path in [
@@ -492,11 +772,13 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                         TAP_DETECTOR.mute(12.0)
                     elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset"]:
                         TAP_DETECTOR.mute(2.5)
-
-                url = f"http://{PI500_IP}:8085{path}"
-                data_bytes = body.encode('utf-8')
-                req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=3.5) as resp:
+                    else:
+                        TAP_DETECTOR.mute(1.5)
+                p500_ip = get_current_pi500_ip(port=8085)
+                url = f"http://{p500_ip}:8085{path}"
+                post_data = body.encode('utf-8')
+                req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
                     resp_body = resp.read()
                     self.send_response(resp.status)
                     self.send_header("Content-Type", "application/json")
@@ -512,6 +794,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 return
             except Exception as e:
                 print(f"Error forwarding request {path}: {e}", flush=True)
+                play_sound_helper(kind="incorrect")
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -521,7 +804,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
-class ReuseTCPServer(socketserver.TCPServer):
+class ReuseTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    daemon_threads = True
     allow_reuse_address = True
 
 if __name__ == "__main__":

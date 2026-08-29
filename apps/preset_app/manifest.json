@@ -3,7 +3,7 @@
   "title": "Preset & Sequence Engine",
   "description": "Multi-mode preset teaching, slot overwriting, and choreographed multi-step sequences with acoustic clack triggers.",
   "version": "2.0.0",
-  "modes": ["normal", "demo", "angry"],
+  "modes": ["normal", "demo", "angry", "dance"],
   "default_mode": "normal",
   "icon": "🎬",
   "tags": ["teaching", "pose", "sequence", "audio", "rover", "so101"]

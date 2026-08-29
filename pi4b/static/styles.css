@@ -1,0 +1,661 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+
+button, .btn-action, .rail-btn, .cfg-btn {
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+}
+
+button:active, .btn-action:active, .rail-btn:active, .cfg-btn:active {
+    transform: scale(0.97);
+    filter: brightness(1.2);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #000000;
+    color: #ffffff;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    padding: 0;
+}
+
+/* Left Navigation Rail (120px Wide, 480px Full Height) */
+.left-rail {
+    width: 120px;
+    height: 100vh;
+    background: #0d0d0d;
+    border-right: 2px solid #222222;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 5px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.rail-btn {
+    flex: 1;
+    background: #141414;
+    border: 2px solid #2a2a2a;
+    color: #888888;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    gap: 2px;
+    transition: all 0.1s ease;
+}
+
+.rail-btn.active {
+    background: #002b4d;
+    border-color: #00e5ff;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+}
+
+/* Main View Container */
+.workspace {
+    flex-grow: 1;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 6px;
+    box-sizing: border-box;
+    background: #000000;
+}
+
+/* Tab Content Panes */
+.tab-panel {
+    display: none;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+}
+
+.tab-panel.active {
+    display: flex;
+}
+
+/* Top Persistent Telemetry Readout */
+.telemetry-bar {
+    height: 32px;
+    background: #111111;
+    border: 1px solid #222222;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    flex-shrink: 0;
+}
+
+.header-readout {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+/* Giant Grid Action Layouts */
+.giant-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    flex-grow: 1;
+    height: calc(100% - 38px);
+}
+
+.btn-action {
+    background: #181818;
+    border: 2.5px solid #333333;
+    color: #ffffff;
+    border-radius: 10px;
+    font-size: 17px;
+    font-weight: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.btn-orange {
+    border-color: #ff9900;
+    color: #ff9900;
+    background: #2b1700;
+}
+
+.btn-cyan {
+    border-color: #00e5ff;
+    color: #00e5ff;
+    background: #002233;
+}
+
+.btn-red {
+    border-color: #ff3344;
+    color: #ff3344;
+    background: #2b080c;
+}
+
+.btn-selected {
+    background: #005077 !important;
+    border-color: #00e5ff !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+}
+
+.cfg-card {
+    background: #111111;
+    border: 2px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.cfg-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.cfg-grid {
+    display: grid;
+    gap: 6px;
+    flex-grow: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.cfg-btn {
+    font-size: 20px !important;
+    font-weight: 900 !important;
+    background: #1c1c1c !important;
+    border: 2.5px solid #383838 !important;
+    color: #aaaaaa !important;
+    border-radius: 8px !important;
+    min-height: unset !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.cfg-btn.active {
+    background: #005077 !important;
+    border-color: #00e5ff !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+}
+
+.btn-back {
+    background: #d80073 !important;
+    border: 3px solid #ff0099 !important;
+    color: #ffffff !important;
+    font-size: 17px !important;
+    font-weight: 900 !important;
+    border-radius: 10px !important;
+    cursor: pointer;
+    text-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px 18px !important;
+    min-height: 44px !important;
+    touch-action: manipulation;
+    box-shadow: 0 0 10px rgba(255, 0, 153, 0.4);
+    white-space: nowrap;
+}
+
+/* Beat Bandit Choreography Studio Styles */
+.bb-nav-btn {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.bb-nav-btn.active {
+    background: linear-gradient(135deg, #7928ca, #a855f7) !important;
+    border-color: #d8b4fe !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+.bb-track-row {
+    display: flex;
+    height: 68px;
+    border-bottom: 1px solid #1a1a28;
+    position: relative;
+    align-items: center;
+}
+
+.bb-track-label {
+    width: 105px;
+    font-size: 11.5px;
+    font-weight: 900;
+    color: #a0a0c0;
+    background: #0d0d16;
+    border-right: 1px solid #2a2a3a;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+    text-align: center;
+    padding: 0 4px;
+}
+
+.bb-track-lane {
+    position: relative;
+    height: 100%;
+    flex-grow: 1;
+    background: #08080f;
+}
+
+.bb-move-block {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #fff;
+    padding: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    user-select: none;
+    touch-action: manipulation;
+    transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.bb-move-block:active {
+    transform: scale(0.98);
+}
+
+.bb-move-block.selected {
+    border: 2px solid #ffffff !important;
+    box-shadow: 0 0 10px #ffffff, 0 0 15px rgba(0, 229, 255, 0.8) !important;
+    z-index: 20;
+}
+
+.block-body {
+    background: linear-gradient(135deg, #7c3aed, #4c1d95);
+    border-color: #a78bfa;
+}
+
+.block-s7 {
+    background: linear-gradient(135deg, #059669, #064e3b);
+    border-color: #34d399;
+}
+
+.block-s8 {
+    background: linear-gradient(135deg, #2563eb, #1e3a8a);
+    border-color: #60a5fa;
+}
+
+.block-head {
+    background: linear-gradient(135deg, #db2777, #831843);
+    border-color: #f472b6;
+}
+
+/* 5th Track: Vocal Style / Lyrics Blocks */
+.block-vocal-conversational {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+}
+
+.block-vocal-belting {
+    background: linear-gradient(135deg, #ea580c, #c2410c);
+    border-color: #fb923c;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(234, 88, 12, 0.5);
+}
+
+.block-gap-slot {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    border-radius: 5px;
+    border: 1px dashed #374151;
+    background: rgba(31, 41, 55, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.block-gap-slot:hover {
+    border-color: #60a5fa;
+    color: #93c5fd;
+    background: rgba(37, 99, 235, 0.15);
+}
+
+/* Separated 2-Level Ruler: Top level for time ticks, Bottom level for section pills */
+.bb-ruler-ticks-row {
+    position: relative;
+    height: 18px;
+    background: #0d0d14;
+    border-bottom: 1px solid #1f1f2e;
+    overflow: hidden;
+}
+
+.bb-ruler-sec-row {
+    position: relative;
+    height: 20px;
+    background: #12121c;
+    border-bottom: 1.5px solid #2a2a3a;
+    overflow: hidden;
+}
+
+.bb-ruler-tick {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    font-size: 9.5px;
+    font-family: monospace;
+    font-weight: 700;
+    color: #71717a;
+    pointer-events: none;
+    user-select: none;
+    border-left: 1px solid #27273a;
+    padding-left: 3px;
+}
+
+.bb-ruler-tick.major {
+    color: #00e5ff;
+    font-weight: 900;
+    border-left: 1.5px solid #00e5ff;
+}
+
+.bb-ruler-sec {
+    position: absolute;
+    top: 1px;
+    height: 18px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Premiere Pro In / Out Markers & Range Highlight */
+.bb-in-marker {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 10px solid #00e5ff;
+    z-index: 35;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px #00e5ff);
+}
+
+.bb-in-marker::after {
+    content: 'IN';
+    position: absolute;
+    top: -15px;
+    left: -10px;
+    font-size: 8px;
+    font-weight: 900;
+    color: #00e5ff;
+    background: #002b36;
+    padding: 0 3px;
+    border-radius: 3px;
+    border: 1px solid #00e5ff;
+}
+
+.bb-out-marker {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 10px solid #ff007f;
+    z-index: 35;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px #ff007f);
+}
+
+.bb-out-marker::after {
+    content: 'OUT';
+    position: absolute;
+    top: -15px;
+    left: -12px;
+    font-size: 8px;
+    font-weight: 900;
+    color: #ff007f;
+    background: #33001a;
+    padding: 0 3px;
+    border-radius: 3px;
+    border: 1px solid #ff007f;
+}
+
+.bb-section-highlight {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(0, 229, 255, 0.08);
+    border-left: 2px dashed #00e5ff;
+    border-right: 2px dashed #ff007f;
+    pointer-events: none;
+    z-index: 15;
+    box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.15);
+}
+
+.bb-transport-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 6px;
+    border: 1.5px solid #33334d;
+    background: #151522;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    min-height: 38px;
+    touch-action: manipulation;
+    transition: all 0.12s ease;
+}
+
+.bb-transport-btn:active {
+    transform: scale(0.96);
+}
+
+.bb-transport-btn.btn-play {
+    background: linear-gradient(135deg, #059669, #10b981);
+    border-color: #34d399;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    font-size: 13px;
+    font-weight: 900;
+    padding: 6px 18px;
+}
+
+.bb-transport-btn.btn-stop {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    border-color: #f87171;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+    font-size: 13px;
+    font-weight: 900;
+    padding: 6px 16px;
+}
+
+.bb-transport-btn.btn-loop.active {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+    border-color: #fbbf24;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+.pose-joint-box {
+    background: #11111a;
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pose-joint-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #ccc;
+}
+
+.pose-joint-hdr span:last-child {
+    font-family: monospace;
+    color: #00ff66;
+    font-size: 12px;
+}
+
+input[type=range] {
+    -webkit-appearance: none;
+    background: #222233;
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #a855f7;
+    border: 2px solid #ffffff;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0,0,0,0.6);
+}
+
+/* AI Stage Director Modal Styles */
+.bb-director-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(4, 4, 8, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bb-director-modal-content {
+    background: #0d0d16;
+    border: 2px solid #a855f7;
+    border-radius: 12px;
+    width: 680px;
+    max-width: 95vw;
+    height: 420px;
+    max-height: 90vh;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 30px rgba(168, 85, 247, 0.35);
+    box-sizing: border-box;
+}
+
+.bb-director-chip {
+    background: #181826;
+    border: 1px solid #4338ca;
+    color: #c7d2fe;
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.bb-director-chip:hover, .bb-director-chip:active {
+    background: #4338ca;
+    color: #ffffff;
+    border-color: #818cf8;
+}
+
+.bb-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(168, 85, 247, 0.2);
+    border-top-color: #a855f7;
+    border-radius: 50%;
+    animation: bb-spin 0.8s linear infinite;
+}
+
+@keyframes bb-spin {
+    to { transform: rotate(360deg); }
+}
+
+

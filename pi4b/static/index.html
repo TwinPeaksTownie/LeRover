@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Overlander 4 Touch Controller</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+    <!-- Left Navigation Rail -->
+    <div class="left-rail">
+        <button id="railBtnGantry" class="rail-btn">
+            <span style="font-size: 22px;">⚙️</span>
+            <span>GANTRY</span>
+        </button>
+
+        <button id="railBtnControls" class="rail-btn">
+            <span style="font-size: 22px;">🦾</span>
+            <span>CONTROLS</span>
+        </button>
+
+        <button id="railBtnApps" class="rail-btn active">
+            <span style="font-size: 22px;">📱</span>
+            <span>APPS</span>
+        </button>
+
+        <button id="railBtnPower" class="rail-btn">
+            <span style="font-size: 22px;">⚡</span>
+            <span>BACKEND</span>
+        </button>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+
+        <!-- TAB 1: ⚙️ GANTRY & PEDESTAL -->
+        <div id="panelGantry" class="tab-panel">
+            <div class="telemetry-bar">
+                <div id="sliderValDisplay" class="header-readout"><span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span></div>
+            </div>
+
+            <div class="giant-grid" style="grid-template-rows: repeat(3, 1fr);">
+                <!-- Top Row: Orange Buttons for Pedestal Motor 7 (+/- 45 Deg Rotation) -->
+                <button id="pedestalLeftBtn" class="btn-action btn-orange">↺ ROTATE PEDESTAL<br>LEFT (-45°)</button>
+                <button id="pedestalRightBtn" class="btn-action btn-orange">ROTATE PEDESTAL ↻<br>(+45°)</button>
+
+                <!-- Middle Row: Step Moves for LeSlide Gantry Motor 8 (500 Ticks) -->
+                <button id="gantryStepLeftBtn" class="btn-action btn-cyan">◀ STEP LEFT<br>(-500 TICKS)</button>
+                <button id="gantryStepRightBtn" class="btn-action btn-cyan">STEP RIGHT ▶<br>(+500 TICKS)</button>
+
+                <!-- Bottom Row: Max Bounds & Center for LeSlide Gantry Motor 8 -->
+                <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <button id="gantryMaxLeftBtn" class="btn-action btn-cyan">⏪ MAX LEFT<br>(3 TICKS)</button>
+                    <button id="gantryCenterBtn" class="btn-action btn-cyan">⏺ CENTER<br>(2400 TICKS)</button>
+                    <button id="gantryMaxRightBtn" class="btn-action btn-cyan">MAX RIGHT ⏩<br>(4800 TICKS)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: 🦾 TELEOP CONTROLLERS -->
+        <div id="panelControls" class="tab-panel">
+            <div class="telemetry-bar">
+                <div id="teleopStatus" class="header-readout" style="color: #00ff66;">DAEMON RUNNING</div>
+            </div>
+
+            <div class="giant-grid" style="grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; height: 110px;">
+                <!-- Left: Leader -->
+                <button id="leaderBtn" class="btn-action">
+                    <span id="leaderBtnIcon">🍎</span><br>
+                    <span id="leaderBtnText">START LEADER</span>
+                </button>
+                <!-- Center: Teleop -->
+                <button id="followerBtn" class="btn-action">
+                    <span id="followerBtnIcon">🦾</span><br>
+                    <span id="followerBtnText">START TELEOP</span>
+                </button>
+                <!-- Right: Pokéball -->
+                <button id="pokeballBtn" class="btn-action">
+                    <span id="pokeballBtnIcon">🔴</span><br>
+                    <span id="pokeballBtnTitle">START POKÉBALL</span>
+                    <span id="pokeballBtnSub" style="display:none; font-size:11px; font-weight:normal;"></span>
+                </button>
+            </div>
+        
+            <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
+            <div id="pbTelemetryBox" style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 14px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
+                    <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 14px;">
+                    <div>Direction: <span id="pbDirReadout" style="color: #ffaa00; font-weight: 900;">CENTER</span></div>
+                    <div>Packets: <span id="pbPktReadout" style="color: #00ff66; font-weight: 900;">0</span></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 13px; color: #aaa;">
+                    <div>Raw Bytes (X, Y): <span id="pbJoyReadout" style="color: #00e5ff; font-weight: 900;">x_val=7, y_val=118</span></div>
+                </div>
+                <div style="font-family: monospace; font-size: 12px; background: #000; padding: 6px 10px; border-radius: 6px; border: 1px solid #222;">
+                    Raw Packet Hex: <span id="pbRawHex" style="color: #ff00ff; font-weight: 700;">--</span>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; font-size: 12px; font-weight: 900;">
+                    <span id="pbBtnA" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button A (Top Red)</span>
+                    <span id="pbBtnB" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button B (Stick Click)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: 📱 ROBOT APPLICATIONS -->
+        <div id="panelApps" class="tab-panel active" style="flex-direction: column; gap: 6px; height: 100%;">
+            <div class="telemetry-bar" style="height: 26px; flex-shrink: 0;">
+                <div id="appsStatus" class="header-readout" style="font-size: 15px; color: #00e5ff;">ROBOT APPS IDLE</div>
+            </div>
+
+            <!-- VIEW A: Top-Level 3-Button Launcher (Default View) -->
+            <div id="appsViewLauncher" style="display: flex; flex-direction: column; gap: 10px; height: calc(100% - 32px); justify-content: center; padding: 6px 16px;">
+                <button id="launchClackerBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 3px solid #00e5ff; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🪴</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #00e5ff; font-weight: 900;">PIRANHA POSE</div>
+                        <div style="font-size: 12px; color: #a0c8e0; font-weight: 600;">Multi-Mode Presets, Sequence Engine & Acoustic Clack Control</div>
+                    </div>
+                </button>
+
+                <button id="launchStudioBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #2d2400, #1a1500); border: 3px solid #ffaa00; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🔧</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #ffaa00; font-weight: 900;">SERVO STUDIO</div>
+                        <div style="font-size: 12px; color: #e0cca0; font-weight: 600;">Live Motor Calibration & Diagnostics (:8086)</div>
+                    </div>
+                </button>
+
+                <button id="launchBeatBanditBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #380e45, #1d0724); border: 3px solid #a855f7; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
+                    <span style="font-size: 38px;">🎧</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 21px; color: #a855f7; font-weight: 900;">BEAT BANDIT</div>
+                        <div style="font-size: 12px; color: #e9cbfd; font-weight: 600;">YouTube Music Audio Analysis & Choreographer</div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- VIEW B: Dedicated Piranha Pose Interface (Controls & Presets + Telemetry Sidebar) -->
+            <div id="appsViewClacker" style="display: none; height: calc(100% - 32px); min-height: 0; width: 100%;">
+                <div style="display: grid; grid-template-columns: 1fr 140px; gap: 6px; flex-grow: 1; min-height: 0; width: 100%; height: 100%;">
+                    
+                    <!-- Left Column Workspace -->
+                    <div style="display: flex; flex-direction: column; min-height: 0; min-width: 0; width: 100%; height: 100%;">
+                        
+                        <!-- Top Nav / Action Bar inside Piranha Pose: Top-Left Pink Back Button & Engage Button -->
+                        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                            <button id="clackerBackBtn" class="btn-action btn-back">
+                                ◀ BACK
+                            </button>
+                            <button id="clackPoseBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px; border-radius: 8px; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff;">
+                                <span id="clackPoseBtnText">🪴 START PIRANHA POSE</span>
+                                <span id="clackPoseBtnSub" style="display:block; font-size:10.5px; color:#aaa;">Presets, Sequences & Clacks</span>
+                            </button>
+                        </div>
+
+                        <!-- MODE A: 4 Action Buttons, Sensitivities & Open Presets -->
+                        <div id="appsModeControls" style="display: flex; flex-direction: column; gap: 6px; height: calc(100% - 50px);">
+                            <!-- Middle 4 Action Buttons -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 155px; flex-shrink: 0;">
+                                <button id="armLimpBtn" class="btn-action" style="background:#2b0e10; border:2.5px solid #ff3344; color:#ff4455; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Cut Torque
+                                </button>
+                                <button id="armSaveBtn" class="btn-action" style="background:#2d2400; border:2.5px solid #ffd700; color:#ffd700; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Hold
+                                </button>
+                                <button id="commitPresetBtn" class="btn-action" style="background:#0a1e36; border:2.5px solid #0099ff; color:#0099ff; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Save Preset
+                                </button>
+                                <button id="armResumeBtn" class="btn-action" style="background:#0a2612; border:2.5px solid #00ff66; color:#00ff66; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                    Go Back
+                                </button>
+                            </div>
+
+                            <!-- Sensitivity / Thresholds Boxes -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; height: 55px; flex-shrink: 0;">
+                                <button id="sensLowBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                    Low
+                                </button>
+                                <button id="sensNormBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #00e5ff; color:#00e5ff; border-radius:6px; cursor:pointer;">
+                                    Normal
+                                </button>
+                                <button id="sensHiBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                    Hi
+                                </button>
+                            </div>
+
+                            <!-- Bottom Button to switch to Presets Grid Mode -->
+                            <button id="openPresetsModeBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:17px; font-weight:900; border-radius:8px; cursor:pointer; height:65px; flex-shrink:0;">
+                                📂 OPEN PRESETS (1-11)
+                            </button>
+                        </div>
+
+                        <!-- MODE B: Multi-Mode Presets Grid & Sequence Engine -->
+                        <div id="appsModePresets" style="display: none; flex-direction: column; gap: 5px; height: calc(100% - 50px);">
+                            <!-- Top Toolbar: Mode Tabs + Overwrite Toggle -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1.3fr; gap: 4px; height: 38px; flex-shrink: 0;">
+                                <button id="modeTabNormal" class="btn-action" style="font-size:12px; font-weight:900; background:#004488; border:2px solid #00e5ff; color:#fff; border-radius:6px; cursor:pointer;">NORMAL</button>
+                                <button id="modeTabDemo" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DEMO</button>
+                                <button id="modeTabAngry" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">ANGRY</button>
+                                <button id="modeTabDance" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DANCE</button>
+                                <button id="overwriteModeBtn" class="btn-action" style="font-size:12px; font-weight:900; background:#1c1c1c; border:2px solid #777; color:#ddd; border-radius:6px; cursor:pointer;">✏️ OVERWRITE: OFF</button>
+                            </div>
+
+                            <!-- 4x3 Grid (12 cells) -->
+                            <div id="presetsGridContainer" style="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 4px; flex-grow: 1; min-height: 0;">
+                                <!-- Dynamically populated -->
+                            </div>
+
+                            <!-- Bottom Action Row: Play Sequence / Attack Demo + Return Button -->
+                            <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 5px; height: 45px; flex-shrink: 0;">
+                                <button id="seqPlayBtn" class="btn-action" style="background:#0a3a1a; border:2.5px solid #00ff66; color:#00ff66; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                    ▶️ PLAY SEQUENCE
+                                </button>
+                                <button id="presetsReturnBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                    ◀ CONTROLS
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Right Column: Full-Height Dedicated Unified Telemetry Sidebar -->
+                    <div style="background: #0d0d0d; border: 1.5px solid #282828; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #333; padding-bottom: 3px;">
+                            <span style="font-size: 11px; font-weight: 900; color: #00e5ff; white-space: nowrap;">TELEMETRY</span>
+                            <span id="clackPoseBadge" style="font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 3px; background: #222; color: #888;">STOPPED</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Servos</div>
+                            <div style="display: flex; flex-direction: column; gap: 2.5px; font-family: monospace; font-size: 11px;">
+                                <div style="display:flex; justify-content:space-between;"><span>1 (Pan):</span> <strong id="telemServo1" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>2 (Lift):</span> <strong id="telemServo2" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>3 (Elbow):</span> <strong id="telemServo3" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>4 (WristF):</span> <strong id="telemServo4" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>5 (WristR):</span> <strong id="telemServo5" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>6 (Grip):</span> <strong id="telemServo6" style="color:#00ff66;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>7 (Ped):</span> <strong id="telemServo7" style="color:#ffaa00;">--</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>8 (Gantry):</span> <strong id="telemServo8" style="color:#00e5ff;">--</strong></div>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid #222; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                            <div style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase;">Microphone</div>
+                            <div style="display: flex; flex-direction: column; gap: 2px; font-family: monospace; font-size: 10.5px; color: #aaa;">
+                                <div style="display:flex; justify-content:space-between;"><span>Peak:</span> <strong id="clackPeakDisplay" style="color:#00e5ff;">0</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>Noise:</span> <strong id="clackNoiseDisplay" style="color:#888;">0</strong></div>
+                                <div style="display:flex; justify-content:space-between;"><span>Gate:</span> <strong id="clackThreshDisplay" style="color:#ffaa00;">5200</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW C: Dedicated Servo Studio Panel -->
+            <div id="appsViewStudio" style="display: none; flex-direction: column; gap: 10px; height: calc(100% - 32px); padding: 6px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="studioBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffaa00; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        🔧 SERVO CALIBRATION STUDIO
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1; justify-content: center;">
+                    <button id="studioBtn" class="btn-action" style="font-size: 20px; font-weight: 900; border-radius: 12px; height: 100px; background: #1a1a1a; border: 3px solid #444;">
+                        <span id="studioBtnIcon" style="font-size: 28px;">🔧</span><br>
+                        <span id="studioBtnText">START SERVO STUDIO</span><br>
+                        <span id="studioBtnSub" style="font-size: 12px; color: #ffcc88;">(CALIBRATION ON PORT 8086)</span>
+                    </button>
+
+                    <div style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:14px; font-weight:900; color:#fff;">STUDIO WEB SERVICE:</span>
+                            <span id="studioBadge" style="font-size:13px; font-weight:900; padding:3px 10px; border-radius:6px; background:#222; color:#888;">STOPPED</span>
+                        </div>
+                        <div style="font-family: monospace; font-size: 14px; color: #00e5ff;">
+                            URL: http://&lt;PI500_IP&gt;:8086 (Port 8086)
+                        </div>
+                        <div style="font-size: 12px; color: #aaa; line-height: 1.4;">
+                            * Provides isolated single-servo testing, torque toggles, and EEPROM calibration registers without conflicting with teleop loops.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW D: Dedicated Beat Bandit Panel & Choreography Studio -->
+            <div id="appsViewBeatBandit" style="display: none; flex-direction: column; flex-grow: 1; height: calc(100% - 32px); min-height: 0; width: 100%; gap: 6px;">
+                
+                <!-- Row 1: Top Navigation Bar: Back Button + Start Beat Bandit App Toggle + Track Pill -->
+                <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 8px; height: 44px; flex-shrink: 0; align-items: center;">
+                    <button id="bbBackBtn" class="btn-action btn-back" style="height: 100%; min-height: 0; padding: 0; font-size: 13px; font-weight: 900;">
+                        ◀ BACK
+                    </button>
+                    <button id="bbAppToggleBtn" class="btn-action" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; padding: 2px 8px; border-radius: 8px; background: linear-gradient(135deg, #2e1065, #1d0724); border: 2px solid #a855f7; color: #fff;">
+                        <span id="bbAppToggleBtnText">🎧 START BEAT BANDIT</span>
+                        <span id="bbAppToggleBtnSub" style="display:block; font-size:10px; color:#c084fc; font-weight:600;">Audio Choreography & Timeline Engine</span>
+                    </button>
+                    <div id="bbHeaderTrackPill" style="background: #0e0e14; border: 1.5px solid #7928ca; border-radius: 8px; padding: 0 12px; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #e9d5ff; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                        🎵 <span id="bbHeaderTrackTitle" style="margin-left: 5px;">Track</span>
+                    </div>
+                </div>
+
+                <!-- Row 2: Studio SubTabs Navigation Bar -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; height: 36px; flex-shrink: 0; align-items: center;">
+                    <button id="bbNavPlayer" class="btn-action bb-nav-btn active" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #2e1065; border: 1.5px solid #a855f7; color: #fff; border-radius: 6px;">
+                        🎧 PLAYER
+                    </button>
+                    <button id="bbNavTimeline" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                        🎬 TIMELINE
+                    </button>
+                    <button id="bbNavPoses" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                        💃 POSES
+                    </button>
+                    <button id="bbNavSettings" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                        ⚙️ SETTINGS
+                    </button>
+                </div>
+
+                <!-- SUB-VIEW 1: PLAYER HUD -->
+                <div id="bbSubViewPlayer" style="display: flex; flex-direction: column; flex-grow: 1; height: 100%; min-height: 0; width: 100%; gap: 6px;">
+                    <!-- YouTube URL Input & Action Row (36px height) -->
+                    <div style="display: grid; grid-template-columns: 1fr 90px; gap: 8px; height: 36px; flex-shrink: 0;">
+                        <input type="text" id="bbUrlInput" placeholder="Paste YouTube / YouTube Music URL..." value="https://youtu.be/_uu_izpVSEc?si=X62QxvffzOgTJNW9" style="height: 100%; background: #111; border: 1.5px solid #444; border-radius: 8px; color: #fff; padding: 0 12px; font-size: 12px; font-family: monospace; box-sizing: border-box;">
+                        <button id="bbFetchBtn" class="btn-action" style="height: 100%; background: linear-gradient(135deg, #2e1065, #3b0764); border: 1.5px solid #a855f7; color: #f3e8ff; font-weight: 900; font-size: 13px; border-radius: 8px; min-height: 0; padding: 0;">
+                            LOAD
+                        </button>
+                    </div>
+
+                    <!-- Songs 2x2 Grid (2/3 width) + DANCE/STOP Button (1/3 width) (155px height) -->
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; height: 155px; flex-shrink: 0;">
+                        <!-- Left: 2x2 Songs Box -->
+                        <div style="display: flex; flex-direction: column; background: #0e0e14; border: 1.5px solid #333348; border-radius: 10px; padding: 5px 8px; min-width: 0; justify-content: space-between; box-sizing: border-box;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; height: 22px;">
+                                <span style="font-size: 11px; font-weight: 900; color: #a855f7; letter-spacing: 0.5px;">AUDIO TRACKS</span>
+                                <button id="bbPageBtn" class="btn-action" style="font-size: 10px; font-weight: 900; padding: 1px 8px; height: 20px; border-radius: 4px; min-height: 0; background: #1f1235; border: 1.5px solid #a855f7; color: #f3e8ff;">NEXT ⏭️</button>
+                            </div>
+                            <div id="bbTracksList" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5px; height: 118px; min-height: 0;">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+
+                        <!-- Right: Big DANCE / STOP Button -->
+                        <button id="bbMainDanceBtn" class="btn-action" style="background: linear-gradient(135deg, #7928ca, #ff0080); border: 2.5px solid #ff00cc; color: #fff; font-weight: 900; font-size: 18px; border-radius: 10px; height: 100%; min-height: 0; box-shadow: 0 4px 14px rgba(255,0,128,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+                            <span id="bbMainDanceIcon" style="font-size: 26px;">⚡</span>
+                            <span id="bbMainDanceText">DANCE</span>
+                        </button>
+                    </div>
+
+                    <!-- Performance HUD -->
+                    <div style="display: flex; flex-direction: column; justify-content: space-between; background: #0c0c14; border: 1.5px solid #a855f7; border-radius: 10px; padding: 6px 10px; flex-grow: 1; min-height: 0; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 8px;">
+                                <span id="bbTrackTitle" style="font-size: 13px; font-weight: 900; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;">Soda Pop</span>
+                                <span id="bbTrackArtist" style="font-size: 11px; font-weight: 700; color: #a855f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Saja Boys</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span id="bbBeatCounter" style="font-size: 11px; color: #00e5ff; font-family: monospace; font-weight: 800;">Beat 0/0</span>
+                                <span id="bbStateBadge" style="font-size: 9.5px; font-weight: 900; padding: 2px 6px; border-radius: 4px; background: #222; color: #888;">IDLE</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div style="height: 5px; background: #1c1c24; border-radius: 3px; overflow: hidden; border: 1px solid #333;">
+                            <div id="bbProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #a855f7, #ff00cc); transition: width 0.1s linear;"></div>
+                        </div>
+
+                        <!-- 4 Live Telemetry Chips -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;">
+                            <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 2px 4px; text-align: center;">
+                                <span style="font-size: 8px; color: #777; display: block; text-transform: uppercase;">TEMPO</span>
+                                <strong id="bbBpmDisplay" style="font-size: 11px; color: #00e5ff; font-family: monospace;">-- BPM</strong>
+                            </div>
+                            <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 2px 4px; text-align: center;">
+                                <span style="font-size: 8px; color: #777; display: block; text-transform: uppercase;">VOCAL JAW</span>
+                                <strong id="bbJawDisplay" style="font-size: 11px; color: #ff00cc; font-family: monospace;">0%</strong>
+                            </div>
+                            <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 2px 4px; text-align: center;">
+                                <span style="font-size: 8px; color: #777; display: block; text-transform: uppercase;">PEDESTAL</span>
+                                <strong id="bbS7Display" style="font-size: 11px; color: #00ff66; font-family: monospace;">0.0°</strong>
+                            </div>
+                            <div style="background: #14141e; border: 1px solid #2a2a3a; border-radius: 6px; padding: 2px 4px; text-align: center;">
+                                <span style="font-size: 8px; color: #777; display: block; text-transform: uppercase;">MOVE</span>
+                                <strong id="bbMoveDisplay" style="font-size: 10px; color: #ffaa00; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Rest Stance</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 2: MULTI-TRACK TIMELINE STUDIO -->
+                <div id="bbSubViewTimeline" style="display: none; flex-direction: column; flex-grow: 1; height: 100%; min-height: 0; width: 100%; gap: 6px;">
+                    <!-- Timeline Toolbar (2x Taller Controls Box: 64px) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #0e0e14; border: 1.5px solid #2a2a3a; border-radius: 10px; padding: 8px 12px; height: 64px; flex-shrink: 0; box-sizing: border-box; gap: 8px;">
+                        <!-- Left: Time Readout & In/Out Range Badge -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="bbTimelineTimeDisplay" style="font-family: monospace; font-size: 14px; font-weight: 900; color: #00e5ff; white-space: nowrap; background: #080811; padding: 4px 8px; border-radius: 6px; border: 1px solid #1f293d;">⏱️ 0:00.0</span>
+                            <span id="bbTimelineRangeDisplay" style="font-size: 11px; font-family: monospace; color: #cbd5e1; background: #141420; padding: 4px 8px; border-radius: 6px; border: 1px solid #333348; white-space: nowrap;">IN: -- | OUT: --</span>
+                            <div style="display: flex; gap: 3px;">
+                                <button id="bbZoomOutBtn" class="btn-action" style="padding: 4px 8px; font-size: 11px; font-weight: 800; height: 36px; min-height: 0; background: #1f1f2e; border: 1.5px solid #444; border-radius: 6px;">🔍 -</button>
+                                <button id="bbZoomInBtn" class="btn-action" style="padding: 4px 8px; font-size: 11px; font-weight: 800; height: 36px; min-height: 0; background: #1f1f2e; border: 1.5px solid #444; border-radius: 6px;">🔍 +</button>
+                            </div>
+                        </div>
+
+                        <!-- Center: Transport & In/Out Buttons -->
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button id="bbRewindBtn" class="bb-transport-btn" title="Rewind to start or IN" style="font-size: 13px;">⏪</button>
+                            <button id="bbPlaySectionBtn" class="bb-transport-btn btn-play" title="Play section or from playhead">▶️ PLAY</button>
+                            <button id="bbStopChoreoBtn" class="bb-transport-btn btn-stop" title="Stop playback & reset arm">⏹️ STOP</button>
+                            <button id="bbLoopSectionBtn" class="bb-transport-btn btn-loop" title="Toggle section loop" style="font-size: 13px;">🔁</button>
+                            <button id="bbSetInBtn" class="bb-transport-btn" style="border-color: #00e5ff; color: #00e5ff;" title="Set IN marker at playhead">🚩 IN</button>
+                            <button id="bbSetOutBtn" class="bb-transport-btn" style="border-color: #ff007f; color: #ff007f;" title="Set OUT marker at playhead">🏁 OUT</button>
+                            <button id="bbClearInOutBtn" class="bb-transport-btn" style="color: #888;" title="Clear IN/OUT range">✕</button>
+                        </div>
+
+                        <!-- Right: Actions -->
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button id="bbAddMoveBtn" class="btn-action" style="padding: 4px 10px; font-size: 11.5px; font-weight: 900; height: 38px; min-height: 0; background: linear-gradient(135deg, #1e3a8a, #2563eb); border: 1.5px solid #60a5fa; color: #fff; border-radius: 6px; white-space: nowrap;">
+                                ➕ MOVE
+                            </button>
+                            <button id="bbAutoChoreoBtn" class="btn-action" style="padding: 4px 10px; font-size: 11.5px; font-weight: 900; height: 38px; min-height: 0; background: linear-gradient(135deg, #374151, #4b5563); border: 1.5px solid #9ca3af; color: #f3f4f6; border-radius: 6px; white-space: nowrap;">
+                                ⚡ AUTO
+                            </button>
+                            <button id="bbSaveChoreoBtn" class="btn-action" style="padding: 4px 14px; font-size: 11.5px; font-weight: 900; height: 38px; min-height: 0; background: linear-gradient(135deg, #059669, #10b981); border: 1.5px solid #34d399; color: #fff; border-radius: 6px; white-space: nowrap;">
+                                💾 SAVE
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Multi-Track Canvas Area -->
+                    <div id="bbTimelineScrollContainer" style="flex-grow: 1; min-height: 0; overflow-x: auto; overflow-y: auto; background: #08080d; border: 1.5px solid #2a2a3a; border-radius: 8px; position: relative; display: flex; flex-direction: column;">
+                        <!-- Timeline Content (dynamically sized based on duration * pixelsPerSec) -->
+                        <div id="bbTimelineTrackCanvas" style="position: relative; min-height: 100%; min-width: 1000px; display: flex; flex-direction: column;">
+                            <!-- Separated 2-Level Ruler: Level 1 Time Ticks (18px) & Level 2 Musical Sections (20px) -->
+                            <div id="bbTimelineRulerTicks" class="bb-ruler-ticks-row"></div>
+                            <div id="bbTimelineRulerSections" class="bb-ruler-sec-row"></div>
+                            
+                            <!-- Shaded Section Highlight Overlay -->
+                            <div id="bbSectionHighlight" class="bb-section-highlight" style="display: none; left: 0; width: 0;"></div>
+
+                            <!-- In / Out Markers -->
+                            <div id="bbInMarker" class="bb-in-marker" style="display: none; left: 0;"></div>
+                            <div id="bbOutMarker" class="bb-out-marker" style="display: none; left: 0;"></div>
+
+                            <!-- Lane 1: Body Postures (Servos 1-5) -->
+                            <div class="bb-track-row" id="bbTrackRowBody">
+                                <div class="bb-track-label">BODY (S1-5)</div>
+                                <div class="bb-track-lane" id="bbLaneBody"></div>
+                            </div>
+                            <!-- Lane 2: Pedestal (Servo 7) -->
+                            <div class="bb-track-row" id="bbTrackRowS7">
+                                <div class="bb-track-label">PEDESTAL (S7)</div>
+                                <div class="bb-track-lane" id="bbLaneS7"></div>
+                            </div>
+                            <!-- Lane 3: Gantry (Servo 8) -->
+                            <div class="bb-track-row" id="bbTrackRowS8">
+                                <div class="bb-track-label">GANTRY (S8)</div>
+                                <div class="bb-track-lane" id="bbLaneS8"></div>
+                            </div>
+                            <!-- Lane 4: Vocal / Head -->
+                            <div class="bb-track-row" id="bbTrackRowHeadJaw">
+                                <div class="bb-track-label">HEAD / JAW</div>
+                                <div class="bb-track-lane" id="bbLaneHeadJaw"></div>
+                            </div>
+                            <!-- Lane 5: Vocal Style & Lyrics (Blue Conversational / Orange Belting) -->
+                            <div class="bb-track-row" id="bbTrackRowVocals">
+                                <div class="bb-track-label" style="color: #38bdf8;">VOCALS / LYRICS</div>
+                                <div class="bb-track-lane" id="bbLaneVocals"></div>
+                            </div>
+
+                            <!-- Draggable / Visual Playhead Line -->
+                            <div id="bbPlayheadLine" style="position: absolute; top: 0; bottom: 0; left: 0px; width: 2px; background: #ff0055; z-index: 50; pointer-events: none;">
+                                <div style="position: absolute; top: 0; left: -5px; width: 12px; height: 12px; background: #ff0055; clip-path: polygon(0 0, 100% 0, 50% 100%);"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Movement Block Inspector Drawer (Expanded Height 130px) -->
+                    <div id="bbInspectorDrawer" style="display: none; background: #101018; border: 2px solid #3b82f6; border-radius: 8px; padding: 8px 12px; height: 130px; flex-shrink: 0; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="bbInspectorTypeBadge" style="font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; background: #1e3a8a; color: #93c5fd;">BODY POSE</span>
+                                <input type="text" id="bbInspectorNameInput" style="background: #181824; border: 1px solid #444; border-radius: 4px; color: #fff; padding: 3px 8px; font-size: 12px; font-weight: 700; width: 200px;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <button id="bbInspectorPreviewBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #1f2937; border: 1px solid #60a5fa; color: #93c5fd; border-radius: 4px;">👁️ PREVIEW</button>
+                                <button id="bbInspectorDuplicateBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #1f2937; border: 1px solid #a855f7; color: #e9d5ff; border-radius: 4px;">📋 DUP</button>
+                                <button id="bbInspectorDeleteBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #3b0710; border: 1px solid #ef4444; color: #fca5a5; border-radius: 4px;">🗑️ DELETE</button>
+                                <button id="bbInspectorCloseBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #222; border: 1px solid #555; color: #aaa; border-radius: 4px;">✕</button>
+                            </div>
+                        </div>
+
+                        <!-- Timing & Values Row -->
+                        <div id="bbInspectorDynamicControls" style="display: grid; grid-template-columns: 2fr 3fr; gap: 10px; align-items: center;">
+                            <!-- Dynamic controls injected via JavaScript based on channel -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 3: DANCE POSES STUDIO -->
+                <div id="bbSubViewPoses" style="display: none; flex-direction: column; flex-grow: 1; height: 100%; min-height: 0; width: 100%; gap: 6px;">
+                    <div style="display: grid; grid-template-columns: 180px 1fr; gap: 8px; flex-grow: 1; min-height: 0;">
+                        <!-- Left: Poses List -->
+                        <div style="display: flex; flex-direction: column; background: #0e0e14; border: 1.5px solid #2a2a3a; border-radius: 8px; padding: 6px; justify-content: space-between;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 11px; font-weight: 900; color: #a855f7;">DANCE POSES</span>
+                                <button id="bbNewPoseBtn" class="btn-action" style="padding: 2px 6px; font-size: 10px; height: 20px; min-height: 0; background: #2e1065; border: 1px solid #a855f7; color: #fff; border-radius: 4px;">+ NEW</button>
+                            </div>
+                            <div id="bbPosesListContainer" style="display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex-grow: 1;">
+                                <!-- Dynamic poses list -->
+                            </div>
+                        </div>
+
+                        <!-- Right: 5 Joint Sliders & Live Preview Controls -->
+                        <div style="display: flex; flex-direction: column; background: #0e0e14; border: 1.5px solid #2a2a3a; border-radius: 8px; padding: 8px; justify-content: space-between;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: baseline; gap: 8px;">
+                                    <span style="font-size: 12px; font-weight: 900; color: #aaa;">EDITING:</span>
+                                    <strong id="bbCurrentPoseNameDisplay" style="font-size: 14px; color: #00ff66;">STAND</strong>
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <button id="bbPreviewPoseBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #064e3b; border: 1px solid #10b981; color: #a7f3d0; border-radius: 4px;">👁️ PREVIEW ON ARM</button>
+                                    <button id="bbCapturePoseBtn" class="btn-action" style="padding: 3px 10px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #1e3a8a; border: 1px solid #3b82f6; color: #bfdbfe; border-radius: 4px;">🦾 CAPTURE FROM ARM</button>
+                                    <button id="bbSavePoseBtn" class="btn-action" style="padding: 3px 12px; font-size: 11px; font-weight: 800; height: 26px; min-height: 0; background: #701a75; border: 1px solid #d946ef; color: #fdf4ff; border-radius: 4px;">💾 SAVE POSE</button>
+                                </div>
+                            </div>
+
+                            <!-- 5 Joint Sliders (Clean 0-100%) -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
+                                <div class="pose-joint-box">
+                                    <div class="pose-joint-hdr"><span>Motor 1 (Shoulder Pan)</span><span id="bbValPan">50.0%</span></div>
+                                    <input type="range" id="bbSliderPan" min="0" max="100" step="0.5" value="50.0">
+                                </div>
+                                <div class="pose-joint-box">
+                                    <div class="pose-joint-hdr"><span>Motor 2 (Shoulder Lift)</span><span id="bbValLift">28.4%</span></div>
+                                    <input type="range" id="bbSliderLift" min="0" max="100" step="0.5" value="28.4">
+                                </div>
+                                <div class="pose-joint-box">
+                                    <div class="pose-joint-hdr"><span>Motor 3 (Elbow Flex)</span><span id="bbValElbow">37.2%</span></div>
+                                    <input type="range" id="bbSliderElbow" min="0" max="100" step="0.5" value="37.2">
+                                </div>
+                                <div class="pose-joint-box">
+                                    <div class="pose-joint-hdr"><span>Motor 4 (Wrist Flex)</span><span id="bbValWristFlex">78.3%</span></div>
+                                    <input type="range" id="bbSliderWristFlex" min="0" max="100" step="0.5" value="78.3">
+                                </div>
+                                <div class="pose-joint-box" style="grid-column: span 2;">
+                                    <div class="pose-joint-hdr"><span>Motor 5 (Wrist Roll)</span><span id="bbValWristRoll">50.0%</span></div>
+                                    <input type="range" id="bbSliderWristRoll" min="0" max="100" step="0.5" value="50.0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 4: SETTINGS & KINEMATICS CONFIG -->
+                <div id="bbSubViewSettings" style="display: none; flex-direction: column; flex-grow: 1; height: 100%; min-height: 0; width: 100%; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #0e0e14; border: 1.5px solid #2a2a3a; border-radius: 8px; padding: 4px 8px; height: 36px; flex-shrink: 0;">
+                        <span style="font-size: 12px; font-weight: 900; color: #00e5ff;">⚙️ CHOREOGRAPHY & KINEMATICS SETTINGS</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button id="bbResetSettingsBtn" class="btn-action" style="padding: 2px 10px; font-size: 11px; height: 26px; min-height: 0; background: #1f1f2e; border: 1px solid #555; color: #ccc; border-radius: 4px;">🔄 DEFAULTS</button>
+                            <button id="bbSaveSettingsBtn" class="btn-action" style="padding: 2px 14px; font-size: 11px; font-weight: 900; height: 26px; min-height: 0; background: #059669; border: 1.5px solid #34d399; color: #fff; border-radius: 4px;">💾 SAVE SETTINGS</button>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-grow: 1; min-height: 0; overflow-y: auto;">
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#ff00cc;">🎤 JAW NOISE GATE</span><span id="bbValJawGate">0.18</span></div>
+                            <input type="range" id="bbSliderJawGate" min="0.05" max="0.50" step="0.01" value="0.18" style="width:100%;">
+                        </div>
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#ff00cc;">🗣️ MAX JAW OPENING %</span><span id="bbValJawMax">45%</span></div>
+                            <input type="range" id="bbSliderJawMax" min="10" max="60" step="1" value="45" style="width:100%;">
+                        </div>
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#00e5ff;">🎵 HEAD NOD DEPTH</span><span id="bbValNodDepth">6.0°</span></div>
+                            <input type="range" id="bbSliderNodDepth" min="0" max="20" step="0.5" value="6.0" style="width:100%;">
+                        </div>
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#a855f7;">〰️ VIBRATO ROLL SWEEP</span><span id="bbValVibrato">20.0°</span></div>
+                            <input type="range" id="bbSliderVibrato" min="0" max="40" step="1" value="20" style="width:100%;">
+                        </div>
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#00ff66;">🛤️ GANTRY DEFAULT SPEED</span><span id="bbValGantrySpeed">800</span></div>
+                            <input type="range" id="bbSliderGantrySpeed" min="100" max="1200" step="50" value="800" style="width:100%;">
+                        </div>
+                        <div class="cfg-card">
+                            <div class="cfg-card-header"><span style="color:#ffaa00;">🦾 UPPER BODY AGILITY ALPHA</span><span id="bbValAgility">0.35</span></div>
+                            <input type="range" id="bbSliderAgility" min="0.10" max="0.80" step="0.05" value="0.35" style="width:100%;">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- TAB 4: ⚡ BACKEND & TOOLS -->
+        <div id="panelPower" class="tab-panel" style="flex-direction: column; gap: 6px; height: 100%;">
+            <div class="telemetry-bar" style="height: 26px; flex-shrink: 0;">
+                <div id="powerStatus" class="header-readout" style="font-size: 15px; color: #00ff66;">PI 500 ONLINE</div>
+            </div>
+
+            <!-- VIEW 1: Main 2-Button Backend Launcher -->
+            <div id="backendViewMain" style="display: flex; flex-direction: column; gap: 12px; height: calc(100% - 32px); justify-content: center; padding: 12px 16px;">
+                <button id="backendPowerMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #3a0d10, #1f0406); border: 3px solid #ff3344; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
+                    <span style="font-size: 42px;">⚡</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 22px; font-weight: 900; color: #ff4455;">POWER MANAGEMENT</div>
+                        <div style="font-size: 12.5px; color: #ffaaaa; font-weight: 600;">Restart Master Daemon, Wake Pi 500, Stop All Processes</div>
+                    </div>
+                </button>
+
+                <button id="backendConfigMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #051833); border: 3px solid #0099ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
+                    <span style="font-size: 42px;">⚙️</span>
+                    <div style="text-align: left;">
+                        <div style="font-size: 22px; font-weight: 900; color: #00e5ff;">CONFIG</div>
+                        <div style="font-size: 12.5px; color: #a0c8e0; font-weight: 600;">Volume Overrides, Clack Gate, Throttle Cap & Arm Speed</div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- VIEW 2: Power Management Sub-View -->
+            <div id="backendViewPower" style="display: none; flex-direction: column; gap: 8px; height: calc(100% - 32px); padding: 4px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="powerBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: #220508; border: 2px solid #ff3344; color: #ff4455; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        ⚡ POWER MANAGEMENT
+                    </div>
+                </div>
+
+                <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; flex-grow: 1;">
+                    <button id="masterDaemonBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset;">
+                        <span id="masterDaemonBtnText">🤖 RESTART DAEMON</span><br><span id="masterDaemonBtnSub" style="font-size:11px; color:#ffccaa;">(PI 500 PORT 8085)</span>
+                    </button>
+                    <button id="wifiRestoreBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset; border-color:#00ff66; color:#00ff66;">
+                        📡 RESTORE WI-FI<br><span style="font-size:11px; color:#aaffcc;">(RECONNECT NETWORK)</span>
+                    </button>
+                    <button id="pi500PowerOnBtn" class="btn-action btn-red" style="font-size: 16px; min-height: unset;">
+                        ⚡ WAKE PI 500<br><span style="font-size:11px; color:#ffccaa;">(WAKE-ON-LAN)</span>
+                    </button>
+                    <button id="wifiDisableBtn" class="btn-action btn-orange" style="font-size: 16px; min-height: unset;">
+                        🚫 TEST OFFLINE<br><span style="font-size:11px; color:#ffeebb;">(DISABLE WI-FI 10M)</span>
+                    </button>
+                    <button id="emergencyKillBtn" class="btn-action btn-red" style="grid-column: span 2; font-size: 16px; min-height: unset; background:#330005; border-color:#ff0033;">
+                        🛑 STOP ALL PROCESSES<br><span style="font-size:11px; color:#ffaaaa;">(EMERGENCY PROCESS KILL)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 3: Config Sub-View -->
+            <div id="backendViewConfig" style="display: none; flex-direction: column; gap: 6px; height: calc(100% - 32px); padding: 2px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
+                    <button id="configBackBtn" class="btn-action btn-back">
+                        ◀ BACK
+                    </button>
+                    <div style="border-radius: 8px; background: #051833; border: 2px solid #0099ff; color: #00e5ff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                        ⚙️ SYSTEM CONFIGURATION
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; flex-grow: 1; min-height: 0;">
+                    <!-- Config 1: Sensitivity Threshold -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
+                            <span id="cfgSensVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">5200</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <button id="cfgSensLow" class="btn-action cfg-btn">Low</button>
+                            <button id="cfgSensNorm" class="btn-action cfg-btn">Normal</button>
+                            <button id="cfgSensHi" class="btn-action cfg-btn">Hi</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 2: Volume -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
+                            <span id="cfgVolVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">100%</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgVol50" class="btn-action cfg-btn">50%</button>
+                            <button id="cfgVol75" class="btn-action cfg-btn">75%</button>
+                            <button id="cfgVol100" class="btn-action cfg-btn">100%</button>
+                            <button id="cfgVol150" class="btn-action cfg-btn">150% 🚀</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 3: Max Speed -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
+                            <span id="cfgSpeedVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">35% (175µs)</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgSpeed35" class="btn-action cfg-btn">35%</button>
+                            <button id="cfgSpeed50" class="btn-action cfg-btn">50%</button>
+                            <button id="cfgSpeed70" class="btn-action cfg-btn">70%</button>
+                            <button id="cfgSpeed100" class="btn-action cfg-btn">100%</button>
+                        </div>
+                    </div>
+
+                    <!-- Config 4: Arm Speed -->
+                    <div class="cfg-card">
+                        <div class="cfg-card-header">
+                            <span style="font-size: 13px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
+                            <span id="cfgArmVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">1.0s</span>
+                        </div>
+                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <button id="cfgArm03" class="btn-action cfg-btn">0.3s</button>
+                            <button id="cfgArm06" class="btn-action cfg-btn">0.6s</button>
+                            <button id="cfgArm10" class="btn-action cfg-btn">1.0s</button>
+                            <button id="cfgArm15" class="btn-action cfg-btn">1.5s</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- AI Stage Director Multi-Turn Interactive Modal -->
+    <div id="bbDirectorModal" class="bb-director-modal-backdrop" style="display: none;">
+        <div class="bb-director-modal-content">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #2a2a3a; padding-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🤖</span>
+                    <div>
+                        <strong style="font-size: 14px; color: #fff; display: block;">AI STAGE DIRECTOR</strong>
+                        <span style="font-size: 10px; color: #a855f7; font-weight: 700;">Powered by Ornith 35B • Multi-Turn Staging Pipeline</span>
+                    </div>
+                </div>
+                <button id="bbDirectorCloseBtn" class="btn-action" style="padding: 2px 8px; font-size: 12px; height: 24px; min-height: 0; background: #222; border: 1px solid #444; color: #aaa; border-radius: 4px;">✕</button>
+            </div>
+
+            <!-- Modal Body (Dynamic Step Flow) -->
+            <div id="bbDirectorBody" style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 0;">
+                <!-- Step 1: Loading Initial Brief -->
+                <div id="bbDirectorLoadingView" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px;">
+                    <div class="bb-spinner"></div>
+                    <span id="bbDirectorLoadingText" style="font-size: 12px; color: #cbd5e1; font-weight: 700;">Querying Ornith 35B on LM Studio...</span>
+                </div>
+
+                <!-- Step 2: Preliminary Brief Review & Feedback -->
+                <div id="bbDirectorBriefView" style="display: flex; flex-direction: column; gap: 8px; height: 100%;">
+                    <!-- Song Brief Card -->
+                    <div style="background: #0d0d16; border: 1px solid #2a2a3a; border-radius: 6px; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span id="bbDirectorSongTitle" style="font-size: 12.5px; font-weight: 900; color: #fff;">Red Wine Supernova</span>
+                            <span id="bbDirectorSongMeta" style="font-size: 10.5px; color: #a855f7; margin-left: 6px;">123 BPM • 3:12</span>
+                        </div>
+                        <span id="bbDirectorBriefBadge" style="font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: #1e1b4b; border: 1px solid #6366f1; color: #c7d2fe;">PHASE 1: PROPOSAL</span>
+                    </div>
+
+                    <!-- Climax Candidates Box -->
+                    <div style="background: #0f172a; border: 1.5px solid #38bdf8; border-radius: 6px; padding: 6px 10px;">
+                        <span style="font-size: 10px; font-weight: 900; color: #38bdf8; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">PROPOSED CLIMAX CANDIDATES</span>
+                        <div id="bbDirectorClimaxList" style="display: flex; flex-direction: column; gap: 4px;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Director Feedback Input Box -->
+                    <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
+                        <span style="font-size: 10.5px; font-weight: 800; color: #ffaa00;">DIRECTOR ADJUSTMENT NOTES (FEEDBACK FOR ORNITH):</span>
+                        <textarea id="bbDirectorFeedbackInput" placeholder="Add specific adjustments for Ornith (e.g. 'Move climax to 2:51 on HEEEY', 'Keep wrist flex at 50% during backbend', 'Add wider gantry sweeps')..." style="width: 100%; height: 58px; background: #141420; border: 1.5px solid #a855f7; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 11.5px; font-family: sans-serif; resize: none; box-sizing: border-box;"></textarea>
+                    </div>
+
+                    <!-- Quick-Directive Chips -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                        <span style="font-size: 9px; color: #888; font-weight: 700;">QUICK CHIPS:</span>
+                        <button class="btn-action bb-director-chip" data-text="Climax at 2:51 (171.0s) on 'HEEEY, ah!'. Safe 50% wrist flex on backbend.">🎯 Outro Climax (2:51)</button>
+                        <button class="btn-action bb-director-chip" data-text="Keep wrist flex at 50% during arch to prevent hyperextension.">🛡️ Safe Wrist Flex (50%)</button>
+                        <button class="btn-action bb-director-chip" data-text="Increase gantry sweep range across choruses.">⚡ Wider Stage Rail Sweeps</button>
+                        <button class="btn-action bb-director-chip" data-text="Add more energetic head nodding on beat.">🎵 Snappier Head Nodding</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer Toolbar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1.5px solid #2a2a3a; padding-top: 8px;">
+                <button id="bbDirectorCancelBtn" class="btn-action" style="padding: 4px 12px; font-size: 11px; font-weight: 800; height: 32px; min-height: 0; background: #222; border: 1px solid #555; color: #ccc; border-radius: 6px;">
+                    CANCEL
+                </button>
+                <div style="display: flex; gap: 6px;">
+                    <button id="bbDirectorAcceptBtn" class="btn-action" style="padding: 4px 12px; font-size: 11px; font-weight: 800; height: 32px; min-height: 0; background: #1f2937; border: 1.5px solid #6b7280; color: #e5e7eb; border-radius: 6px;">
+                        ✅ ACCEPT AS-IS
+                    </button>
+                    <button id="bbDirectorGenerateBtn" class="btn-action" style="padding: 4px 16px; font-size: 12px; font-weight: 900; height: 32px; min-height: 0; background: linear-gradient(135deg, #7928ca, #ff0080); border: 1.5px solid #ff00cc; color: #fff; border-radius: 6px; box-shadow: 0 0 10px rgba(255,0,128,0.4);">
+                        ⚡ APPLY & SYNTHESIZE TIMELINE
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main ES Module Entry Point -->
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>

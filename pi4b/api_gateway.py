@@ -21,8 +21,21 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any
 
-PI500_IP = "192.168.0.130"
-MAC_HOST_API = "http://192.168.0.2:8086"
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
+
+
+def get_pi500_ip() -> str:
+    return network_resolver.get_pi500_ip(prefer_port=8085)
+
+
+def get_mac_api_url() -> str:
+    mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
+    return f"http://{mac_ip}:8086"
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -55,8 +68,10 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        if path in ["/", "/index.html"]:
-            static_file = os.path.join(DIRECTORY, "static", "gantry_ui.html")
+        if path in ["/", "/index.html", "/gantry_ui.html"]:
+            static_file = os.path.join(DIRECTORY, "static", "index.html")
+            if not os.path.exists(static_file):
+                static_file = os.path.join(DIRECTORY, "static", "gantry_ui.html")
             if not os.path.exists(static_file):
                 static_file = os.path.join(DIRECTORY, "index.html")
 
@@ -65,6 +80,34 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+        rel_path = path.lstrip("/")
+        if rel_path and not rel_path.startswith("api/"):
+            static_asset = os.path.join(DIRECTORY, "static", rel_path)
+            if os.path.isfile(static_asset):
+                mime_type = "application/octet-stream"
+                if rel_path.endswith(".css"):
+                    mime_type = "text/css"
+                elif rel_path.endswith(".js"):
+                    mime_type = "application/javascript"
+                elif rel_path.endswith(".json"):
+                    mime_type = "application/json"
+                elif rel_path.endswith(".html"):
+                    mime_type = "text/html"
+                elif rel_path.endswith(".png"):
+                    mime_type = "image/png"
+                elif rel_path.endswith(".svg"):
+                    mime_type = "image/svg+xml"
+                with open(static_asset, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type)
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("Expires", "0")
@@ -81,6 +124,21 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
             else:
                 self._send_json({"error": "TelemetryPollerService unavailable"}, 503)
             return
+
+        if path.startswith("/api/apps") or path.startswith("/api/arm/"):
+            try:
+                target_url = f"http://{get_pi500_ip()}:8085{self.path}"
+                req = urllib.request.Request(target_url)
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    data = resp.read()
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+            except Exception as e:
+                self._send_json({"error": f"Error proxying GET to Pi 500: {e}"}, 502)
+                return
 
         return super().do_GET()
 
@@ -143,7 +201,7 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
                 return
 
             action = req_data.get("action")
-            kind = req_data.get("kind", "connect")
+            kind = req_data.get("kind", "incorrect")
             if action in ["stop", "clear"] or kind in ["stop", "stop_audio"]:
                 self.audio_service.stop_all()
                 self._send_json({"status": "ok", "action": "stopped_and_flushed"})
@@ -224,16 +282,19 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
             return
 
         # 6. Mode Toggles & Teleop Controls (Forwarded to Pi 500 or Mac Mini)
-        if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/kill_all"]:
+        if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/clack_pose_toggle", "/api/beat_bandit_toggle", "/api/kill_all"]:
             action = req_data.get("action", "toggle")
+            if (path == "/api/kill_all" or (path == "/api/beat_bandit_toggle" and action in ["stop", "kill"])) and self.audio_service:
+                self.audio_service.stop_all()
+
             try:
-                url = f"{MAC_HOST_API}/api/leader_toggle" if path == "/api/mac_leader_toggle" else f"http://{PI500_IP}:8085{path}"
+                url = f"{get_mac_api_url()}/api/leader_toggle" if path == "/api/mac_leader_toggle" else f"http://{get_pi500_ip()}:8085{path}"
                 post_data = json.dumps({"action": action}).encode("utf-8")
                 req = urllib.request.Request(url, data=post_data, headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=3.0) as resp:
                     resp_body = resp.read()
                     try:
-                        st_req = urllib.request.Request(f"http://{PI500_IP}:8085/api/status")
+                        st_req = urllib.request.Request(f"http://{get_pi500_ip()}:8085/api/status")
                         with urllib.request.urlopen(st_req, timeout=1.0) as st_resp:
                             if st_resp.status == 200 and self.telemetry_service:
                                 self.telemetry_service.set_hardware_telemetry(json.loads(st_resp.read().decode()))
@@ -248,10 +309,36 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
                 self._send_json({"error": f"HTTP endpoint error: {e}", "status": "failed"}, 500)
                 return
 
+        # 6.5 Apps & Arm Sequence/Preset Forwarding
+        if path.startswith("/api/apps/") or path.startswith("/api/arm/"):
+            if path in ["/api/apps/beat_bandit/stop", "/api/apps/stop"] and self.audio_service:
+                self.audio_service.stop_all()
+
+            try:
+                target_url = f"http://{get_pi500_ip()}:8085{path}"
+                data_bytes = body.encode("utf-8")
+                req = urllib.request.Request(target_url, data=data_bytes, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    resp_body = resp.read()
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(resp_body)
+                    return
+            except urllib.error.HTTPError as e:
+                self.send_response(e.code)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(e.read())
+                return
+            except Exception as e:
+                self._send_json({"error": f"HTTP endpoint error: {e}", "status": "failed"}, 500)
+                return
+
         # 7. Direct Motor Commands & Position Sync Forwarding
         if path in ["/api/slider", "/api/nudge_physical", "/api/pedestal_step", "/api/pedestal", "/api/move", "/api/sync_position"]:
             try:
-                target_url = f"http://{PI500_IP}:8085{path}"
+                target_url = f"http://{get_pi500_ip()}:8085{path}"
 
                 data_bytes = body.encode("utf-8")
                 req = urllib.request.Request(target_url, data=data_bytes, headers={"Content-Type": "application/json"})

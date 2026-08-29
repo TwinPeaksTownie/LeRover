@@ -18,7 +18,7 @@ The system is distributed across three physical compute nodes communicating over
    +--------------------------+                      +--------------------------+
    |   Leader Arm Host        |                      |   Touchscreen Kiosk      |
    |   (Mac Mini)             |                      |   (Raspberry Pi 4B)      |
-   |   IP: 192.168.0.2        |                      |   IP: 192.168.0.86       |
+   |   IP: 192.168.0.149      |                      |   IP: 192.168.0.86       |
    |                          |                      |                          |
    |  * so101_leader_client   |                      |  * Gantry UI (800x480)   |
    |  * Joint Normalization   |                      |  * Touch UI Server :8082 |
@@ -65,7 +65,7 @@ The system is distributed across three physical compute nodes communicating over
 * **Audio Playback Pipeline (`audio_service.py`):** Proxies sound effects and voice synthesis to the local speaker via PulseAudio (`paplay`) without ALSA device lock contention.
 * **Rover Process Manager (`rover_launcher.py`):** Starts, monitors, and stops standalone rover driver tasks over authenticated background channels.
 
-### 3. Leader Arm Client (Mac Mini @ `192.168.0.2`)
+### 3. Leader Arm Client & Audio Service (Mac Mini @ `192.168.0.149`)
 * **Spatial Input Capture (`so101_leader_client.py`):** Reads joint angles from the 6-DOF Leader Arm over USB serial.
 * **Range Normalization:** Translates physical ticks into percentage-based normalized ranges (`[-100.0, 100.0]` for joints 1–5, `[0.0, 100.0]` for gripper joint 6) and broadcasts frames over ZMQ socket `5555`.
 
@@ -206,10 +206,10 @@ python3 server.py
 ### 3. Launching Leader Arm Teleoperation (Mac Mini)
 ```bash
 # SSH into Mac Mini
-ssh user@192.168.0.2
+ssh twinpeakstownie@192.168.0.149
 
 # Stream leader arm motion
-cd ~/so101/mac-mini
+cd ~/lerobot
 python3 so101_leader_client.py --ip 192.168.0.130 --port 5555
 ```
 
