@@ -1178,6 +1178,12 @@ function bindEventListeners() {
             } else if (id === 'inspBasePose') {
                 selectedMoveBlock.pose_name = val;
                 ui.renderTimeline();
+            } else if (id === 'inspHeadPitch') {
+                selectedMoveBlock.head_pitch = val;
+                ui.renderTimeline();
+            } else if (id === 'inspGantryMode') {
+                selectedMoveBlock.mode = val;
+                ui.renderTimeline();
             } else if (id === 'inspTransSlider') {
                 selectedMoveBlock.transition_sec = parseFloat(val) || 0.5;
                 const v = document.getElementById('inspTransVal');
@@ -1192,6 +1198,16 @@ function bindEventListeners() {
                 selectedMoveBlock.target_pos = parseInt(val, 10);
                 const v = document.getElementById('inspS8Val');
                 if (v) v.innerText = `${val}`;
+                ui.renderTimeline();
+            } else if (id === 'inspGrooveSlider') {
+                selectedMoveBlock.groove_intensity = parseFloat((parseInt(val, 10) / 100).toFixed(2));
+                const v = document.getElementById('inspGrooveVal');
+                if (v) v.innerText = `${val}%`;
+                ui.renderTimeline();
+            } else if (id === 'inspTiltSlider') {
+                selectedMoveBlock.tilt_deg = parseFloat(val);
+                const v = document.getElementById('inspTiltVal');
+                if (v) v.innerText = `${val > 0 ? '+' : ''}${val}°`;
                 ui.renderTimeline();
             } else if (id === 'inspVocalLyrics') {
                 selectedMoveBlock.lyrics = val;
@@ -1258,6 +1274,31 @@ function bindEventListeners() {
                 if (sl) sl.value = pos;
                 if (v) v.innerText = `${pos}`;
                 ui.renderTimeline();
+                return;
+            }
+
+            const groovePreset = e.target.closest('.insp-groove-preset');
+            if (groovePreset) {
+                const gVal = parseInt(groovePreset.getAttribute('data-val') || '50', 10);
+                selectedMoveBlock.groove_intensity = parseFloat((gVal / 100).toFixed(2));
+                const sl = document.getElementById('inspGrooveSlider');
+                const v = document.getElementById('inspGrooveVal');
+                if (sl) sl.value = gVal;
+                if (v) v.innerText = `${gVal}%`;
+                ui.renderTimeline();
+                return;
+            }
+
+            const tiltPreset = e.target.closest('.insp-tilt-preset');
+            if (tiltPreset) {
+                const tDeg = parseFloat(tiltPreset.getAttribute('data-deg') || '0');
+                selectedMoveBlock.tilt_deg = tDeg;
+                const sl = document.getElementById('inspTiltSlider');
+                const v = document.getElementById('inspTiltVal');
+                if (sl) sl.value = tDeg;
+                if (v) v.innerText = `${tDeg > 0 ? '+' : ''}${tDeg}°`;
+                ui.renderTimeline();
+                return;
             }
         });
     }

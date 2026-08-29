@@ -447,30 +447,35 @@
                             <div id="bbInMarker" class="bb-in-marker" style="display: none; left: 0;"></div>
                             <div id="bbOutMarker" class="bb-out-marker" style="display: none; left: 0;"></div>
 
-                            <!-- Lane 1: Body Postures (Servos 1-5) -->
+                            <!-- Lane 1: Spine & Elevation (Servos 2-4) -->
                             <div class="bb-track-row" id="bbTrackRowBody">
-                                <div class="bb-track-label">BODY (S1-5)</div>
+                                <div class="bb-track-label">SPINE (S2-4)</div>
                                 <div class="bb-track-lane" id="bbLaneBody"></div>
                             </div>
-                            <!-- Lane 2: Pedestal (Servo 7) -->
-                            <div class="bb-track-row" id="bbTrackRowS7">
-                                <div class="bb-track-label">PEDESTAL (S7)</div>
-                                <div class="bb-track-lane" id="bbLaneS7"></div>
-                            </div>
-                            <!-- Lane 3: Gantry (Servo 8) -->
+                            <!-- Lane 2: Gantry Rail (Servo 8) -->
                             <div class="bb-track-row" id="bbTrackRowS8">
                                 <div class="bb-track-label">GANTRY (S8)</div>
                                 <div class="bb-track-lane" id="bbLaneS8"></div>
                             </div>
-                            <!-- Lane 4: Vocal / Head -->
-                            <div class="bb-track-row" id="bbTrackRowHeadJaw">
-                                <div class="bb-track-label">HEAD / JAW</div>
-                                <div class="bb-track-lane" id="bbLaneHeadJaw"></div>
+                            <!-- Lane 3: Pedestal Facing (Servo 7) -->
+                            <div class="bb-track-row" id="bbTrackRowS7">
+                                <div class="bb-track-label">PEDESTAL (S7)</div>
+                                <div class="bb-track-lane" id="bbLaneS7"></div>
                             </div>
-                            <!-- Lane 5: Vocal Style & Lyrics (Blue Conversational / Orange Belting) -->
-                            <div class="bb-track-row" id="bbTrackRowVocals">
-                                <div class="bb-track-label" style="color: #38bdf8;">VOCALS / LYRICS</div>
-                                <div class="bb-track-lane" id="bbLaneVocals"></div>
+                            <!-- Lane 4: Torso Pan & Groove Modifier (Servo 1) -->
+                            <div class="bb-track-row" id="bbTrackRowS1">
+                                <div class="bb-track-label" style="color: #fbbf24;">GROOVE (S1)</div>
+                                <div class="bb-track-lane" id="bbLaneS1"></div>
+                            </div>
+                            <!-- Lane 5: Head Attitude / Tilt (Servo 5) -->
+                            <div class="bb-track-row" id="bbTrackRowS5">
+                                <div class="bb-track-label" style="color: #2dd4bf;">TILT (S5)</div>
+                                <div class="bb-track-lane" id="bbLaneS5"></div>
+                            </div>
+                            <!-- Lane 6: Lip-Sync Jaw (Servo 6) -->
+                            <div class="bb-track-row" id="bbTrackRowHeadJaw">
+                                <div class="bb-track-label" style="color: #f472b6;">JAW (S6)</div>
+                                <div class="bb-track-lane" id="bbLaneHeadJaw"></div>
                             </div>
 
                             <!-- Draggable / Visual Playhead Line -->

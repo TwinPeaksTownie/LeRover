@@ -1209,11 +1209,12 @@ export function renderTimeline() {
     }
 
     const tracks = activeChoreoData.tracks || {};
-    renderLaneBlocks(document.getElementById('bbLaneBody'), tracks.body_pose, 'body_pose', 'block-body');
-    renderLaneBlocks(document.getElementById('bbLaneS7'), tracks.s7_pedestal, 's7_pedestal', 'block-s7');
+    renderLaneBlocks(document.getElementById('bbLaneBody'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-body');
     renderLaneBlocks(document.getElementById('bbLaneS8'), tracks.s8_gantry, 's8_gantry', 'block-s8');
-    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.head_jaw, 'head_jaw', 'block-head');
-    renderLaneBlocks(document.getElementById('bbLaneVocals'), tracks.vocal_style, 'vocal_style', 'block-vocal-conversational');
+    renderLaneBlocks(document.getElementById('bbLaneS7'), tracks.s7_pedestal, 's7_pedestal', 'block-s7');
+    renderLaneBlocks(document.getElementById('bbLaneS1'), tracks.s1_torso, 's1_torso', 'block-s1');
+    renderLaneBlocks(document.getElementById('bbLaneS5'), tracks.s5_head_tilt, 's5_head_tilt', 'block-s5');
+    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-head');
 
     // 4. In / Out Markers & Shaded Range Highlight
     const inMarkerEl = document.getElementById('bbInMarker');
@@ -1313,10 +1314,14 @@ export function openMoveInspector(channel, block) {
     const dynamicCtrls = document.getElementById('bbInspectorDynamicControls');
 
     const channelNames = {
-        'body_pose': 'BODY (S1-5)',
-        's7_pedestal': 'PEDESTAL (S7)',
+        'spine_gaze': 'SPINE (S2-4)',
+        'body_pose': 'SPINE (S2-4)',
         's8_gantry': 'GANTRY (S8)',
-        'head_jaw': 'HEAD / JAW',
+        's7_pedestal': 'PEDESTAL (S7)',
+        's1_torso': 'GROOVE (S1)',
+        's5_head_tilt': 'HEAD TILT (S5)',
+        's6_jaw': 'LIP-SYNC JAW (S6)',
+        'head_jaw': 'LIP-SYNC JAW (S6)',
         'vocal_style': 'VOCALS / LYRICS'
     };
 
@@ -1348,7 +1353,7 @@ export function openMoveInspector(channel, block) {
     `;
 
     // Right: Channel-Specific Parameters
-    if (channel === 'body_pose') {
+    if (channel === 'spine_gaze' || channel === 'body_pose') {
         const poses = activeChoreoData.poses || {};
         const poseKeys = Object.keys(poses);
         let poseOpts = '';
@@ -1358,13 +1363,22 @@ export function openMoveInspector(channel, block) {
         });
 
         const transSec = Number(block.transition_sec !== undefined ? block.transition_sec : 0.5);
+        const pitch = block.head_pitch || 'level';
 
         controlsHtml += `
             <div style="display: flex; gap: 12px; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">BLOCK POSTURE:</span>
+                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">STANCE:</span>
                     <select id="inspBasePose" style="background: #1a1a26; border: 1px solid #60a5fa; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
                         ${poseOpts}
+                    </select>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">HEAD PITCH:</span>
+                    <select id="inspHeadPitch" style="background: #1a1a26; border: 1px solid #a855f7; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+                        <option value="level" ${pitch === 'level' ? 'selected' : ''}>Level (Audience)</option>
+                        <option value="up" ${pitch === 'up' ? 'selected' : ''}>Up (Power Belt)</option>
+                        <option value="down" ${pitch === 'down' ? 'selected' : ''}>Down (Introspective)</option>
                     </select>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
@@ -1375,13 +1389,42 @@ export function openMoveInspector(channel, block) {
                 </div>
             </div>
         `;
+    } else if (channel === 's8_gantry') {
+        const pos = Number(block.target_pos || 2400);
+        const spd = Number(block.speed || 800);
+        const mode = block.mode || 'hold';
+        controlsHtml += `
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">MODE:</span>
+                    <select id="inspGantryMode" style="background: #1a1a26; border: 1px solid #60a5fa; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+                        <option value="hold" ${mode === 'hold' ? 'selected' : ''}>Hold</option>
+                        <option value="full_glide" ${mode === 'full_glide' ? 'selected' : ''}>Full Glide</option>
+                        <option value="late_move" ${mode === 'late_move' ? 'selected' : ''}>Late Move</option>
+                        <option value="early_settle" ${mode === 'early_settle' ? 'selected' : ''}>Early Settle</option>
+                    </select>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc;">
+                        <span>POSITION:</span><strong id="inspS8Val" style="color: #00e5ff;">${pos}</strong>
+                    </div>
+                    <input type="range" id="inspS8Slider" min="3" max="4800" step="50" value="${pos}">
+                </div>
+                <div style="display: flex; gap: 2px;">
+                    <button class="btn-action insp-s8-preset" data-pos="1100" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Right</button>
+                    <button class="btn-action insp-s8-preset" data-pos="2400" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Center</button>
+                    <button class="btn-action insp-s8-preset" data-pos="3700" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Left</button>
+                    <button class="btn-action insp-s8-preset" data-pos="4350" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Drop</button>
+                </div>
+            </div>
+        `;
     } else if (channel === 's7_pedestal') {
         const deg = Number(block.target_deg || 0);
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc;">
-                        <span>TARGET ANGLE:</span><strong id="inspS7Val" style="color: #00ff66;">${deg > 0 ? '+' : ''}${deg}°</strong>
+                        <span>STAGE FACING:</span><strong id="inspS7Val" style="color: #00ff66;">${deg > 0 ? '+' : ''}${deg}°</strong>
                     </div>
                     <input type="range" id="inspS7Slider" min="-90" max="90" step="5" value="${deg}">
                 </div>
@@ -1392,39 +1435,45 @@ export function openMoveInspector(channel, block) {
                 </div>
             </div>
         `;
-    } else if (channel === 's8_gantry') {
-        const pos = Number(block.target_pos || 2400);
-        const spd = Number(block.speed || 800);
+    } else if (channel === 's1_torso') {
+        const groovePct = Math.round(Number(block.groove_intensity !== undefined ? block.groove_intensity : 0.5) * 100);
         controlsHtml += `
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc;">
-                        <span>GANTRY POSITION:</span><strong id="inspS8Val" style="color: #00e5ff;">${pos}</strong>
+                        <span>GROOVE MODIFIER INTENSITY:</span><strong id="inspGrooveVal" style="color: #fbbf24;">${groovePct}%</strong>
                     </div>
-                    <input type="range" id="inspS8Slider" min="3" max="4800" step="50" value="${pos}">
+                    <input type="range" id="inspGrooveSlider" min="0" max="100" step="5" value="${groovePct}">
                 </div>
-                <div style="display: flex; gap: 2px;">
-                    <button class="btn-action insp-s8-preset" data-pos="1100" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Right 1100</button>
-                    <button class="btn-action insp-s8-preset" data-pos="2400" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Center 2400</button>
-                    <button class="btn-action insp-s8-preset" data-pos="3700" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Left 3700</button>
-                    <button class="btn-action insp-s8-preset" data-pos="4350" style="padding: 2px 4px; font-size: 8.5px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">Drop 4350</button>
+                <div style="display: flex; gap: 3px;">
+                    <button class="btn-action insp-groove-preset" data-val="0" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">0% Still</button>
+                    <button class="btn-action insp-groove-preset" data-val="50" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">50% Verse</button>
+                    <button class="btn-action insp-groove-preset" data-val="100" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">100% Dance</button>
                 </div>
             </div>
         `;
-    } else if (channel === 'vocal_style') {
-        const vStyle = block.style || 'conversational';
-        const lyrics = block.lyrics || '';
+    } else if (channel === 's5_head_tilt') {
+        const tilt = Number(block.tilt_deg || 0);
         controlsHtml += `
-            <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <span style="font-size: 10px; color: #aaa; font-weight: 700;">STYLE:</span>
-                        <button class="btn-action insp-vocal-style-btn" data-style="conversational" style="padding: 2px 10px; font-size: 10.5px; font-weight: 800; border-radius: 4px; background: ${vStyle === 'conversational' ? '#0284c7' : '#141420'}; border: 1.5px solid ${vStyle === 'conversational' ? '#38bdf8' : '#334155'}; color: #fff;">🗣️ Conversational (Blue)</button>
-                        <button class="btn-action insp-vocal-style-btn" data-style="belting" style="padding: 2px 10px; font-size: 10.5px; font-weight: 800; border-radius: 4px; background: ${vStyle === 'belting' ? '#ea580c' : '#141420'}; border: 1.5px solid ${vStyle === 'belting' ? '#fb923c' : '#334155'}; color: #fff;">🔥 Power Belting (Orange)</button>
+            <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc;">
+                        <span>HEAD TILT ROLL:</span><strong id="inspTiltVal" style="color: #2dd4bf;">${tilt > 0 ? '+' : ''}${tilt}°</strong>
                     </div>
-                    <span style="font-size: 9.5px; color: #94a3b8;">(Head pitches up on Belt)</span>
+                    <input type="range" id="inspTiltSlider" min="-25" max="25" step="1" value="${tilt}">
                 </div>
-                <textarea id="inspVocalLyrics" placeholder="Enter lyrics for this time window..." style="width: 100%; height: 42px; background: #141420; border: 1.5px solid ${vStyle === 'belting' ? '#fb923c' : '#38bdf8'}; border-radius: 5px; color: #fff; padding: 4px 8px; font-size: 11.5px; font-family: sans-serif; resize: none; box-sizing: border-box;">${lyrics}</textarea>
+                <div style="display: flex; gap: 3px;">
+                    <button class="btn-action insp-tilt-preset" data-deg="-12" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">-12° Left</button>
+                    <button class="btn-action insp-tilt-preset" data-deg="0" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">0° Level</button>
+                    <button class="btn-action insp-tilt-preset" data-deg="12" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">+12° Right</button>
+                </div>
+            </div>
+        `;
+    } else if (channel === 's6_jaw' || channel === 'head_jaw') {
+        controlsHtml += `
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <span style="font-size: 11px; color: #f472b6; font-weight: 700;">50 Hz MMDenseLSTM Neural Lip-Sync Active</span>
+                <span style="font-size: 10px; color: #aaa;">(Automatically opens jaw 0-45% matching vocal power)</span>
             </div>
         `;
     }

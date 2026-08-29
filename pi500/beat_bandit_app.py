@@ -379,7 +379,7 @@ class BeatBanditApp(BaseApp):
         if target_end_sec <= target_start_sec:
             target_end_sec = duration
 
-        # 1. Load Pre-Compiled Choreography Tracks (Timeline Contract)
+        # 1. Load Pre-Compiled Choreography Tracks (6-Track Timeline Contract)
         track_id = self.active_track.get("track_id", "")
         choreo = self.active_track.get("choreography")
         if not choreo or not choreo.get("tracks"):
@@ -387,13 +387,15 @@ class BeatBanditApp(BaseApp):
             self.active_track["choreography"] = choreo
 
         choreo_tracks = choreo.get("tracks", {})
-        if "body_pose" not in choreo_tracks or "s7_pedestal" not in choreo_tracks:
-            raise KeyError(f"Choreography tracks missing required channels ('body_pose', 's7_pedestal') for track '{track_id}'.")
-
-        body_track = choreo_tracks["body_pose"]
-        s7_track = choreo_tracks["s7_pedestal"]
+        spine_track = choreo_tracks.get("spine_gaze") or choreo_tracks.get("body_pose", [])
+        s7_track = choreo_tracks.get("s7_pedestal", [])
         s8_track = choreo_tracks.get("s8_gantry", [])
+        s1_track = choreo_tracks.get("s1_torso", [])
+        s5_track = choreo_tracks.get("s5_head_tilt", [])
         mouth_env_50hz = analysis.get("mouth_envelope_50hz", [])
+
+        settings = choreo.get("settings", DEFAULT_SETTINGS)
+        max_sway_deg = float(settings.get("groove_max_sway_deg", 18.0))
 
         # Calibration & Center Points from Backend
         aux_calib = getattr(backend, "aux_calibration", {})
@@ -456,7 +458,7 @@ class BeatBanditApp(BaseApp):
 
         # Start 50 Hz Synchronized Loop
         start_time = time.time()
-        self.logger.info(f"Starting synchronized timeline performance loop ({target_start_sec:.1f}s -> {target_end_sec:.1f}s, loop={loop})...")
+        self.logger.info(f"Starting 6-track measure performance loop ({target_start_sec:.1f}s -> {target_end_sec:.1f}s, loop={loop})...")
 
         while not self.track_stop_event.is_set() and not (self.stop_event and self.stop_event.is_set()):
             loop_start = time.time()
@@ -474,39 +476,68 @@ class BeatBanditApp(BaseApp):
 
             self.progress_pct = min(100.0, (elapsed / duration) * 100.0)
 
-            # Current Beat Index Lookup
+            # Current Beat Index and Phase Lookup
             beat_idx = int(np.searchsorted(beat_times, elapsed)) - 1
             beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
             self.current_beat_idx = beat_idx
 
-            # 1. Timeline Body Posture Lookup & Low-Pass Blend
-            body_block = next((b for b in body_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            if body_block:
-                pose_name = body_block["pose_name"]
-                if pose_name not in choreo_poses:
-                    raise KeyError(f"Choreography pose '{pose_name}' not found in presets_dance.json")
-                target_posture = choreo_poses[pose_name]
-                trans_sec = float(body_block.get("transition_sec", 0.6))
-                alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
-                for j in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]:
-                    smooth_posture[j] += alpha * (float(target_posture[j]) - smooth_posture[j])
-                self.current_move_name = body_block.get("name", pose_name)
-                self.current_energy_level = "HIGH ENERGY" if pose_name in ["tiptoe", "squat"] else "GROOVE"
+            # Calculate continuous rhythmic sway phase across beats
+            if beat_idx < len(beat_times) - 1:
+                b_cur = beat_times[beat_idx]
+                b_nxt = beat_times[beat_idx + 1]
+                b_frac = (elapsed - b_cur) / max(0.05, b_nxt - b_cur)
+                sway_offset = math.sin((beat_idx % 2 + b_frac) * math.pi)
+            else:
+                sway_offset = 0.0
 
-            # 2. Timeline Pedestal S7 Lookup & Smooth Transition
+            # 1. Track 1: Spine & Elevation (Servos 2, 3, 4)
+            spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+            if spine_block:
+                pose_name = spine_block.get("pose_name", "stand")
+                if pose_name not in choreo_poses:
+                    pose_name = "stand"
+                target_posture = choreo_poses[pose_name]
+                trans_sec = float(spine_block.get("transition_sec", 0.5))
+                alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
+
+                head_pitch = spine_block.get("head_pitch", "level")
+                pitch_offset = 20.0 if head_pitch == "up" else (-15.0 if head_pitch == "down" else 0.0)
+
+                smooth_posture["shoulder_lift"] += alpha * (float(target_posture["shoulder_lift"]) - smooth_posture["shoulder_lift"])
+                smooth_posture["elbow_flex"] += alpha * (float(target_posture["elbow_flex"]) - smooth_posture["elbow_flex"])
+                smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + pitch_offset) - smooth_posture["wrist_flex"])
+
+                self.current_move_name = spine_block.get("name", pose_name)
+                self.current_energy_level = "HIGH ENERGY" if pose_name in ["tiptoe", "arch"] else "GROOVE"
+
+            # 2. Track 4: Torso Pan & Groove Modifier (Servo 1)
+            s1_block = next((b for b in s1_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+            groove_int = float(s1_block.get("groove_intensity", 0.5)) if s1_block else 0.5
+            sway_enabled = s1_block.get("sway_enabled", True) if s1_block else True
+            sway_deg = (groove_int * max_sway_deg * sway_offset) if sway_enabled else 0.0
+            target_pan = float(target_posture["shoulder_pan"]) + sway_deg
+            smooth_posture["shoulder_pan"] += 0.25 * (target_pan - smooth_posture["shoulder_pan"])
+
+            # 3. Track 5: Head Tilt (Servo 5)
+            s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+            target_tilt = float(s5_block.get("tilt_deg", 0.0)) if s5_block else 0.0
+            target_roll = float(target_posture["wrist_roll"]) + target_tilt
+            smooth_posture["wrist_roll"] += 0.25 * (target_roll - smooth_posture["wrist_roll"])
+
+            # 4. Track 3: Pedestal S7 (Macro Stage Facing)
             s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
             if s7_block:
-                target_s7_deg = float(s7_block["target_deg"])
+                target_s7_deg = float(s7_block.get("target_deg", 0.0))
                 trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
                 alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
                 current_s7_deg += alpha_s7 * (target_s7_deg - current_s7_deg)
                 current_s7_deg = max(-135.0, min(135.0, current_s7_deg))
                 self.current_s7_target_deg = current_s7_deg
 
-            # 3. Timeline Gantry S8 Dispatch
+            # 5. Track 2: Gantry S8 (Tier A One-Shot Dispatch)
             s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
             if s8_block and s8_block.get("id") != last_s8_block_id:
-                dest_s8 = int(s8_block["target_pos"])
+                dest_s8 = int(s8_block.get("target_pos", gantry_center))
                 spd = int(s8_block.get("speed", 500))
                 try:
                     backend.move_target(8, dest_s8, speed=spd, max_t=800)
@@ -514,7 +545,7 @@ class BeatBanditApp(BaseApp):
                 except Exception as g_err:
                     self.logger.warning(f"Gantry timeline move warning: {g_err}")
 
-            # 4. Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)
+            # 6. Track 6: Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)
             jaw_open_pct = 0.0
             if mouth_env_50hz:
                 env_idx = int(elapsed * 50.0)
@@ -523,7 +554,7 @@ class BeatBanditApp(BaseApp):
             jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
             self.current_vocal_power = jaw_open_pct
 
-            # 5. Assemble Goal Positions (Deterministic Posture Interpolation & Lip Sync)
+            # 7. Assemble Goal Positions (Normalized Telemetry)
             arm_goals = {
                 "shoulder_pan": float(max(-100.0, min(100.0, smooth_posture["shoulder_pan"]))),
                 "shoulder_lift": float(max(-100.0, min(100.0, smooth_posture["shoulder_lift"]))),
@@ -533,14 +564,14 @@ class BeatBanditApp(BaseApp):
                 "gripper": float(max(0.0, min(45.0, jaw_open_pct))),
             }
 
-            # 8. Hardware Writes (50 Hz Fast bulk sync_write for Motors 1-6 & Pedestal S7)
+            # 8. Hardware Writes (50 Hz Atomic Bulk sync_write for Motors 1-6 & Pedestal S7)
             try:
                 with SERIAL_LOCK:
-                    # Write to Motors 1-6
+                    # Atomic write to Motors 1-6
                     if backend.bus and hasattr(backend.bus, "sync_write"):
                         backend.bus.sync_write("Goal_Position", arm_goals)
 
-                    # Write to Servo 7 (Pedestal)
+                    # Write to Servo 7 (Pedestal) if angle changed by >= 0.5 deg
                     if last_s7_sent_deg is None or abs(current_s7_deg - last_s7_sent_deg) >= 0.5:
                         if hasattr(backend, "ctrl") and backend.ctrl:
                             s7_ticks = degrees_to_ticks_s7(current_s7_deg, center_ticks=aux_s7_center)

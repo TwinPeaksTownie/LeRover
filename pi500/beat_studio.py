@@ -23,6 +23,8 @@ DEFAULT_SETTINGS = {
     "jaw_max_open": 45.0,
     "head_nod_depth": 6.0,
     "vibrato_amplitude": 20.0,
+    "groove_max_sway_deg": 18.0,
+    "head_tilt_max_deg": 15.0,
     "gantry_default_speed": 800,
     "joint_alphas": {
         "wrist_flex": 0.35,
@@ -87,8 +89,6 @@ def load_dance_presets() -> Dict[str, Dict[str, float]]:
 
     clean_poses = {}
     for name, pdata in data.items():
-        if name.lower() == "arch":
-            continue
         if isinstance(pdata, dict) and "normalized" in pdata:
             clean_poses[name] = {
                 k: float(v)
@@ -121,8 +121,8 @@ def blend_5joint_poses(p_a: Dict[str, float], p_b: Dict[str, float], alpha: floa
 
 
 def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> Dict[str, Any]:
-    """Compiles audio analysis (beats, drops, sections, held notes) into a complete,
-    structured multi-track linear timeline organized around 4-bar blocks (16 beats).
+    """Compiles Essentia audio analysis (sections, beats, downbeats, drops, held notes, danceability)
+    into a structured 6-track measure-by-measure linear choreography timeline.
     """
     if not analysis:
         raise ValueError("Cannot compile choreography: audio 'analysis' payload is empty or missing.")
@@ -135,365 +135,296 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
     if not beat_times:
         raise ValueError("Cannot compile choreography: 'beat_times' missing or empty in audio analysis.")
 
+    danceability = float(analysis.get("danceability", 0.6))
     drops = analysis.get("drops", [])
-    sections = analysis.get("sections", [])
-    if not sections:
-        # Auto-partition sections from 16-beat (4-bar) intervals
-        sections = []
-        for idx in range(0, len(beat_times), 16):
-            st = float(beat_times[idx])
-            end_idx = min(idx + 16, len(beat_times) - 1)
-            et = float(beat_times[end_idx]) if end_idx < len(beat_times) else duration
-            sections.append({
-                "start_sec": st,
-                "end_sec": et,
-                "type": "CHORUS_DROP" if any(d.get("drop_sec", 0.0) >= st and d.get("drop_sec", 0.0) < et for d in drops) else "VERSE_GROOVE"
-            })
-
+    raw_sections = analysis.get("sections", [])
     held_notes = analysis.get("held_notes", [])
 
-    # Load real calibration poses
+    # Load real calibration poses (stand, squat, tiptoe, arch)
     choreo_poses = load_dance_presets()
-    p_stand = choreo_poses["stand"]
-    p_tiptoe = choreo_poses["tiptoe"]
-    p_squat = choreo_poses["squat"]
 
-    # 1. Sections breakdown
+    # 1. Structure sections into clean section blocks
+    if not raw_sections:
+        raw_sections = [{
+            "type": "verse",
+            "start_sec": 0.0,
+            "end_sec": duration,
+            "energy_score": 0.0,
+        }]
+
     sec_blocks = []
-    for idx, s in enumerate(sections):
+    for idx, s in enumerate(raw_sections):
         st = float(s.get("start_sec", 0.0))
         et = min(duration, float(s.get("end_sec", duration)))
-        stype = str(s.get("type", "VERSE_GROOVE"))
+        stype = str(s.get("type", "verse")).lower()
         sec_blocks.append({
             "id": f"sec_{idx + 1}",
-            "name": stype.replace("_", " ").title(),
+            "name": stype.title(),
             "type": stype,
             "start_sec": round(st, 2),
             "end_sec": round(et, 2),
+            "energy_score": float(s.get("energy_score", 0.0)),
         })
 
-    # Timeline Tracks
-    body_moves = []
-    s7_moves = []
+    # Timeline Tracks (The 6 Coordinated Functional Lanes)
+    spine_moves = []
     s8_moves = []
-    vocal_moves = []
+    s7_moves = []
+    s1_moves = []
+    s5_moves = []
+    jaw_moves = []
 
-    # Check intro section
-    intro_sec = next((s for s in sections if s.get("type") == "BEATLESS_INTRO"), None)
-    intro_end = float(intro_sec.get("end_sec", 0.0)) if intro_sec else 0.0
+    # Drop intervals
+    drop_times = [float(d.get("drop_sec", 0.0)) for d in drops]
 
-    if intro_end > 3.0:
-        body_moves.append({
-            "id": f"bm_{uuid.uuid4().hex[:6]}",
-            "name": "Cinematic Intro Stance",
+    # Partition beats into 4-beat measures
+    measure_indices = list(range(0, len(beat_times), 4))
+    total_measures = len(measure_indices)
+
+    # Check intro before first beat if any
+    first_beat = float(beat_times[0])
+    if first_beat > 2.5:
+        # Pre-beat intro measure
+        spine_moves.append({
+            "id": f"sp_{uuid.uuid4().hex[:6]}",
+            "name": "Intro Stance",
             "pose_name": "stand",
+            "head_pitch": "level",
             "start_sec": 0.0,
-            "end_sec": round(intro_end, 2),
-            "transition_sec": 1.5,
+            "end_sec": round(first_beat, 2),
+            "transition_sec": 1.2,
+        })
+        s8_moves.append({
+            "id": f"s8_{uuid.uuid4().hex[:6]}",
+            "name": "Intro Center Hold",
+            "mode": "hold",
+            "start_sec": 0.0,
+            "end_sec": round(first_beat, 2),
+            "target_pos": calc_s8_rail_pos(0.50),
+            "speed": 200,
         })
         s7_moves.append({
             "id": f"s7_{uuid.uuid4().hex[:6]}",
-            "name": "Front Facing Stage",
+            "name": "Intro Center Facing",
             "start_sec": 0.0,
-            "end_sec": round(intro_end, 2),
+            "end_sec": round(first_beat, 2),
             "target_deg": 0.0,
             "transition_sec": 0.8,
         })
-        s8_moves.append({
-            "id": f"s8_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Stage Left Glide",
+        s1_moves.append({
+            "id": f"s1_{uuid.uuid4().hex[:6]}",
+            "name": "Intro Torso Stillness",
             "start_sec": 0.0,
-            "end_sec": round(min(intro_end * 0.5, 12.0), 2),
-            "target_pos": calc_s8_rail_pos(0.75),
-            "speed": 220,
+            "end_sec": round(first_beat, 2),
+            "groove_intensity": 0.0,
+            "sway_enabled": False,
         })
-        s8_moves.append({
-            "id": f"s8_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Return Center",
-            "start_sec": round(min(intro_end * 0.5, 12.0), 2),
-            "end_sec": round(intro_end, 2),
-            "target_pos": calc_s8_rail_pos(0.50),
-            "speed": 250,
-        })
-        vocal_moves.append({
-            "id": f"voc_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Storytelling",
-            "style": "conversational",
+        s5_moves.append({
+            "id": f"s5_{uuid.uuid4().hex[:6]}",
+            "name": "Intro Level Head",
             "start_sec": 0.0,
-            "end_sec": round(intro_end, 2),
+            "end_sec": round(first_beat, 2),
+            "tilt_deg": 0.0,
         })
 
-    # Divide active groove into 4-bar blocks (16 beats each)
-    groove_start = intro_end
-    total_beats = len(beat_times)
-    start_beat_idx = int(sum(1 for b in beat_times if b < groove_start))
+    for m_idx, b_start in enumerate(measure_indices):
+        m_st = float(beat_times[b_start])
+        b_end = b_start + 4
+        if b_end < len(beat_times):
+            m_et = float(beat_times[b_end])
+        elif m_idx == total_measures - 1:
+            m_et = duration
+        else:
+            m_et = float(beat_times[-1]) + 2.0
 
-    # Compile drop anticipation intervals
-    drop_windows = []
-    for d in drops:
-        d_sec = float(d.get("drop_sec", 0.0))
-        ant_st = float(d.get("anticipation_start_sec", max(0.0, d_sec - 4.0)))
-        vac_st = float(d.get("vacuum_start_sec", max(0.0, d_sec - 1.0)))
-        drop_windows.append({
-            "ant_st": ant_st,
-            "vac_st": vac_st,
-            "drop_sec": d_sec,
-            "burst_end": min(duration, d_sec + 3.5),
-        })
-
-    curr_b = start_beat_idx
-    block_num = 0
-
-    while curr_b < total_beats:
-        block_st_time = float(beat_times[curr_b])
-        end_b = min(curr_b + 16, total_beats - 1)
-        block_et_time = float(beat_times[end_b]) if end_b < total_beats else duration
-
-        if block_et_time <= block_st_time:
-            break
-
-        # Check if drop occurs in this 4-bar block
-        drop_in_block = next(
-            (dw for dw in drop_windows if dw["ant_st"] < block_et_time and dw["burst_end"] > block_st_time),
-            None
-        )
-
-        if drop_in_block:
-            # Leading block segment before drop anticipation
-            if drop_in_block["ant_st"] > block_st_time + 0.3:
-                body_moves.append({
-                    "id": f"bm_{uuid.uuid4().hex[:6]}",
-                    "name": "Intro Stage Presence" if block_num == 0 else "Pre-Riser Groove",
-                    "pose_name": "stand",
-                    "start_sec": round(block_st_time, 2),
-                    "end_sec": round(drop_in_block["ant_st"], 2),
-                    "transition_sec": 0.5,
-                })
-            # 1. Riser Buildup
-            if drop_in_block["ant_st"] < drop_in_block["vac_st"]:
-                body_moves.append({
-                    "id": f"bm_{uuid.uuid4().hex[:6]}",
-                    "name": "Snare Riser Energy Lift",
-                    "pose_name": "tiptoe",
-                    "start_sec": round(drop_in_block["ant_st"], 2),
-                    "end_sec": round(drop_in_block["vac_st"], 2),
-                    "transition_sec": 0.5,
-                })
-            # 2. Pre-Drop Suspense Hold
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": "Pre-Drop Suspense Hold",
-                "pose_name": "stand",
-                "start_sec": round(drop_in_block["vac_st"], 2),
-                "end_sec": round(drop_in_block["drop_sec"], 2),
-                "transition_sec": 0.2,
-            })
-            # 3. Bass Drop Impact
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": "Bass Drop Energy Release",
-                "pose_name": "tiptoe",
-                "start_sec": round(drop_in_block["drop_sec"], 2),
-                "end_sec": round(drop_in_block["burst_end"], 2),
-                "transition_sec": 0.15,
-            })
-            # S7 Drop Center
-            s7_moves.append({
-                "id": f"s7_{uuid.uuid4().hex[:6]}",
-                "name": "Center Drop Anchor",
-                "start_sec": round(drop_in_block["ant_st"], 2),
-                "end_sec": round(drop_in_block["burst_end"], 2),
-                "target_deg": 0.0,
-                "transition_sec": 0.3,
-            })
-            # S8 Gantry Explosive Glide (Clamped to safe 85% / 15% travel bounds)
-            s8_moves.append({
-                "id": f"s8_{uuid.uuid4().hex[:6]}",
-                "name": "Bass Drop Rail Sweep",
-                "start_sec": round(drop_in_block["drop_sec"], 2),
-                "end_sec": round(drop_in_block["burst_end"] + 1.0, 2),
-                "target_pos": calc_s8_rail_pos(0.85 if (block_num % 2 == 0) else 0.15),
-                "speed": 650,
-            })
-            vocal_moves.append({
-                "id": f"voc_{uuid.uuid4().hex[:6]}",
-                "name": "Drop Power Burst",
-                "style": "belting",
-                "start_sec": round(drop_in_block["drop_sec"], 2),
-                "end_sec": round(drop_in_block["burst_end"], 2),
-            })
-
-            # Advance past drop burst
-            curr_b = int(sum(1 for b in beat_times if b < (drop_in_block["burst_end"] + 0.2)))
-            block_num += 1
+        m_dur = m_et - m_st
+        if m_dur <= 0.05:
             continue
 
-        # Standard 4-Bar Block Patterns
-        pattern = block_num % 4
-        if pattern == 0:
-            # Center Stage Neutral
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": f"Center Stage Groove (Block {block_num + 1})",
-                "pose_name": "stand",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "transition_sec": 0.5,
-            })
-            s7_moves.append({
-                "id": f"s7_{uuid.uuid4().hex[:6]}",
-                "name": "Center Neutral",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_deg": 0.0,
-                "transition_sec": 0.4,
-            })
-            vocal_moves.append({
-                "id": f"voc_{uuid.uuid4().hex[:6]}",
-                "name": f"Verse Groove {block_num + 1}",
-                "style": "conversational",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-            })
-            if block_num % 2 == 0:
-                s8_moves.append({
-                    "id": f"s8_{uuid.uuid4().hex[:6]}",
-                    "name": "Stage Center Alignment",
-                    "start_sec": round(block_st_time, 2),
-                    "end_sec": round(block_st_time + 4.0, 2),
-                    "target_pos": calc_s8_rail_pos(0.50),
-                    "speed": 280,
-                })
+        # Find parent section
+        sec = next((s for s in sec_blocks if s["start_sec"] <= m_st < s["end_sec"]), None)
+        sec_type = sec["type"] if sec else "verse"
 
-        elif pattern == 1:
-            # Stage Left Gaze Shift (+25 deg)
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": f"Stage Left Focus (Block {block_num + 1})",
-                "pose_name": "stand",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "transition_sec": 0.5,
-            })
-            s7_moves.append({
-                "id": f"s7_{uuid.uuid4().hex[:6]}",
-                "name": "Stage Left Facing (+25°)",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_deg": 25.0,
-                "transition_sec": 0.5,
-            })
-            s8_moves.append({
-                "id": f"s8_{uuid.uuid4().hex[:6]}",
-                "name": "Stage Left Rail Drift",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_pos": calc_s8_rail_pos(0.70),
-                "speed": 220,
-            })
-            vocal_moves.append({
-                "id": f"voc_{uuid.uuid4().hex[:6]}",
-                "name": f"Stage Shift Vocal {block_num + 1}",
-                "style": "conversational",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-            })
+        # Check if near drop
+        is_drop_hit = any(abs(d_t - m_st) < 2.0 for d_t in drop_times)
+        is_pre_drop = any(0.0 < (d_t - m_st) <= 4.0 for d_t in drop_times)
 
-        elif pattern == 2:
-            # High Energy Upright Tiptoe
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": f"High Energy Lift (Block {block_num + 1})",
-                "pose_name": "tiptoe",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "transition_sec": 0.6,
-            })
-            s7_moves.append({
-                "id": f"s7_{uuid.uuid4().hex[:6]}",
-                "name": "High Energy Center",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_deg": 0.0,
-                "transition_sec": 0.4,
-            })
-            s8_moves.append({
-                "id": f"s8_{uuid.uuid4().hex[:6]}",
-                "name": "Center Rail Hold",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_pos": calc_s8_rail_pos(0.50),
-                "speed": 280,
-            })
-            vocal_moves.append({
-                "id": f"voc_{uuid.uuid4().hex[:6]}",
-                "name": f"High Energy Section {block_num + 1}",
-                "style": "belting",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-            })
+        # Check held notes in this measure
+        has_held_note = any(h["start_sec"] <= m_st < h["end_sec"] or m_st <= h["start_sec"] < m_et for h in held_notes)
 
+        # Track 1: Spine & Elevation (S2, S3, S4)
+        if is_drop_hit or sec_type == "chorus":
+            if m_idx % 2 == 0:
+                pose = "tiptoe" if "tiptoe" in choreo_poses else "stand"
+            else:
+                pose = "arch" if "arch" in choreo_poses else "tiptoe"
+            head_pitch = "up" if has_held_note else "level"
+            trans_sec = 0.35
+        elif is_pre_drop:
+            pose = "squat" if "squat" in choreo_poses else "stand"
+            head_pitch = "down"
+            trans_sec = 0.5
+        elif sec_type == "intro":
+            pose = "stand"
+            head_pitch = "level"
+            trans_sec = 0.8
+        elif sec_type == "bridge":
+            pose = "squat" if m_idx % 2 == 0 else "arch"
+            head_pitch = "up" if has_held_note else "down"
+            trans_sec = 0.6
+        elif sec_type == "outro":
+            pose = "stand"
+            head_pitch = "level"
+            trans_sec = 1.0
         else:
-            # Stage Right Gaze Shift (-25 deg)
-            body_moves.append({
-                "id": f"bm_{uuid.uuid4().hex[:6]}",
-                "name": f"Stage Right Focus (Block {block_num + 1})",
-                "pose_name": "stand",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "transition_sec": 0.5,
-            })
-            s7_moves.append({
-                "id": f"s7_{uuid.uuid4().hex[:6]}",
-                "name": "Stage Right Facing (-25°)",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_deg": -25.0,
-                "transition_sec": 0.5,
-            })
-            s8_moves.append({
-                "id": f"s8_{uuid.uuid4().hex[:6]}",
-                "name": "Stage Right Rail Drift",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-                "target_pos": calc_s8_rail_pos(0.30),
-                "speed": 220,
-            })
-            vocal_moves.append({
-                "id": f"voc_{uuid.uuid4().hex[:6]}",
-                "name": f"Stage Right Vocal {block_num + 1}",
-                "style": "conversational",
-                "start_sec": round(block_st_time, 2),
-                "end_sec": round(block_et_time, 2),
-            })
+            # Verse groove: cycle between stand, squat, and arch
+            v_cycle = m_idx % 4
+            if v_cycle in [0, 2]:
+                pose = "stand"
+            elif v_cycle == 1:
+                pose = "squat" if "squat" in choreo_poses else "stand"
+            else:
+                pose = "arch" if "arch" in choreo_poses else "stand"
+            head_pitch = "up" if has_held_note else "level"
+            trans_sec = 0.5
 
-        curr_b = end_b
-        block_num += 1
+        spine_moves.append({
+            "id": f"sp_{uuid.uuid4().hex[:6]}",
+            "name": f"M{m_idx + 1} {pose.title()}",
+            "pose_name": pose,
+            "head_pitch": head_pitch,
+            "start_sec": round(m_st, 2),
+            "end_sec": round(m_et, 2),
+            "transition_sec": trans_sec,
+        })
 
-    # 5. Head and Jaw Track
-    head_jaw_moves = [
+        # Track 2: Gantry Rail (S8)
+        if is_drop_hit:
+            g_mode = "full_glide"
+            g_target = calc_s8_rail_pos(0.85 if m_idx % 2 == 0 else 0.15)
+            g_spd = 650
+        elif sec_type == "chorus":
+            g_mode = "full_glide"
+            g_target = calc_s8_rail_pos(0.70 if m_idx % 2 == 0 else 0.30)
+            g_spd = 450
+        elif sec_type in ["intro", "outro"]:
+            g_mode = "hold"
+            g_target = calc_s8_rail_pos(0.50)
+            g_spd = 200
+        else:
+            # Verse: alternate late_move, early_settle, hold
+            v_gantry_cycle = m_idx % 4
+            if v_gantry_cycle == 0:
+                g_mode = "hold"
+                g_target = calc_s8_rail_pos(0.50)
+                g_spd = 250
+            elif v_gantry_cycle == 1:
+                g_mode = "early_settle"
+                g_target = calc_s8_rail_pos(0.65)
+                g_spd = 280
+            elif v_gantry_cycle == 2:
+                g_mode = "hold"
+                g_target = calc_s8_rail_pos(0.65)
+                g_spd = 250
+            else:
+                g_mode = "late_move"
+                g_target = calc_s8_rail_pos(0.35)
+                g_spd = 280
+
+        s8_moves.append({
+            "id": f"s8_{uuid.uuid4().hex[:6]}",
+            "name": f"M{m_idx + 1} Rail {g_mode.replace('_', ' ').title()}",
+            "mode": g_mode,
+            "start_sec": round(m_st, 2),
+            "end_sec": round(m_et, 2),
+            "target_pos": g_target,
+            "speed": g_spd,
+        })
+
+        # Track 3: Pedestal Facing (S7)
+        if is_drop_hit or sec_type in ["chorus", "intro", "outro"]:
+            target_deg = 0.0
+            p_trans = 0.35 if is_drop_hit else 0.6
+        else:
+            # Staging angle shifts every 2 measures
+            p_cycle = (m_idx // 2) % 3
+            if p_cycle == 0:
+                target_deg = 0.0
+            elif p_cycle == 1:
+                target_deg = 25.0
+            else:
+                target_deg = -25.0
+            p_trans = 0.5
+
+        s7_moves.append({
+            "id": f"s7_{uuid.uuid4().hex[:6]}",
+            "name": f"M{m_idx + 1} Pedestal ({int(target_deg)}°)",
+            "start_sec": round(m_st, 2),
+            "end_sec": round(m_et, 2),
+            "target_deg": target_deg,
+            "transition_sec": p_trans,
+        })
+
+        # Track 4: Torso Pan & Groove Modifier (S1)
+        if sec_type == "chorus" or is_drop_hit:
+            groove_val = max(0.75, min(1.0, danceability * 1.2))
+        elif sec_type == "verse":
+            groove_val = max(0.30, min(0.75, danceability * 0.8))
+        elif sec_type == "bridge":
+            groove_val = 0.20
+        else:
+            groove_val = 0.0
+
+        s1_moves.append({
+            "id": f"s1_{uuid.uuid4().hex[:6]}",
+            "name": f"M{m_idx + 1} Groove {int(groove_val * 100)}%",
+            "start_sec": round(m_st, 2),
+            "end_sec": round(m_et, 2),
+            "groove_intensity": round(groove_val, 2),
+            "sway_enabled": groove_val > 0.15,
+        })
+
+        # Track 5: Head Tilt (S5)
+        if is_drop_hit:
+            tilt = 0.0
+        elif sec_type == "verse" and m_idx % 2 == 1:
+            tilt = 12.0 if (m_idx // 2) % 2 == 0 else -12.0
+        else:
+            tilt = 0.0
+
+        s5_moves.append({
+            "id": f"s5_{uuid.uuid4().hex[:6]}",
+            "name": f"M{m_idx + 1} Tilt ({int(tilt)}°)",
+            "start_sec": round(m_st, 2),
+            "end_sec": round(m_et, 2),
+            "tilt_deg": tilt,
+        })
+
+    # Track 6: Full-track Singing Jaw
+    jaw_moves = [
         {
-            "id": f"hj_{uuid.uuid4().hex[:6]}",
-            "name": "Full Performance Vocal & Head Agility",
+            "id": f"jw_{uuid.uuid4().hex[:6]}",
+            "name": "50 Hz Neural Vocal Lip-Sync",
             "start_sec": 0.0,
             "end_sec": round(duration, 2),
-            "nod_enabled": True,
             "jaw_mode": "singing",
         }
     ]
 
     return {
-        "version": "2.0.0",
+        "version": "3.0.0",
         "duration": round(duration, 2),
+        "danceability": danceability,
         "settings": dict(DEFAULT_SETTINGS),
         "poses": choreo_poses,
         "sections": sec_blocks,
         "tracks": {
-            "body_pose": body_moves,
-            "s7_pedestal": s7_moves,
+            "spine_gaze": spine_moves,
             "s8_gantry": s8_moves,
-            "head_jaw": head_jaw_moves,
-            "vocal_style": vocal_moves,
+            "s7_pedestal": s7_moves,
+            "s1_torso": s1_moves,
+            "s5_head_tilt": s5_moves,
+            "s6_jaw": jaw_moves,
         },
     }
 
@@ -565,24 +496,25 @@ class BeatStudioManager:
         poses = choreo_data.get("poses") or load_dance_presets()
 
         clean_choreo = {
-            "version": choreo_data.get("version", "2.0.0"),
+            "version": choreo_data.get("version", "3.0.0"),
             "duration": float(choreo_data.get("duration", track_meta.get("duration", 0.0))),
             "settings": choreo_data.get("settings", DEFAULT_SETTINGS),
             "poses": poses,
             "sections": choreo_data.get("sections", []),
             "tracks": choreo_data.get("tracks", {
-                "body_pose": [],
-                "s7_pedestal": [],
+                "spine_gaze": [],
                 "s8_gantry": [],
-                "head_jaw": [],
-                "vocal_style": [],
+                "s7_pedestal": [],
+                "s1_torso": [],
+                "s5_head_tilt": [],
+                "s6_jaw": [],
             }),
             "updated_at": time.time(),
         }
         track_meta["choreography"] = clean_choreo
         manifest[track_id] = track_meta
         self._save_manifest(manifest)
-        self.logger.info(f"Successfully saved 4-bar choreography for '{track_meta.get('title')}' ({track_id}).")
+        self.logger.info(f"Successfully saved measure choreography for '{track_meta.get('title')}' ({track_id}).")
         return {"status": "ok", "track_id": track_id, "updated_at": clean_choreo["updated_at"]}
 
     def auto_generate_choreography(self, track_id: str, style: str = "balanced") -> Dict[str, Any]:
@@ -670,9 +602,23 @@ class BeatStudioManager:
             backend.move_target(8, ticks, speed=600, max_t=800)
             return {"status": "ok", "channel": channel, "target_pos": ticks}
 
-        elif channel == "body_pose":
-            if isinstance(target_val, dict):
+        elif channel in ["spine_gaze", "body_pose"]:
+            if isinstance(target_val, str):
+                poses = load_dance_presets()
+                if target_val in poses:
+                    return self.preview_pose_on_robot(backend, poses[target_val])
+            elif isinstance(target_val, dict):
                 return self.preview_pose_on_robot(backend, target_val)
+
+        elif channel == "s1_torso":
+            deg = float(target_val)
+            norm_pan = float(max(-100.0, min(100.0, deg)))
+            return {"status": "ok", "channel": channel, "torso_pan": norm_pan}
+
+        elif channel == "s5_head_tilt":
+            deg = float(target_val)
+            norm_roll = float(max(-100.0, min(100.0, deg)))
+            return {"status": "ok", "channel": channel, "head_tilt": norm_roll}
 
         return {"status": "error", "message": f"Unsupported channel '{channel}'"}
 

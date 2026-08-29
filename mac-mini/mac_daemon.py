@@ -26,6 +26,20 @@ import soundfile as sf
 import librosa
 import torch
 
+try:
+    import essentia.standard as es
+except ImportError:
+    es = None
+
+try:
+    from sklearn.cluster import AgglomerativeClustering
+    from sklearn.preprocessing import StandardScaler
+    from scipy.ndimage import uniform_filter1d
+except ImportError:
+    AgglomerativeClustering = None
+    StandardScaler = None
+    uniform_filter1d = None
+
 # Base directories
 BASE_DIR = Path("/Users/twinpeakstownie/reachy_mini")
 REACHY_MIX_DIR = BASE_DIR / "reachy_ultradancemix_9000"
@@ -163,8 +177,42 @@ def download_audio_from_youtube(url: str, track_id: str) -> Path:
     logger.info(f"Standardized audio to 44.1kHz stereo: {target_wav}")
     return target_wav
 
+def infer_section_labels(segments: list[dict], total_duration: float) -> list[dict]:
+    """Infers structural labels (intro, verse, chorus, bridge, outro) from segment energy z-scores and timeline position."""
+    if not segments:
+        return segments
+
+    energies = np.array([float(s.get("energy", 0.0)) for s in segments])
+    mean_e = float(np.mean(energies)) if len(energies) > 0 else 0.0
+    std_e = float(np.std(energies)) if len(energies) > 0 else 1.0
+
+    for i, seg in enumerate(segments):
+        pos = float(seg["start_sec"]) / max(1.0, total_duration)
+        dur = float(seg.get("duration", seg["end_sec"] - seg["start_sec"]))
+        e = float(seg.get("energy", 0.0))
+        z = (e - mean_e) / (std_e + 1e-6)
+
+        if i == 0:
+            label = "intro" if (dur < 16.0 or z < -0.3) else "verse"
+        elif i == len(segments) - 1:
+            label = "outro" if (dur < 16.0 or z < 0.1) else "chorus"
+        else:
+            if z > 0.4:
+                label = "chorus"
+            elif dur < 8.0:
+                label = "bridge"
+            elif pos < 0.65:
+                label = "verse"
+            else:
+                label = "chorus" if z > 0.0 else "bridge"
+
+        seg["type"] = label
+        seg["energy_score"] = round(float(z), 3)
+
+    return segments
+
 def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") -> dict:
-    logger.info(f"Starting dual-engine analysis for {track_id}...")
+    logger.info(f"Starting Essentia dual-engine analysis for {track_id}...")
     
     audio_stereo, sr = librosa.load(str(wav_path), sr=44100, mono=False)
     if audio_stereo.ndim == 1:
@@ -248,22 +296,125 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
             "duration": round((len(norm_env) - cur_start) / fps, 2)
         })
 
-    # 3. Librosa Rhythm & Structural Drop Detection
-    audio_mono = librosa.to_mono(audio_stereo)
-    tempo, beat_frames = librosa.beat.beat_track(y=audio_mono, sr=sr)
-    if isinstance(tempo, np.ndarray):
-        tempo = float(tempo[0])
-    tempo = float(tempo)
-    beat_times = librosa.frames_to_time(beat_frames, sr=sr).round(3).tolist()
-    downbeats = beat_times[::4]
+    # 3. Essentia / Rhythm & Structural Analysis
+    audio_mono = np.mean(audio_stereo, axis=0)
+    
+    danceability = 0.5
+    dynamic_complexity = 0.5
+    beat_times = []
+    downbeats = []
+    sections = []
+    tempo = 120.0
 
+    if es is not None:
+        try:
+            loader = es.MonoLoader(filename=str(wav_path), sampleRate=44100)
+            y_es = loader()
+            
+            rhythm_extractor = es.RhythmExtractor2013()
+            bpm_val, beats_arr, beats_conf, _, _ = rhythm_extractor(y_es)
+            tempo = float(bpm_val)
+            beat_times = [round(float(b), 3) for b in beats_arr]
+            downbeats = beat_times[::4]
+            
+            try:
+                danceability = round(float(es.Danceability()(y_es)), 3)
+            except Exception:
+                danceability = 0.5
+                
+            try:
+                _, dyn_comp = es.DynamicComplexity()(y_es)
+                dynamic_complexity = round(float(dyn_comp), 3)
+            except Exception:
+                dynamic_complexity = 0.5
+
+            # Essentia MFCC + Agglomerative clustering for structural segmentation
+            frame_size = 2048
+            hop_size = 512
+            window = es.Windowing(type='hann')
+            spectrum = es.Spectrum()
+            mfcc_ext = es.MFCC(numberCoefficients=13)
+            
+            mfccs_list = []
+            frame_times = []
+            for st_i in range(0, len(y_es) - frame_size, hop_size):
+                f_win = window(y_es[st_i:st_i + frame_size])
+                f_spec = spectrum(f_win)
+                _, f_mfcc = mfcc_ext(f_spec)
+                mfccs_list.append(f_mfcc)
+                frame_times.append(st_i / sr)
+                
+            if len(mfccs_list) > 10 and AgglomerativeClustering is not None and StandardScaler is not None:
+                mfccs_arr = np.array(mfccs_list)
+                mfccs_norm = StandardScaler().fit_transform(mfccs_arr)
+                if uniform_filter1d is not None:
+                    mfccs_norm = uniform_filter1d(mfccs_norm, size=9, axis=0)
+                    
+                n_seg = max(3, min(8, int(duration // 20)))
+                clust = AgglomerativeClustering(n_clusters=n_seg, linkage='ward')
+                c_labels = clust.fit_predict(mfccs_norm)
+                
+                b_indices = [0]
+                for li in range(1, len(c_labels)):
+                    if c_labels[li] != c_labels[li - 1]:
+                        b_indices.append(li)
+                b_indices.append(len(c_labels) - 1)
+                
+                b_times = [frame_times[b] for b in b_indices[:-1]] + [duration]
+                b_times = [0.0] + sorted(list(set([round(t, 2) for t in b_times if 0.0 < t < duration]))) + [round(duration, 2)]
+                
+                raw_sections = []
+                rms_ext = es.RMS()
+                for s_i in range(len(b_times) - 1):
+                    st_sec = b_times[s_i]
+                    en_sec = b_times[s_i + 1]
+                    if en_sec - st_sec < 2.0:
+                        continue
+                    st_sample = int(st_sec * sr)
+                    en_sample = int(en_sec * sr)
+                    seg_audio = y_es[st_sample:en_sample]
+                    seg_rms = float(rms_ext(seg_audio)) if len(seg_audio) > 0 else 0.0
+                    seg_beats = sum(1 for b in beat_times if st_sec <= b < en_sec)
+                    raw_sections.append({
+                        "start_sec": st_sec,
+                        "end_sec": en_sec,
+                        "duration": round(en_sec - st_sec, 2),
+                        "energy": round(seg_rms, 4),
+                        "beat_count": seg_beats,
+                    })
+                sections = infer_section_labels(raw_sections, duration)
+        except Exception as es_err:
+            logger.warning(f"Essentia extraction exception: {es_err}")
+
+    # Fallback to librosa if Essentia was unavailable or failed
+    if not beat_times:
+        tempo_val, beat_frames = librosa.beat.beat_track(y=audio_mono, sr=sr)
+        tempo = float(tempo_val[0]) if isinstance(tempo_val, np.ndarray) else float(tempo_val)
+        beat_times = librosa.frames_to_time(beat_frames, sr=sr).round(3).tolist()
+        downbeats = beat_times[::4]
+
+    if not sections:
+        sections = []
+        for idx in range(0, max(1, len(beat_times)), 16):
+            st = float(beat_times[idx]) if idx < len(beat_times) else 0.0
+            end_idx = min(idx + 16, len(beat_times) - 1)
+            et = float(beat_times[end_idx]) if end_idx < len(beat_times) else duration
+            sections.append({
+                "type": "intro" if idx == 0 and st < 5.0 else "verse",
+                "start_sec": round(st, 2),
+                "end_sec": round(et, 2),
+                "duration": round(et - st, 2),
+                "energy": 0.5,
+                "beat_count": end_idx - idx
+            })
+
+    # Sub-bass drop detection (30 - 120 Hz)
     stft_spec = np.abs(librosa.stft(audio_mono, n_fft=2048, hop_length=hop_length_50hz))
     freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
-    
     idx_sub = np.where((freqs >= 30) & (freqs <= 120))[0]
     sub_energy = np.mean(stft_spec[idx_sub, :], axis=0) if len(idx_sub) else np.zeros(num_frames)
     norm_sub = sub_energy / (np.max(sub_energy) + 1e-6)
-    
+
     drops = []
     window_pts = int(fps * 2.0)
     for i in range(window_pts, len(norm_sub) - window_pts, int(fps * 0.5)):
@@ -278,38 +429,13 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
                     "vacuum_start_sec": max(0.0, round(drop_sec - 1.0, 2))
                 })
 
-    # Extract real acoustic segments using Librosa agglomerative clustering on MFCCs
-    try:
-        mfcc = librosa.feature.mfcc(y=audio_mono, sr=sr, n_mfcc=13)
-        num_seg = max(2, min(10, int(duration // 25)))
-        bound_frames = librosa.segment.agglomerative(mfcc, k=num_seg)
-        bound_times = librosa.frames_to_time(bound_frames, sr=sr).tolist()
-        bound_times = [0.0] + sorted(list(set([round(t, 2) for t in bound_times if 0.0 < t < duration]))) + [round(duration, 2)]
-
-        sections = []
-        for idx in range(len(bound_times) - 1):
-            s_start = bound_times[idx]
-            s_end = bound_times[idx + 1]
-            if s_end - s_start < 2.0:
-                continue
-            sections.append({
-                "type": f"SECTION_{idx + 1}",
-                "start_sec": s_start,
-                "end_sec": s_end
-            })
-    except Exception as seg_err:
-        logger.warning(f"Acoustic segmentation warning: {seg_err}")
-        sections = [{
-            "type": "SECTION_1",
-            "start_sec": 0.0,
-            "end_sec": round(duration, 2)
-        }]
-
     manifest = {
         "track_id": track_id,
         "title": title or track_id,
         "duration": round(duration, 2),
         "bpm": round(tempo, 1),
+        "danceability": danceability,
+        "dynamic_complexity": dynamic_complexity,
         "fps": fps,
         "beat_times": beat_times,
         "downbeats": downbeats,
