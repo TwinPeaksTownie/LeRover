@@ -296,9 +296,23 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
             "duration": round((len(norm_env) - cur_start) / fps, 2)
         })
 
-    # 3. Essentia / Rhythm & Structural Analysis
+    # Extract 50Hz Full Audio Amplitude Envelope (Normalized 0.0 - 1.0)
     audio_mono = np.mean(audio_stereo, axis=0)
-    
+    audio_rms = np.zeros(num_frames, dtype=np.float32)
+    for i in range(num_frames):
+        st = i * hop_length_50hz
+        en = min(len(audio_mono), st + frame_len)
+        if st < len(audio_mono):
+            chunk = audio_mono[st:en]
+            audio_rms[i] = np.sqrt(np.mean(chunk**2)) if len(chunk) > 0 else 0.0
+    a_peak = np.percentile(audio_rms, 99) if len(audio_rms) > 0 else 1.0
+    if a_peak > 1e-4:
+        norm_audio_env = np.clip(audio_rms / a_peak, 0.0, 1.0)
+    else:
+        norm_audio_env = np.zeros_like(audio_rms)
+    amplitude_envelope = [round(float(v), 3) for v in norm_audio_env]
+
+    # 3. Essentia / Rhythm & Structural Analysis
     danceability = 0.5
     dynamic_complexity = 0.5
     beat_times = []
@@ -442,7 +456,8 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         "drops": drops,
         "sections": sections,
         "held_notes": held_notes,
-        "mouth_envelope_50hz": mouth_envelope
+        "mouth_envelope_50hz": mouth_envelope,
+        "amplitude_envelope": amplitude_envelope
     }
 
     manifest_path = CACHE_DIR / f"{track_id}_manifest.json"

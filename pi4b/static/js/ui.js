@@ -1216,6 +1216,97 @@ export function renderTimeline() {
     renderLaneBlocks(document.getElementById('bbLaneS5'), tracks.s5_head_tilt, 's5_head_tilt', 'block-s5');
     renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-head');
 
+    // 3.5 Render Audio Waveform Visualizer Lane (Dark Blue Background, Cyan Ticks, Red Drop Lines)
+    const waveCanvas = document.getElementById('bbWaveformCanvas');
+    if (waveCanvas) {
+        const laneW = Math.max(1000, duration * pps);
+        const laneH = 46;
+        waveCanvas.width = laneW;
+        waveCanvas.height = laneH;
+        waveCanvas.style.left = `${labelOffset}px`;
+        waveCanvas.style.width = `${laneW}px`;
+        waveCanvas.style.height = `${laneH}px`;
+
+        const ctx = waveCanvas.getContext('2d');
+        if (ctx) {
+            // Dark navy blue background
+            ctx.fillStyle = '#060d1f';
+            ctx.fillRect(0, 0, laneW, laneH);
+
+            // Subtle horizontal center baseline
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, laneH / 2);
+            ctx.lineTo(laneW, laneH / 2);
+            ctx.stroke();
+
+            const ampEnv = activeChoreoData.amplitude_envelope || activeChoreoData.mouth_envelope_50hz || [];
+            const drops = activeChoreoData.drops || [];
+            const midY = laneH / 2;
+            const maxH = (laneH / 2) - 4;
+
+            if (ampEnv && ampEnv.length > 0) {
+                const fps = 50.0;
+                const totalSamples = ampEnv.length;
+                const barSpacing = 2.5;
+                const totalBars = Math.floor(laneW / barSpacing);
+
+                for (let b = 0; b < totalBars; b++) {
+                    const x = b * barSpacing;
+                    const timeAtX = x / pps;
+                    const sampleIdx = Math.floor(timeAtX * fps);
+                    if (sampleIdx < totalSamples) {
+                        let rawVal = ampEnv[sampleIdx];
+                        if (rawVal > 1.0) rawVal = rawVal / 45.0;
+                        const amp = Math.max(0.06, Math.min(1.0, rawVal));
+                        const barHeight = amp * maxH;
+
+                        // Cyan / light blue vertical tick gradient
+                        const grad = ctx.createLinearGradient(0, midY - barHeight, 0, midY + barHeight);
+                        grad.addColorStop(0, '#38bdf8');   // Light blue
+                        grad.addColorStop(0.5, '#00e5ff'); // Bright cyan
+                        grad.addColorStop(1, '#0284c7');   // Deeper cyan
+
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(x, midY - barHeight, 1.6, barHeight * 2);
+                    }
+                }
+            } else {
+                // Beat-aligned visualizer ticks fallback
+                const beatTimes = activeChoreoData.beat_times || [];
+                beatTimes.forEach((bt, idx) => {
+                    const bx = bt * pps;
+                    const isDownbeat = (idx % 4 === 0);
+                    const bh = isDownbeat ? maxH * 0.85 : maxH * 0.45;
+                    ctx.fillStyle = isDownbeat ? '#00e5ff' : '#38bdf8';
+                    ctx.fillRect(bx, midY - bh, 1.8, bh * 2);
+                });
+            }
+
+            // Draw thin vertical red lines for detected drops
+            drops.forEach(d => {
+                const dropSec = Number(d.drop_sec || 0);
+                const dropX = dropSec * pps;
+
+                // Red drop marker line
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(dropX, 0);
+                ctx.lineTo(dropX, laneH);
+                ctx.stroke();
+
+                // Drop tag banner
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(dropX - 1, 0, 3, 10);
+                ctx.font = 'bold 8.5px monospace';
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fillText('⚡DROP', dropX + 4, 9);
+            });
+        }
+    }
+
     // 4. In / Out Markers & Shaded Range Highlight
     const inMarkerEl = document.getElementById('bbInMarker');
     const outMarkerEl = document.getElementById('bbOutMarker');

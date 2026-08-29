@@ -479,10 +479,11 @@ class BeatStudioManager:
         choreo["track_id"] = track_id
         choreo["title"] = track_meta.get("title", track_id)
         choreo["artist"] = track_meta.get("artist", "Unknown Artist")
-        choreo["tempo"] = float(track_meta.get("bpm") or track_meta.get("tempo") or analysis.get("bpm") or analysis.get("tempo", 0.0))
-        if choreo["tempo"] <= 0.0:
-            raise ValueError(f"Invalid tempo for track '{track_id}'.")
+        choreo["tempo"] = float(track_meta.get("bpm") or track_meta.get("tempo") or analysis.get("bpm") or analysis.get("tempo", 120.0))
         choreo["beat_times"] = analysis.get("beat_times", [])
+        choreo["drops"] = analysis.get("drops", [])
+        choreo["amplitude_envelope"] = analysis.get("amplitude_envelope", [])
+        choreo["mouth_envelope_50hz"] = analysis.get("mouth_envelope_50hz", [])
 
         return choreo
 

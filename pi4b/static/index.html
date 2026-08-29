@@ -447,6 +447,14 @@
                             <div id="bbInMarker" class="bb-in-marker" style="display: none; left: 0;"></div>
                             <div id="bbOutMarker" class="bb-out-marker" style="display: none; left: 0;"></div>
 
+                            <!-- Audio Waveform Lane (Amplitude Envelopes & Sub-Bass Drops) -->
+                            <div class="bb-track-row bb-waveform-row" id="bbTrackRowWaveform">
+                                <div class="bb-track-label" style="color: #38bdf8; font-size: 9.5px; line-height: 1.1;">AUDIO<br>WAVE</div>
+                                <div class="bb-track-lane bb-waveform-lane" id="bbLaneWaveform">
+                                    <canvas id="bbWaveformCanvas" style="position: absolute; top: 0; left: 0; height: 100%;"></canvas>
+                                </div>
+                            </div>
+
                             <!-- Lane 1: Spine & Elevation (Servos 2-4) -->
                             <div class="bb-track-row" id="bbTrackRowBody">
                                 <div class="bb-track-label">SPINE (S2-4)</div>

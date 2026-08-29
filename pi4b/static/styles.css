@@ -285,6 +285,18 @@ body {
     background: #08080f;
 }
 
+.bb-waveform-row {
+    height: 46px;
+    background: #050b18;
+    border-bottom: 1.5px solid #1e293b;
+}
+
+.bb-waveform-lane {
+    background: #050b18;
+    position: relative;
+    overflow: hidden;
+}
+
 .bb-move-block {
     position: absolute;
     top: 5px;
