@@ -629,19 +629,36 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(req, timeout=3.0) as resp:
                     resp_body = resp.read()
-                    try:
-                        st_req = urllib.request.Request(f"http://{p500_ip}:8085/api/status")
-                        with urllib.request.urlopen(st_req, timeout=1.0) as st_resp:
-                            if st_resp.status == 200:
-                                STATUS_CACHE["hardware_telemetry"] = json.loads(st_resp.read().decode())
-                    except Exception as st_err:
-                        print(f"[Telemetry] Status refresh warning: {st_err}", flush=True)
+                    if path == "/api/kill_all":
+                        try:
+                            script_path = os.path.join(DIRECTORY, "restart_daemon.py")
+                            subprocess.run([sys.executable, script_path, "stop"], capture_output=True, timeout=6)
+                            STATUS_CACHE["daemon_running"] = False
+                            STATUS_CACHE["hardware_telemetry"] = None
+                        except Exception as stop_err:
+                            print(f"[KillAll] Service stop warning: {stop_err}", flush=True)
+                    else:
+                        try:
+                            st_req = urllib.request.Request(f"http://{p500_ip}:8085/api/status")
+                            with urllib.request.urlopen(st_req, timeout=1.0) as st_resp:
+                                if st_resp.status == 200:
+                                    STATUS_CACHE["hardware_telemetry"] = json.loads(st_resp.read().decode())
+                        except Exception as st_err:
+                            print(f"[Telemetry] Status refresh warning: {st_err}", flush=True)
                     self.send_response(resp.status)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
                     self.wfile.write(resp_body)
                     return
             except Exception as e:
+                if path == "/api/kill_all":
+                    try:
+                        script_path = os.path.join(DIRECTORY, "restart_daemon.py")
+                        subprocess.run([sys.executable, script_path, "stop"], capture_output=True, timeout=6)
+                        STATUS_CACHE["daemon_running"] = False
+                        STATUS_CACHE["hardware_telemetry"] = None
+                    except Exception:
+                        pass
                 play_sound_helper(kind="incorrect")
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")

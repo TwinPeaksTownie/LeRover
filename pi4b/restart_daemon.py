@@ -32,13 +32,13 @@ def run_systemctl(action: str) -> bool:
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-        print(f"Master daemon {action} ({target_ip}): code={res.returncode} out='{res.stdout.strip()}' err='{res.stderr.strip()}'")
+        print(f"Sewer daemon {action} ({target_ip}): code={res.returncode} out='{res.stdout.strip()}' err='{res.stderr.strip()}'")
         return res.returncode == 0
     except subprocess.TimeoutExpired:
-        print(f"Master daemon {action} ({target_ip}) timed out after 8s")
+        print(f"Sewer daemon {action} ({target_ip}) timed out after 8s")
         return False
     except Exception as e:
-        print(f"Master daemon {action} ({target_ip}) failed: {e}")
+        print(f"Sewer daemon {action} ({target_ip}) failed: {e}")
         return False
 
 

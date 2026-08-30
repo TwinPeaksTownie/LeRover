@@ -629,7 +629,7 @@ export function triggerPi500MasterDaemonRestart() {
     const txt = document.getElementById('masterDaemonBtnText');
     if (btn) {
         btn.style.opacity = '0.5';
-        if (txt) txt.innerText = action === 'stop' ? '⌛ STOPPING DAEMON...' : '⌛ STARTING DAEMON...';
+        if (txt) txt.innerText = action === 'stop' ? '⌛ STOPPING SEWER DAEMON...' : '⌛ STARTING SEWER DAEMON...';
     }
     api.sendMasterDaemonRestart(action)
         .then(r => r.json())
@@ -641,7 +641,7 @@ export function triggerPi500MasterDaemonRestart() {
         .catch(() => {
             if (btn) {
                 btn.style.opacity = '1.0';
-                if (txt) txt.innerText = '❌ DAEMON ERROR';
+                if (txt) txt.innerText = '❌ SEWER DAEMON ERROR';
             }
         });
 }

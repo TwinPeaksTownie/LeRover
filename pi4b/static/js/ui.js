@@ -212,7 +212,7 @@ export function renderButtonStates() {
         }
     }
 
-    // Master daemon button
+    // Sewer daemon button
     const masterBtn = document.getElementById('masterDaemonBtn');
     const masterBtnText = document.getElementById('masterDaemonBtnText');
     const masterBtnSub = document.getElementById('masterDaemonBtnSub');
@@ -221,7 +221,7 @@ export function renderButtonStates() {
             masterBtn.style.borderColor = '#00ff66';
             masterBtn.style.color = '#00ff66';
             masterBtn.style.background = 'rgba(0, 255, 102, 0.12)';
-            if (masterBtnText) masterBtnText.innerText = '🟢 STOP MASTER DAEMON';
+            if (masterBtnText) masterBtnText.innerText = '🟢 STOP SEWER DAEMON';
             if (masterBtnSub) {
                 masterBtnSub.innerText = '(PORT 8085 RUNNING)';
                 masterBtnSub.style.color = '#aaffcc';
@@ -230,7 +230,7 @@ export function renderButtonStates() {
             masterBtn.style.borderColor = '#ffaa00';
             masterBtn.style.color = '#ffffff';
             masterBtn.style.background = '#181818';
-            if (masterBtnText) masterBtnText.innerText = '🤖 START MASTER DAEMON';
+            if (masterBtnText) masterBtnText.innerText = '🤖 START SEWER DAEMON';
             if (masterBtnSub) {
                 masterBtnSub.innerText = '(DAEMON STOPPED)';
                 masterBtnSub.style.color = '#ffcc88';
