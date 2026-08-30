@@ -750,9 +750,11 @@ class MasterApiHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/arm/move_norm":
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
-            target = body.get("target") or body.get("normalized") or body
+            target = body.get("target") or body.get("normalized")
+            if not target:
+                return self._send_json({"status": "error", "message": "Missing required 'target' parameter"}, 400)
             duration = float(body.get("duration", 1.5))
-            steps = int(body.get("steps", max(10, int(duration * 40))))
+            steps = int(body.get("steps", int(round(duration * 50))))
             ok, msg = self.backend.interpolate_arm_norm(target, duration=duration, steps=steps)
             self._send_json({"status": "ok" if ok else "error", "message": msg, "target": target}, 200 if ok else 400)
 

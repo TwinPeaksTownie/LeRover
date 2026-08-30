@@ -52,15 +52,20 @@ def main():
     logging.info("Streaming ZMQ relative percentage frames...")
     n = 0
     consecutive_zmq_errors = 0
+    consecutive_telemetry_errors = 0
     try:
         while True:
             loop_start = time.time()
             
             try:
                 action = leader.get_action()
+                consecutive_telemetry_errors = 0
             except Exception as e:
-                logging.debug(f"Telemetry error: {e}")
-                time.sleep(0.01)
+                consecutive_telemetry_errors += 1
+                logging.error("Leader arm telemetry read error (%d/5): %s", consecutive_telemetry_errors, e)
+                if consecutive_telemetry_errors >= 5:
+                    raise RuntimeError(f"Leader arm telemetry lost after {consecutive_telemetry_errors} consecutive failures: {e}")
+                time.sleep(0.02)
                 continue
 
             if action and isinstance(action, dict):

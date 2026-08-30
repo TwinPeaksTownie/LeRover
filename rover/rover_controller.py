@@ -44,11 +44,13 @@ class RoverController:
         self.watchdog_timeout = watchdog_timeout
         self.mock_mode = mock_mode
 
-        # Fallback to mock mode automatically if on Windows or serial port does not exist
+        # Enforce strict serial port presence when mock_mode is False (No silent auto-mock fallbacks)
         if not self.mock_mode:
-            if os.name == "nt" or (not os.path.exists(self.serial_port) and not self.serial_port.startswith("mock")):
-                self.mock_mode = True
-                logger.info("RoverController automatically running in MOCK mode (serial port '%s' not present).", self.serial_port)
+            if not self.serial_port.startswith("mock") and not os.path.exists(self.serial_port):
+                raise FileNotFoundError(
+                    f"Rover hardware serial port '{self.serial_port}' not found. "
+                    f"Specify mock_mode=True explicitly to enable mock hardware simulation."
+                )
 
         self._lock = threading.Lock()
         self._target_x: float = 0.0

@@ -479,11 +479,16 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         raise RuntimeError(f"Failed to detect musical beats in {wav_path}")
     downbeats = beat_times[::4]
 
-    # Empirical dynamic complexity & danceability regularity
+    # Grounded dynamic complexity & danceability pulse regularity (Zero synthetic scaling multipliers)
     onset_env = librosa.onset.onset_strength(y=audio_mono, sr=sr)
     pulse = librosa.beat.plp(onset_envelope=onset_env, sr=sr)
-    danceability = round(float(np.clip(np.mean(pulse) * 1.8, 0.2, 0.95)), 3)
-    dynamic_complexity = round(float(np.clip(np.std(audio_rms) / (np.mean(audio_rms) + 1e-4), 0.1, 1.0)), 3)
+    p_max = float(np.max(pulse)) if len(pulse) > 0 else 0.0
+    danceability = round(float(np.mean(pulse) / (p_max + 1e-6)), 3)
+    
+    rms_mean = float(np.mean(audio_rms))
+    if rms_mean <= 1e-6:
+        raise RuntimeError(f"Audio RMS energy is zero for {wav_path}")
+    dynamic_complexity = round(float(np.std(audio_rms) / rms_mean), 3)
 
     # 4. Beat-Synchronous Harmonic (Chroma) & Timbral (MFCC) Feature Extraction
     hop_length = 512
@@ -496,7 +501,7 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
 
     # 5. Sequential 1D Temporal Connectivity Graph (Contiguous Macro Sections)
     n_beats = len(beat_features_norm)
-    n_macro = max(6, min(10, int(duration // 24)))
+    n_macro = max(2, min(12, int(round(duration / 30.0))))
     time_grid = np.arange(n_beats).reshape(-1, 1)
     connectivity = kneighbors_graph(time_grid, n_neighbors=2, mode='connectivity', include_self=False)
     clust = AgglomerativeClustering(n_clusters=n_macro, connectivity=connectivity, linkage='ward')
@@ -513,13 +518,13 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
     lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps, chapter_boundaries=raw_b_times)
     first_vocal_sec = lyrics_blocks[0]["start_sec"] if lyrics_blocks else None
 
-    # Snap boundary timeline (ensuring opening aligns with first vocal onset)
+    # Snap boundary timeline (aligning opening with acoustic feature transitions and vocal onset)
     b_times = [0.0]
-    if first_vocal_sec is not None and 1.5 <= first_vocal_sec <= 5.0:
+    if first_vocal_sec is not None and first_vocal_sec > 0.5:
         b_times.append(round(first_vocal_sec, 2))
 
     for bt in raw_b_times[1:]:
-        if bt > b_times[-1] + 8.0 and bt < duration - 8.0:
+        if bt > b_times[-1] + 1.0 and bt < duration - 1.0:
             b_times.append(round(bt, 2))
     b_times.append(round(duration, 2))
 

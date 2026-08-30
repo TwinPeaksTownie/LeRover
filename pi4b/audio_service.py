@@ -157,13 +157,13 @@ class AudioPlaybackService:
             try:
                 if item_type == "asset_wav":
                     cmd = ["paplay", item["path"]]
-                    proc = subprocess.Popen(cmd, env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    proc = subprocess.Popen(cmd, env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                     with self._lock:
                         self._current_proc = proc
-                    proc.wait()
+                    _, err_bytes = proc.communicate()
                     if proc.returncode != 0:
-                        cmd_fallback = ["aplay", "-D", "sysdefault", "-q", item["path"]]
-                        subprocess.run(cmd_fallback, env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                        err_msg = err_bytes.decode('utf-8', errors='ignore') if err_bytes else "Unknown paplay error"
+                        raise RuntimeError(f"PulseAudio paplay failed on '{item_name}' (code {proc.returncode}): {err_msg}")
 
                 elif item_type == "asset_mp3":
                     cmd = ["mpg123", "-q", item["path"]]

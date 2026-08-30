@@ -172,9 +172,10 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
                         target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
 
             if target_wav and os.path.exists(target_wav):
-                res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
                 if res.returncode != 0:
-                    subprocess.run(["aplay", "-D", "sysdefault", "-q", target_wav], env=PULSE_ENV, check=False)
+                    err_txt = res.stderr.decode('utf-8', errors='ignore') if res.stderr else "Unknown error"
+                    print(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}", flush=True)
         except Exception as e:
             print(f"Sound playback error: {e}", flush=True)
     threading.Thread(target=_work, daemon=True).start()
