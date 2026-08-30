@@ -61,15 +61,13 @@ def get_aux_calibration_path() -> Path:
 
 def get_s8_rail_bounds() -> Tuple[int, int]:
     fpath = get_aux_calibration_path()
-    if fpath.exists():
-        try:
-            with open(fpath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if "8" in data and "min_ticks" in data["8"] and "max_ticks" in data["8"]:
-                    return int(data["8"]["min_ticks"]), int(data["8"]["max_ticks"])
-        except Exception:
-            pass
-    return 3, 4800
+    if not fpath.exists():
+        raise FileNotFoundError(f"Mandatory auxiliary calibration file not found at {fpath}")
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        if "8" in data and "min_ticks" in data["8"] and "max_ticks" in data["8"]:
+            return int(data["8"]["min_ticks"]), int(data["8"]["max_ticks"])
+    raise KeyError(f"Servo 8 'min_ticks' and 'max_ticks' calibration missing in {fpath}")
 
 
 def calc_s8_rail_pos(pct: float) -> int:
@@ -102,8 +100,9 @@ def load_dance_presets() -> Dict[str, Dict[str, float]]:
                 if k in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
             }
 
-    if "stand" not in clean_poses:
-        raise ValueError(f"Mandatory 'stand' posture missing in {fpath}")
+    for mandatory_pose in ["stand", "squat", "tiptoe", "arch"]:
+        if mandatory_pose not in clean_poses:
+            raise KeyError(f"Mandatory posture '{mandatory_pose}' missing in {fpath}")
     return clean_poses
 
 
@@ -135,28 +134,25 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
     if not beat_times:
         raise ValueError("Cannot compile choreography: 'beat_times' missing or empty in audio analysis.")
 
-    danceability = float(analysis.get("danceability", 0.6))
-    drops = analysis.get("drops", [])
+    if "danceability" not in analysis:
+        raise ValueError("Cannot compile choreography: 'danceability' missing in audio analysis.")
+    danceability = float(analysis["danceability"])
+
     raw_sections = analysis.get("sections", [])
+    if not raw_sections:
+        raise ValueError("Cannot compile choreography: empirical 'sections' missing in audio analysis.")
+
+    drops = analysis.get("drops", [])
     held_notes = analysis.get("held_notes", [])
 
     # Load real calibration poses (stand, squat, tiptoe, arch)
     choreo_poses = load_dance_presets()
 
-    # 1. Structure sections into clean section blocks
-    if not raw_sections:
-        raw_sections = [{
-            "type": "verse",
-            "start_sec": 0.0,
-            "end_sec": duration,
-            "energy_score": 0.0,
-        }]
-
     sec_blocks = []
     for idx, s in enumerate(raw_sections):
-        st = float(s.get("start_sec", 0.0))
-        et = min(duration, float(s.get("end_sec", duration)))
-        stype = str(s.get("type", "verse")).lower()
+        st = float(s["start_sec"])
+        et = min(duration, float(s["end_sec"]))
+        stype = str(s["type"]).lower()
         sec_blocks.append({
             "id": f"sec_{idx + 1}",
             "name": stype.title(),
@@ -254,14 +250,11 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
 
         # Track 1: Spine & Elevation (S2, S3, S4)
         if is_drop_hit or sec_type == "chorus":
-            if m_idx % 2 == 0:
-                pose = "tiptoe" if "tiptoe" in choreo_poses else "stand"
-            else:
-                pose = "arch" if "arch" in choreo_poses else "tiptoe"
+            pose = "tiptoe" if m_idx % 2 == 0 else "arch"
             head_pitch = "up" if has_held_note else "level"
             trans_sec = 0.35
         elif is_pre_drop:
-            pose = "squat" if "squat" in choreo_poses else "stand"
+            pose = "squat"
             head_pitch = "down"
             trans_sec = 0.5
         elif sec_type == "intro":
@@ -282,9 +275,9 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
             if v_cycle in [0, 2]:
                 pose = "stand"
             elif v_cycle == 1:
-                pose = "squat" if "squat" in choreo_poses else "stand"
+                pose = "squat"
             else:
-                pose = "arch" if "arch" in choreo_poses else "stand"
+                pose = "arch"
             head_pitch = "up" if has_held_note else "level"
             trans_sec = 0.5
 

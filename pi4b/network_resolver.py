@@ -142,9 +142,12 @@ def resolve_target(candidates: List[Tuple[str, Optional[int]]], cache_key: str) 
                 _IP_CACHE[cache_key] = (ip, now)
                 return ip
 
-    fallback_ip = candidates[0][0] if candidates else "127.0.0.1"
-    _IP_CACHE[cache_key] = (fallback_ip, now)
-    return fallback_ip
+    if candidates and candidates[0][0]:
+        fallback_ip = candidates[0][0]
+        _IP_CACHE[cache_key] = (fallback_ip, now)
+        return fallback_ip
+
+    raise RuntimeError(f"Network resolution failed for '{target_key}'. No candidate addresses configured.")
 
 
 def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:

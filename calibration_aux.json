@@ -1,0 +1,12 @@
+{
+  "7": {
+    "center_ticks": 2048,
+    "min_ticks": 172,
+    "max_ticks": 3924
+  },
+  "8": {
+    "center_ticks": 2400,
+    "min_ticks": 3,
+    "max_ticks": 4800
+  }
+}

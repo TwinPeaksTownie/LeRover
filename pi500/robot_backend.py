@@ -833,13 +833,18 @@ class RobotBackend:
             s7_pos = self.servos[7].get("pos")
             s8_pos = self.servos[8].get("pos")
 
+            if s7_pos is None:
+                raise RuntimeError("Cannot capture arm pose: Servo 7 position is uninitialized or unreadable.")
+            if s8_pos is None:
+                raise RuntimeError("Cannot capture arm pose: Servo 8 position is uninitialized or unreadable.")
+
             new_pose = {
                 "timestamp": time.time(),
                 "normalized": {k: round(float(v), 2) for k, v in norm_dict.items()},
                 "raw_ticks": {str(motor_ids.get(k, k)): int(v) for k, v in raw_dict.items()} if raw_dict else {},
                 "aux": {
-                    "7": s7_pos if s7_pos is not None else 2048,
-                    "8": s8_pos if s8_pos is not None else 3300,
+                    "7": int(s7_pos),
+                    "8": int(s8_pos),
                 }
             }
             self.last_saved_position = new_pose
@@ -1519,7 +1524,7 @@ class RobotBackend:
         """Calculates next preset angle relative to live Servo 7 angle and executes move.
         Returns (ok, moved, msg, target_deg, target_ticks, at_limit).
         """
-        center_s7 = self.aux_calibration.get("7", {}).get("center_ticks", 2048) if hasattr(self, "aux_calibration") else 2048
+        center_s7 = self.get_s7_center_ticks()
         with self.lock:
             curr_pos = self.aux_positions.get(7)
             if curr_pos is None and hasattr(self, "sync_servo7_position"):

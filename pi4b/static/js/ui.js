@@ -1047,9 +1047,9 @@ export function switchBbStudioTab(tab) {
 }
 
 export function renderTimeline() {
-    if (!activeChoreoData) return;
+    if (!activeChoreoData || !activeChoreoData.duration || activeChoreoData.duration <= 0) return;
 
-    const duration = activeChoreoData.duration || 120.0;
+    const duration = activeChoreoData.duration;
     const pps = timelinePixelsPerSec;
     const labelOffset = 100; // 100px track label width
     const totalWidth = Math.max(900, duration * pps + labelOffset + 50);

@@ -183,12 +183,15 @@ class BeatBanditApp(BaseApp):
         for tid, meta in self.manifest.items():
             wav_path = meta.get("wav_path", "")
             if os.path.exists(wav_path):
+                bpm_val = meta.get("bpm") if "bpm" in meta else meta.get("tempo")
+                if bpm_val is None:
+                    raise KeyError(f"Track '{tid}' missing 'bpm' in manifest.")
                 tracks.append({
                     "track_id": tid,
                     "title": meta.get("title", tid),
-                    "artist": meta.get("artist", "Unknown"),
-                    "duration": meta.get("duration", 0),
-                    "bpm": meta.get("tempo") or meta.get("bpm", 120),
+                    "artist": meta.get("artist", ""),
+                    "duration": float(meta.get("duration", 0.0)),
+                    "bpm": float(bpm_val),
                     "is_ready": True
                 })
         return tracks
@@ -293,13 +296,18 @@ class BeatBanditApp(BaseApp):
             raw_title = analysis.get("title", track_id)
             song_title, artist = sanitize_title_and_artist(raw_title)
 
+            if "duration" not in analysis or float(analysis["duration"]) <= 0.0:
+                raise ValueError("Audio analysis is missing valid 'duration'.")
+            if "bpm" not in analysis or float(analysis["bpm"]) <= 0.0:
+                raise ValueError("Audio analysis is missing valid 'bpm'.")
+
             # Store in Manifest
             track_meta = {
                 "track_id": track_id,
                 "title": song_title,
                 "artist": artist,
-                "duration": float(analysis.get("duration", 0.0)),
-                "bpm": float(analysis.get("bpm", 120.0)),
+                "duration": float(analysis["duration"]),
+                "bpm": float(analysis["bpm"]),
                 "wav_path": wav_path,
                 "analysis": analysis,
                 "created_at": time.time(),
@@ -497,7 +505,7 @@ class BeatBanditApp(BaseApp):
                 if spine_block:
                     pose_name = spine_block.get("pose_name", "stand")
                     if pose_name not in choreo_poses:
-                        pose_name = "stand"
+                        raise KeyError(f"Choreography specifies posture '{pose_name}' which is not in presets_dance.json")
                     target_posture = choreo_poses[pose_name]
                     trans_sec = float(spine_block.get("transition_sec", 0.5))
                     alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))

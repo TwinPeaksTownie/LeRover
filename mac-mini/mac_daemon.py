@@ -177,25 +177,35 @@ def download_audio_from_youtube(url: str, track_id: str) -> Path:
     logger.info(f"Standardized audio to 44.1kHz stereo: {target_wav}")
     return target_wav
 
-def infer_section_labels(segments: list[dict], total_duration: float) -> list[dict]:
-    """Infers structural labels (intro, verse, chorus, bridge, outro) from segment energy z-scores and timeline position."""
+def infer_section_labels(segments: list[dict], total_duration: float, first_vocal_sec: Optional[float] = None) -> list[dict]:
+    """Infers structural labels (intro, verse, chorus, bridge, outro) from segment energy z-scores,
+    timeline position, and empirical vocal onset timestamp.
+    """
     if not segments:
-        return segments
+        raise ValueError("Cannot infer section labels on empty segment list.")
 
-    energies = np.array([float(s.get("energy", 0.0)) for s in segments])
-    mean_e = float(np.mean(energies)) if len(energies) > 0 else 0.0
-    std_e = float(np.std(energies)) if len(energies) > 0 else 1.0
+    energies = np.array([float(s["energy"]) for s in segments])
+    mean_e = float(np.mean(energies))
+    std_e = float(np.std(energies))
+    if std_e < 1e-6:
+        std_e = 1.0
 
     for i, seg in enumerate(segments):
         pos = float(seg["start_sec"]) / max(1.0, total_duration)
-        dur = float(seg.get("duration", seg["end_sec"] - seg["start_sec"]))
-        e = float(seg.get("energy", 0.0))
-        z = (e - mean_e) / (std_e + 1e-6)
+        dur = float(seg["duration"])
+        e = float(seg["energy"])
+        z = (e - mean_e) / std_e
 
         if i == 0:
-            label = "intro" if (dur < 16.0 or z < -0.3) else "verse"
+            # Physical reality: If vocal delivery starts early in the section, it is Verse 1, not Intro
+            if first_vocal_sec is not None and first_vocal_sec < min(3.5, float(seg["end_sec"])):
+                label = "verse"
+            elif dur < 6.0 and (z < -0.2 or (first_vocal_sec is not None and first_vocal_sec >= float(seg["end_sec"]))):
+                label = "intro"
+            else:
+                label = "verse"
         elif i == len(segments) - 1:
-            label = "outro" if (dur < 16.0 or z < 0.1) else "chorus"
+            label = "outro" if (dur < 20.0 and z < 0.1) else "chorus"
         else:
             if z > 0.4:
                 label = "chorus"
@@ -208,6 +218,8 @@ def infer_section_labels(segments: list[dict], total_duration: float) -> list[di
 
         seg["type"] = label
         seg["energy_score"] = round(float(z), 3)
+
+    return segments
 
 def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50) -> list:
     """Extracts word-timestamped ASR lyrics, groups into 2-5 word clauses based on punctuation
@@ -225,7 +237,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         )
     except Exception as e:
         logger.error(f"Whisper transcription failed on {vocals_wav_path}: {e}")
-        return []
+        raise RuntimeError(f"Whisper transcription failed on {vocals_wav_path}: {e}")
 
     all_words = []
     for segment in result.get("segments", []):
@@ -432,115 +444,86 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         norm_audio_env = np.zeros_like(audio_rms)
     amplitude_envelope = [round(float(v), 3) for v in norm_audio_env]
 
-    # 3. Essentia / Rhythm & Structural Analysis
-    danceability = 0.5
-    dynamic_complexity = 0.5
-    beat_times = []
-    downbeats = []
-    sections = []
-    tempo = 120.0
+    # 3. Essentia / Rhythm & Structural Analysis (Strict Empirical Only, Zero Fallbacks)
+    if es is None:
+        raise RuntimeError("Essentia library is missing on Mac Mini.")
+    if AgglomerativeClustering is None or StandardScaler is None:
+        raise RuntimeError("scikit-learn is missing on Mac Mini for structural segmentation.")
 
-    if es is not None:
-        try:
-            loader = es.MonoLoader(filename=str(wav_path), sampleRate=44100)
-            y_es = loader()
-            
-            rhythm_extractor = es.RhythmExtractor2013()
-            bpm_val, beats_arr, beats_conf, _, _ = rhythm_extractor(y_es)
-            tempo = float(bpm_val)
-            beat_times = [round(float(b), 3) for b in beats_arr]
-            downbeats = beat_times[::4]
-            
-            try:
-                danceability = round(float(es.Danceability()(y_es)), 3)
-            except Exception:
-                danceability = 0.5
-                
-            try:
-                _, dyn_comp = es.DynamicComplexity()(y_es)
-                dynamic_complexity = round(float(dyn_comp), 3)
-            except Exception:
-                dynamic_complexity = 0.5
-
-            # Essentia MFCC + Agglomerative clustering for structural segmentation
-            frame_size = 2048
-            hop_size = 512
-            window = es.Windowing(type='hann')
-            spectrum = es.Spectrum()
-            mfcc_ext = es.MFCC(numberCoefficients=13)
-            
-            mfccs_list = []
-            frame_times = []
-            for st_i in range(0, len(y_es) - frame_size, hop_size):
-                f_win = window(y_es[st_i:st_i + frame_size])
-                f_spec = spectrum(f_win)
-                _, f_mfcc = mfcc_ext(f_spec)
-                mfccs_list.append(f_mfcc)
-                frame_times.append(st_i / sr)
-                
-            if len(mfccs_list) > 10 and AgglomerativeClustering is not None and StandardScaler is not None:
-                mfccs_arr = np.array(mfccs_list)
-                mfccs_norm = StandardScaler().fit_transform(mfccs_arr)
-                if uniform_filter1d is not None:
-                    mfccs_norm = uniform_filter1d(mfccs_norm, size=9, axis=0)
-                    
-                n_seg = max(3, min(8, int(duration // 20)))
-                clust = AgglomerativeClustering(n_clusters=n_seg, linkage='ward')
-                c_labels = clust.fit_predict(mfccs_norm)
-                
-                b_indices = [0]
-                for li in range(1, len(c_labels)):
-                    if c_labels[li] != c_labels[li - 1]:
-                        b_indices.append(li)
-                b_indices.append(len(c_labels) - 1)
-                
-                b_times = [frame_times[b] for b in b_indices[:-1]] + [duration]
-                b_times = [0.0] + sorted(list(set([round(t, 2) for t in b_times if 0.0 < t < duration]))) + [round(duration, 2)]
-                
-                raw_sections = []
-                rms_ext = es.RMS()
-                for s_i in range(len(b_times) - 1):
-                    st_sec = b_times[s_i]
-                    en_sec = b_times[s_i + 1]
-                    if en_sec - st_sec < 2.0:
-                        continue
-                    st_sample = int(st_sec * sr)
-                    en_sample = int(en_sec * sr)
-                    seg_audio = y_es[st_sample:en_sample]
-                    seg_rms = float(rms_ext(seg_audio)) if len(seg_audio) > 0 else 0.0
-                    seg_beats = sum(1 for b in beat_times if st_sec <= b < en_sec)
-                    raw_sections.append({
-                        "start_sec": st_sec,
-                        "end_sec": en_sec,
-                        "duration": round(en_sec - st_sec, 2),
-                        "energy": round(seg_rms, 4),
-                        "beat_count": seg_beats,
-                    })
-                sections = infer_section_labels(raw_sections, duration)
-        except Exception as es_err:
-            logger.warning(f"Essentia extraction exception: {es_err}")
-
-    # Fallback to librosa if Essentia was unavailable or failed
+    loader = es.MonoLoader(filename=str(wav_path), sampleRate=44100)
+    y_es = loader()
+    
+    rhythm_extractor = es.RhythmExtractor2013()
+    bpm_val, beats_arr, beats_conf, _, _ = rhythm_extractor(y_es)
+    tempo = float(bpm_val)
+    beat_times = [round(float(b), 3) for b in beats_arr]
     if not beat_times:
-        tempo_val, beat_frames = librosa.beat.beat_track(y=audio_mono, sr=sr)
-        tempo = float(tempo_val[0]) if isinstance(tempo_val, np.ndarray) else float(tempo_val)
-        beat_times = librosa.frames_to_time(beat_frames, sr=sr).round(3).tolist()
-        downbeats = beat_times[::4]
+        raise RuntimeError(f"Essentia failed to detect beats in {wav_path}")
+    downbeats = beat_times[::4]
+    
+    danceability = round(float(es.Danceability()(y_es)), 3)
+    _, dyn_comp = es.DynamicComplexity()(y_es)
+    dynamic_complexity = round(float(dyn_comp), 3)
 
-    if not sections:
-        sections = []
-        for idx in range(0, max(1, len(beat_times)), 16):
-            st = float(beat_times[idx]) if idx < len(beat_times) else 0.0
-            end_idx = min(idx + 16, len(beat_times) - 1)
-            et = float(beat_times[end_idx]) if end_idx < len(beat_times) else duration
-            sections.append({
-                "type": "intro" if idx == 0 and st < 5.0 else "verse",
-                "start_sec": round(st, 2),
-                "end_sec": round(et, 2),
-                "duration": round(et - st, 2),
-                "energy": 0.5,
-                "beat_count": end_idx - idx
-            })
+    # Essentia MFCC + Agglomerative clustering for structural segmentation
+    frame_size = 2048
+    hop_size = 512
+    window = es.Windowing(type='hann')
+    spectrum = es.Spectrum()
+    mfcc_ext = es.MFCC(numberCoefficients=13)
+    
+    mfccs_list = []
+    frame_times = []
+    for st_i in range(0, len(y_es) - frame_size, hop_size):
+        f_win = window(y_es[st_i:st_i + frame_size])
+        f_spec = spectrum(f_win)
+        _, f_mfcc = mfcc_ext(f_spec)
+        mfccs_list.append(f_mfcc)
+        frame_times.append(st_i / sr)
+        
+    if len(mfccs_list) <= 10:
+        raise RuntimeError(f"Audio too short for structural MFCC extraction: {len(mfccs_list)} frames.")
+
+    mfccs_arr = np.array(mfccs_list)
+    mfccs_norm = StandardScaler().fit_transform(mfccs_arr)
+    if uniform_filter1d is not None:
+        mfccs_norm = uniform_filter1d(mfccs_norm, size=9, axis=0)
+        
+    n_seg = max(3, min(12, int(duration // 20)))
+    clust = AgglomerativeClustering(n_clusters=n_seg, linkage='ward')
+    c_labels = clust.fit_predict(mfccs_norm)
+    
+    b_indices = [0]
+    for li in range(1, len(c_labels)):
+        if c_labels[li] != c_labels[li - 1]:
+            b_indices.append(li)
+    b_indices.append(len(c_labels) - 1)
+    
+    b_times = [frame_times[b] for b in b_indices[:-1]] + [duration]
+    b_times = [0.0] + sorted(list(set([round(t, 2) for t in b_times if 0.0 < t < duration]))) + [round(duration, 2)]
+    
+    raw_sections = []
+    rms_ext = es.RMS()
+    for s_i in range(len(b_times) - 1):
+        st_sec = b_times[s_i]
+        en_sec = b_times[s_i + 1]
+        if en_sec - st_sec < 2.0:
+            continue
+        st_sample = int(st_sec * sr)
+        en_sample = int(en_sec * sr)
+        seg_audio = y_es[st_sample:en_sample]
+        seg_rms = float(rms_ext(seg_audio)) if len(seg_audio) > 0 else 0.0
+        seg_beats = sum(1 for b in beat_times if st_sec <= b < en_sec)
+        raw_sections.append({
+            "start_sec": st_sec,
+            "end_sec": en_sec,
+            "duration": round(en_sec - st_sec, 2),
+            "energy": round(seg_rms, 4),
+            "beat_count": seg_beats,
+        })
+
+    if not raw_sections:
+        raise RuntimeError(f"Structural segmentation failed to identify valid acoustic sections in {wav_path}")
 
     # Sub-bass drop detection (30 - 120 Hz)
     stft_spec = np.abs(librosa.stft(audio_mono, n_fft=2048, hop_length=hop_length_50hz))
@@ -565,6 +548,10 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
 
     # Extract ASR lyrics and acoustic breath landmarks
     lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps)
+    first_vocal_sec = lyrics_blocks[0]["start_sec"] if lyrics_blocks else None
+
+    # Infer structural labels with real acoustic energy and vocal onset
+    sections = infer_section_labels(raw_sections, duration, first_vocal_sec=first_vocal_sec)
 
     manifest = {
         "track_id": track_id,

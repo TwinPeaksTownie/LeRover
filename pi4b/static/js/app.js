@@ -271,7 +271,11 @@ export function startBeatBanditFromInput() {
     const inp = document.getElementById('bbUrlInput');
     let val = (inp && inp.value) ? inp.value.trim() : '';
     if (!val) {
-        val = selectedBeatBanditTrackId || '_uu_izpVSEc';
+        val = selectedBeatBanditTrackId;
+    }
+    if (!val) {
+        ui.setHeaderAlert('NO TRACK SELECTED');
+        return;
     }
     startBeatBanditTrack(val);
 }
@@ -326,8 +330,11 @@ export function stopBeatBanditDance() {
 }
 
 export function startBeatBanditSectionPlay() {
-    const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id) || '_uu_izpVSEc';
-    if (!tid) return;
+    const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id);
+    if (!tid) {
+        ui.setHeaderAlert('NO TRACK SELECTED');
+        return;
+    }
 
     let start_sec = 0.0;
     if (timelineInTime !== null) {
@@ -416,14 +423,26 @@ export function saveCurrentChoreography() {
 }
 
 export function openAIDirectorModalFlow() {
-    const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id) || 'y9Wxl9Q9lUQ';
+    const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id);
+    if (!tid) {
+        ui.setHeaderAlert('NO TRACK SELECTED');
+        return;
+    }
     const tracks = cachedBeatBanditTracks || [];
-    const track = tracks.find(t => t.track_id === tid || t.id === tid) || {};
-    const title = track.title || (activeChoreoData && activeChoreoData.title) || 'Red Wine Supernova';
-    const dur = track.duration || (activeChoreoData && activeChoreoData.duration) || 192;
+    const track = tracks.find(t => t.track_id === tid || t.id === tid);
+    if (!track && !activeChoreoData) {
+        ui.setHeaderAlert('TRACK METADATA UNAVAILABLE');
+        return;
+    }
+    const title = (track && track.title) || (activeChoreoData && activeChoreoData.title);
+    const dur = (track && track.duration) || (activeChoreoData && activeChoreoData.duration);
+    const tempo = (track && (track.tempo || track.bpm)) || (activeChoreoData && activeChoreoData.settings && activeChoreoData.settings.bpm);
+    if (!title || !dur || !tempo) {
+        ui.setHeaderAlert('INCOMPLETE TRACK METADATA');
+        return;
+    }
     const durMins = Math.floor(dur / 60);
     const durSecs = Math.floor(dur % 60).toString().padStart(2, '0');
-    const tempo = track.tempo || (activeChoreoData && activeChoreoData.settings && activeChoreoData.settings.bpm) || 123;
     const meta = `${tempo} BPM • ${durMins}:${durSecs}`;
 
     ui.openDirectorModal();
@@ -959,18 +978,29 @@ function bindEventListeners() {
         ui.renderTimeline();
     });
     if (addMoveBtn) addMoveBtn.addEventListener('click', () => {
-        if (!activeChoreoData) return;
-        const tracks = activeChoreoData.tracks || {};
-        const ch = selectedMoveChannel || 'body_pose';
+        if (!activeChoreoData || !activeChoreoData.duration) {
+            ui.setHeaderAlert('NO CHOREOGRAPHY LOADED');
+            return;
+        }
+        const tracks = activeChoreoData.tracks;
+        if (!tracks) {
+            ui.setHeaderAlert('CHOREOGRAPHY HAS NO TRACKS');
+            return;
+        }
+        const ch = selectedMoveChannel || 'spine_gaze';
         if (!tracks[ch]) tracks[ch] = [];
         
         const newId = 'move_' + Date.now();
         const st = timelinePlayheadTime;
-        const et = Math.min(activeChoreoData.duration || 120, st + 3.0);
+        const et = Math.min(activeChoreoData.duration, st + 3.0);
         let newBlock = { id: newId, name: 'New Move', start_sec: st, end_sec: et };
 
-        if (ch === 'body_pose') {
-            newBlock.pose_name = selectedPoseName || 'stand';
+        if (ch === 'body_pose' || ch === 'spine_gaze') {
+            if (!selectedPoseName) {
+                ui.setHeaderAlert('NO POSE SELECTED');
+                return;
+            }
+            newBlock.pose_name = selectedPoseName;
             newBlock.transition_sec = 0.5;
         } else if (ch === 's7_pedestal') {
             newBlock.target_deg = 0.0;
@@ -980,7 +1010,7 @@ function bindEventListeners() {
         }
 
         tracks[ch].push(newBlock);
-        tracks[ch].sort((a, b) => (a.start_sec || 0) - (b.start_sec || 0));
+        tracks[ch].sort((a, b) => a.start_sec - b.start_sec);
         ui.openMoveInspector(ch, newBlock);
     });
     if (autoChoreoBtn) autoChoreoBtn.addEventListener('click', () => openAIDirectorModalFlow());
@@ -1056,10 +1086,14 @@ function bindEventListeners() {
     });
 
     if (inspPreviewBtn) inspPreviewBtn.addEventListener('click', () => {
-        if (!selectedMoveBlock) return;
-        if (selectedMoveChannel === 'body_pose') {
-            const poses = activeChoreoData.poses || {};
-            const p = poses[selectedMoveBlock.pose_name] || poses['stand'];
+        if (!selectedMoveBlock || !activeChoreoData) return;
+        if (selectedMoveChannel === 'body_pose' || selectedMoveChannel === 'spine_gaze') {
+            const poses = activeChoreoData.poses;
+            if (!poses || !poses[selectedMoveBlock.pose_name]) {
+                ui.setHeaderAlert(`POSE '${selectedMoveBlock.pose_name}' NOT FOUND`);
+                return;
+            }
+            const p = poses[selectedMoveBlock.pose_name];
             api.previewBeatBanditPose(p).catch(() => {});
         } else if (selectedMoveChannel === 's7_pedestal') {
             api.previewBeatBanditMovement('s7_pedestal', selectedMoveBlock.target_deg).catch(() => {});
@@ -1069,16 +1103,16 @@ function bindEventListeners() {
     });
 
     if (inspDupBtn) inspDupBtn.addEventListener('click', () => {
-        if (!selectedMoveBlock || !activeChoreoData) return;
+        if (!selectedMoveBlock || !activeChoreoData || !activeChoreoData.duration) return;
         const tracks = activeChoreoData.tracks[selectedMoveChannel] || [];
-        const dur = (selectedMoveBlock.end_sec || 0) - (selectedMoveBlock.start_sec || 0);
+        const dur = selectedMoveBlock.end_sec - selectedMoveBlock.start_sec;
         const dup = Object.assign({}, selectedMoveBlock, {
             id: 'move_' + Date.now(),
             start_sec: selectedMoveBlock.end_sec,
-            end_sec: Math.min(activeChoreoData.duration || 120, selectedMoveBlock.end_sec + dur)
+            end_sec: Math.min(activeChoreoData.duration, selectedMoveBlock.end_sec + dur)
         });
         tracks.push(dup);
-        tracks.sort((a, b) => (a.start_sec || 0) - (b.start_sec || 0));
+        tracks.sort((a, b) => a.start_sec - b.start_sec);
         ui.openMoveInspector(selectedMoveChannel, dup);
     });
 
