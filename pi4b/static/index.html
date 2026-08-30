@@ -640,29 +640,34 @@
             <!-- VIEW 2: Power Management Sub-View -->
             <div id="backendViewPower" style="display: none; flex-direction: column; gap: 8px; height: calc(100% - 32px); padding: 4px;">
                 <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
-                    <button id="powerBackBtn" class="btn-action btn-back">
+                    <button id="powerBackBtn" class="btn-action btn-back" style="font-size: 18px; font-weight: 900;">
                         ◀ BACK
                     </button>
-                    <div style="border-radius: 8px; background: #220508; border: 2px solid #ff3344; color: #ff4455; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                    <div style="border-radius: 8px; background: #220508; border: 2px solid #ff3344; color: #ff4455; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900;">
                         ⚡ POWER MANAGEMENT
                     </div>
                 </div>
 
                 <div class="giant-grid" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; flex-grow: 1;">
-                    <button id="masterDaemonBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset;">
-                        <span id="masterDaemonBtnText">🤖 RESTART SEWER DAEMON</span><br><span id="masterDaemonBtnSub" style="font-size:11px; color:#ffccaa;">(PI 500 PORT 8085)</span>
+                    <button id="masterDaemonBtn" class="btn-action btn-cyan" style="font-size: 22px; font-weight: 900; line-height: 1.25; min-height: unset; padding: 10px 14px;">
+                        <span id="masterDaemonBtnText">🤖 RESTART SEWER DAEMON</span>
+                        <span id="masterDaemonBtnSub" style="font-size: 14px; font-weight: 700; color: #ffccaa; margin-top: 6px;">(PI 500 PORT 8085)</span>
                     </button>
-                    <button id="wifiRestoreBtn" class="btn-action btn-cyan" style="font-size: 16px; min-height: unset; border-color:#00ff66; color:#00ff66;">
-                        📡 RESTORE WI-FI<br><span style="font-size:11px; color:#aaffcc;">(RECONNECT NETWORK)</span>
+                    <button id="wifiRestoreBtn" class="btn-action btn-cyan" style="font-size: 22px; font-weight: 900; line-height: 1.25; min-height: unset; border-color: #00ff66; color: #00ff66; padding: 10px 14px;">
+                        📡 RESTORE WI-FI
+                        <span style="font-size: 14px; font-weight: 700; color: #aaffcc; margin-top: 6px;">(RECONNECT NETWORK)</span>
                     </button>
-                    <button id="pi500PowerOnBtn" class="btn-action btn-red" style="font-size: 16px; min-height: unset;">
-                        ⚡ WAKE PI 500<br><span style="font-size:11px; color:#ffccaa;">(WAKE-ON-LAN)</span>
+                    <button id="pi500PowerOnBtn" class="btn-action btn-red" style="font-size: 22px; font-weight: 900; line-height: 1.25; min-height: unset; padding: 10px 14px;">
+                        ⚡ WAKE PI 500
+                        <span style="font-size: 14px; font-weight: 700; color: #ffccaa; margin-top: 6px;">(WAKE-ON-LAN)</span>
                     </button>
-                    <button id="wifiDisableBtn" class="btn-action btn-orange" style="font-size: 16px; min-height: unset;">
-                        🚫 TEST OFFLINE<br><span style="font-size:11px; color:#ffeebb;">(DISABLE WI-FI 10M)</span>
+                    <button id="wifiDisableBtn" class="btn-action btn-orange" style="font-size: 22px; font-weight: 900; line-height: 1.25; min-height: unset; padding: 10px 14px;">
+                        🚫 TEST OFFLINE
+                        <span style="font-size: 14px; font-weight: 700; color: #ffeebb; margin-top: 6px;">(DISABLE WI-FI 10M)</span>
                     </button>
-                    <button id="emergencyKillBtn" class="btn-action btn-red" style="grid-column: span 2; font-size: 16px; min-height: unset; background:#330005; border-color:#ff0033;">
-                        🛑 STOP ALL PROCESSES<br><span style="font-size:11px; color:#ffaaaa;">(EMERGENCY PROCESS KILL)</span>
+                    <button id="emergencyKillBtn" class="btn-action btn-red" style="grid-column: span 2; font-size: 26px; font-weight: 900; line-height: 1.25; min-height: unset; background: #330005; border-color: #ff0033; padding: 12px 16px;">
+                        🛑 STOP ALL PROCESSES
+                        <span style="font-size: 15px; font-weight: 700; color: #ffaaaa; margin-top: 6px;">(EMERGENCY PROCESS KILL)</span>
                     </button>
                 </div>
             </div>
