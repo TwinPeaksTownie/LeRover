@@ -405,22 +405,43 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
     ]
 
     raw_lyrics = analysis.get("lyrics", [])
-    lyrics_moves = [
-        {
-            "id": seg.get("id", f"ly_{l_idx + 1:03d}"),
-            "name": seg.get("text", seg.get("name", "")),
-            "text": seg.get("text", seg.get("name", "")),
-            "original_asr_text": seg.get("original_asr_text", seg.get("text", seg.get("name", ""))),
-            "type": seg.get("type", "lyric"),
-            "singer_type": seg.get("singer_type", "female" if seg.get("type") != "breath" else "breath"),
-            "is_user_edited": seg.get("is_user_edited", False),
-            "start_sec": round(float(seg["start_sec"]), 2),
-            "end_sec": round(float(seg["end_sec"]), 2),
-            "duration": round(float(seg["end_sec"]) - float(seg["start_sec"]), 2),
-            "words": seg.get("words", [])
+    lyrics_moves = []
+    for l_idx, seg in enumerate(raw_lyrics):
+        if not isinstance(seg, dict):
+            raise TypeError(f"Lyric segment at index {l_idx} must be a dictionary.")
+        if "type" not in seg or seg["type"] not in ["lyric", "breath"]:
+            raise KeyError(f"Lyric segment at index {l_idx} missing valid 'type' ('lyric' or 'breath').")
+        if "start_sec" not in seg or "end_sec" not in seg:
+            raise KeyError(f"Lyric segment at index {l_idx} missing required timestamp 'start_sec' or 'end_sec'.")
+        if "text" not in seg:
+            raise KeyError(f"Lyric segment at index {l_idx} missing required field 'text'.")
+
+        st_val = round(float(seg["start_sec"]), 2)
+        et_val = round(float(seg["end_sec"]), 2)
+        if et_val <= st_val:
+            raise ValueError(f"Lyric segment at index {l_idx} has invalid duration (start_sec={st_val}, end_sec={et_val}).")
+
+        b_type = str(seg["type"])
+        orig_text = str(seg.get("original_asr_text", seg["text"]))
+        seg_id = str(seg.get("id", f"{'br' if b_type == 'breath' else 'ly'}_{l_idx + 1:03d}"))
+        seg_name = str(seg.get("name", seg["text"]))
+        words = list(seg.get("words", [])) if b_type == "lyric" else []
+
+        entry = {
+            "id": seg_id,
+            "name": seg_name,
+            "text": str(seg["text"]),
+            "original_asr_text": orig_text,
+            "type": b_type,
+            "is_user_edited": bool(seg.get("is_user_edited", False)),
+            "start_sec": st_val,
+            "end_sec": et_val,
+            "duration": round(et_val - st_val, 2),
         }
-        for l_idx, seg in enumerate(raw_lyrics)
-    ]
+        if b_type == "lyric":
+            entry["words"] = words
+
+        lyrics_moves.append(entry)
 
     return {
         "version": "3.0.0",
