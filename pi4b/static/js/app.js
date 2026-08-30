@@ -233,7 +233,6 @@ export function toggleBeatBanditApp() {
                 if (d.running !== undefined) setIsBeatBanditAppRunning(d.running);
                 if (btn) btn.style.opacity = '1.0';
                 ui.renderButtonStates();
-                api.sendPlaySound({ kind: 'connect' }).catch(() => {});
             })
             .catch(err => {
                 if (btn) btn.style.opacity = '1.0';
@@ -251,7 +250,6 @@ export function toggleBeatBanditApp() {
                 setIsBeatBanditDancing(false);
                 if (btn) btn.style.opacity = '1.0';
                 ui.renderButtonStates();
-                api.sendPlaySound({ kind: 'disconnect' }).catch(() => {});
             })
             .catch(err => {
                 if (btn) btn.style.opacity = '1.0';
@@ -267,7 +265,7 @@ export function handleMainDanceBtnClick() {
         api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
         return;
     }
-    if (isBeatBanditDancing || isBeatBanditRunning) {
+    if (isBeatBanditDancing || timelineIsPlaying) {
         stopBeatBanditDance();
     } else {
         startBeatBanditFromInput();
@@ -308,6 +306,8 @@ export function startBeatBanditTrack(urlOrId) {
                 api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
                 return;
             }
+            setIsBeatBanditDancing(true);
+            ui.renderButtonStates();
             fetchBeatBanditTracks();
         })
         .catch(() => {

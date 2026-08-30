@@ -125,16 +125,10 @@ export function sendBeatBanditStop() {
         body: JSON.stringify({ action: 'stop' })
     }, 1000).catch(() => {});
 
-    safeFetch('/api/apps/beat_bandit/stop', {
+    return safeFetch('/api/apps/beat_bandit/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
-    }, 2000).catch(() => {});
-
-    return safeFetch('/api/beat_bandit_toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'stop' })
     }, 2000);
 }
 

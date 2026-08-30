@@ -82,8 +82,8 @@ export function setIsPokeballConnected(val) { isPokeballConnected = !!val; }
 export function setIsMasterDaemonRunning(val) { isMasterDaemonRunning = !!val; }
 export function setIsStudioRunning(val) { isStudioRunning = !!val; }
 export function setIsClackPoseRunning(val) { isClackPoseRunning = !!val; }
-export function setIsBeatBanditAppRunning(val) { isBeatBanditAppRunning = !!val; isBeatBanditRunning = isBeatBanditAppRunning || isBeatBanditDancing; }
-export function setIsBeatBanditDancing(val) { isBeatBanditDancing = !!val; isBeatBanditRunning = isBeatBanditAppRunning || isBeatBanditDancing; }
+export function setIsBeatBanditAppRunning(val) { isBeatBanditAppRunning = !!val; }
+export function setIsBeatBanditDancing(val) { isBeatBanditDancing = !!val; }
 export function setIsBeatBanditRunning(val) { isBeatBanditRunning = !!val; }
 export function setBeatBanditTrackPage(val) { beatBanditTrackPage = val; }
 export function setSelectedBeatBanditTrackId(val) { selectedBeatBanditTrackId = val; }

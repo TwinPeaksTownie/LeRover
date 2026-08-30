@@ -90,7 +90,7 @@ export function setHeaderAlert(msg) {
 }
 
 export function renderButtonStates() {
-    const stateKey = `${isFollowerRunning}_${isLeaderRunning}_${isStudioRunning}_${isClackPoseRunning}_${isBeatBanditRunning}_${isRoverStandaloneRunning}_${isMasterDaemonRunning}_${isPokeballRunning}_${isPokeballConnected}`;
+    const stateKey = `${isFollowerRunning}_${isLeaderRunning}_${isStudioRunning}_${isClackPoseRunning}_${isBeatBanditAppRunning}_${isBeatBanditDancing}_${isMasterDaemonRunning}_${isPokeballRunning}_${isPokeballConnected}`;
     if (lastRenderedButtonsKey === stateKey) {
         return; // Zero DOM mutations when state is unchanged!
     }
@@ -425,7 +425,7 @@ export function selectBeatBanditTrack(trackId, encTitle, encArtist) {
         if (bpmDisplay && selectedTrack.tempo) bpmDisplay.innerText = Math.round(selectedTrack.tempo) + ' BPM';
         if (beatCounter && selectedTrack.total_beats) beatCounter.innerText = `Beat 0/${selectedTrack.total_beats}`;
     }
-    if (stateBadge && !isBeatBanditRunning) {
+    if (stateBadge && !isBeatBanditDancing) {
         stateBadge.innerText = 'SELECTED';
         stateBadge.style.background = '#2e1040';
         stateBadge.style.color = '#ff00cc';
@@ -943,7 +943,7 @@ export function updateTelemetryUI(data) {
     if (bbProg && bbData.progress !== undefined) bbProg.style.width = bbData.progress + '%';
     if (bbBeatCtr && bbData.current_beat !== undefined) bbBeatCtr.innerText = `Beat: ${bbData.current_beat} / ${bbData.total_beats || 0}`;
 
-    if (bbData.time_sec !== undefined && isBeatBanditRunning) {
+    if (bbData.time_sec !== undefined && isBeatBanditDancing) {
         setTimelinePlayheadTime(bbData.time_sec);
         if (bbStudioTab === 'timeline') {
             renderTimeline();
