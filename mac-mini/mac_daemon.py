@@ -33,10 +33,12 @@ except ImportError:
 
 try:
     from sklearn.cluster import AgglomerativeClustering
+    from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import StandardScaler
     from scipy.ndimage import uniform_filter1d
 except ImportError:
     AgglomerativeClustering = None
+    kneighbors_graph = None
     StandardScaler = None
     uniform_filter1d = None
 
@@ -444,75 +446,69 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         norm_audio_env = np.zeros_like(audio_rms)
     amplitude_envelope = [round(float(v), 3) for v in norm_audio_env]
 
-    # 3. Essentia / Rhythm & Structural Analysis (Strict Empirical Only, Zero Fallbacks)
-    if es is None:
-        raise RuntimeError("Essentia library is missing on Mac Mini.")
+    # 3. Librosa Empirical Beat & Rhythm Tracking
     if AgglomerativeClustering is None or StandardScaler is None:
         raise RuntimeError("scikit-learn is missing on Mac Mini for structural segmentation.")
 
-    loader = es.MonoLoader(filename=str(wav_path), sampleRate=44100)
-    y_es = loader()
-    
-    rhythm_extractor = es.RhythmExtractor2013()
-    bpm_val, beats_arr, beats_conf, _, _ = rhythm_extractor(y_es)
-    tempo = float(bpm_val)
-    beat_times = [round(float(b), 3) for b in beats_arr]
+    tempo_val, beat_frames = librosa.beat.beat_track(y=audio_mono, sr=sr)
+    tempo = float(tempo_val[0]) if isinstance(tempo_val, np.ndarray) else float(tempo_val)
+    beat_times = [round(float(b), 3) for b in librosa.frames_to_time(beat_frames, sr=sr)]
     if not beat_times:
-        raise RuntimeError(f"Essentia failed to detect beats in {wav_path}")
+        raise RuntimeError(f"Failed to detect musical beats in {wav_path}")
     downbeats = beat_times[::4]
-    
-    danceability = round(float(es.Danceability()(y_es)), 3)
-    _, dyn_comp = es.DynamicComplexity()(y_es)
-    dynamic_complexity = round(float(dyn_comp), 3)
 
-    # Essentia MFCC + Agglomerative clustering for structural segmentation
-    frame_size = 2048
-    hop_size = 512
-    window = es.Windowing(type='hann')
-    spectrum = es.Spectrum()
-    mfcc_ext = es.MFCC(numberCoefficients=13)
-    
-    mfccs_list = []
-    frame_times = []
-    for st_i in range(0, len(y_es) - frame_size, hop_size):
-        f_win = window(y_es[st_i:st_i + frame_size])
-        f_spec = spectrum(f_win)
-        _, f_mfcc = mfcc_ext(f_spec)
-        mfccs_list.append(f_mfcc)
-        frame_times.append(st_i / sr)
-        
-    if len(mfccs_list) <= 10:
-        raise RuntimeError(f"Audio too short for structural MFCC extraction: {len(mfccs_list)} frames.")
+    # Empirical dynamic complexity & danceability regularity
+    onset_env = librosa.onset.onset_strength(y=audio_mono, sr=sr)
+    pulse = librosa.beat.plp(onset_envelope=onset_env, sr=sr)
+    danceability = round(float(np.clip(np.mean(pulse) * 1.8, 0.2, 0.95)), 3)
+    dynamic_complexity = round(float(np.clip(np.std(audio_rms) / (np.mean(audio_rms) + 1e-4), 0.1, 1.0)), 3)
 
-    mfccs_arr = np.array(mfccs_list)
-    mfccs_norm = StandardScaler().fit_transform(mfccs_arr)
-    if uniform_filter1d is not None:
-        mfccs_norm = uniform_filter1d(mfccs_norm, size=9, axis=0)
-        
-    n_seg = max(3, min(12, int(duration // 20)))
-    clust = AgglomerativeClustering(n_clusters=n_seg, linkage='ward')
-    c_labels = clust.fit_predict(mfccs_norm)
-    
-    b_indices = [0]
+    # 4. Beat-Synchronous Harmonic (Chroma) & Timbral (MFCC) Feature Extraction
+    hop_length = 512
+    mfcc_feat = librosa.feature.mfcc(y=audio_mono, sr=sr, n_mfcc=13, hop_length=hop_length)
+    chroma_feat = librosa.feature.chroma_stft(y=audio_mono, sr=sr, hop_length=hop_length)
+    spectral_features = np.vstack([mfcc_feat, chroma_feat]) # (25, n_frames)
+
+    beat_features = librosa.util.sync(spectral_features, beat_frames, aggregate=np.median).T # (n_beats, 25)
+    beat_features_norm = StandardScaler().fit_transform(beat_features)
+
+    # 5. Sequential 1D Temporal Connectivity Graph (Contiguous Macro Sections)
+    n_beats = len(beat_features_norm)
+    n_macro = max(6, min(10, int(duration // 24)))
+    time_grid = np.arange(n_beats).reshape(-1, 1)
+    connectivity = kneighbors_graph(time_grid, n_neighbors=2, mode='connectivity', include_self=False)
+    clust = AgglomerativeClustering(n_clusters=n_macro, connectivity=connectivity, linkage='ward')
+    c_labels = clust.fit_predict(beat_features_norm)
+
+    change_indices = [0]
     for li in range(1, len(c_labels)):
         if c_labels[li] != c_labels[li - 1]:
-            b_indices.append(li)
-    b_indices.append(len(c_labels) - 1)
-    
-    b_times = [frame_times[b] for b in b_indices[:-1]] + [duration]
-    b_times = [0.0] + sorted(list(set([round(t, 2) for t in b_times if 0.0 < t < duration]))) + [round(duration, 2)]
-    
+            change_indices.append(li)
+
+    raw_b_times = [float(beat_times[min(idx, len(beat_times) - 1)]) for idx in change_indices]
+
+    # Extract ASR lyrics and acoustic breath landmarks
+    lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps)
+    first_vocal_sec = lyrics_blocks[0]["start_sec"] if lyrics_blocks else None
+
+    # Snap boundary timeline (ensuring opening aligns with first vocal onset)
+    b_times = [0.0]
+    if first_vocal_sec is not None and 1.5 <= first_vocal_sec <= 5.0:
+        b_times.append(round(first_vocal_sec, 2))
+
+    for bt in raw_b_times[1:]:
+        if bt > b_times[-1] + 8.0 and bt < duration - 8.0:
+            b_times.append(round(bt, 2))
+    b_times.append(round(duration, 2))
+
     raw_sections = []
-    rms_ext = es.RMS()
     for s_i in range(len(b_times) - 1):
         st_sec = b_times[s_i]
         en_sec = b_times[s_i + 1]
-        if en_sec - st_sec < 2.0:
-            continue
         st_sample = int(st_sec * sr)
         en_sample = int(en_sec * sr)
-        seg_audio = y_es[st_sample:en_sample]
-        seg_rms = float(rms_ext(seg_audio)) if len(seg_audio) > 0 else 0.0
+        seg_audio = audio_mono[st_sample:en_sample]
+        seg_rms = float(np.sqrt(np.mean(seg_audio**2))) if len(seg_audio) > 0 else 0.0
         seg_beats = sum(1 for b in beat_times if st_sec <= b < en_sec)
         raw_sections.append({
             "start_sec": st_sec,
@@ -545,10 +541,6 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
                     "anticipation_start_sec": max(0.0, round(drop_sec - 4.0, 2)),
                     "vacuum_start_sec": max(0.0, round(drop_sec - 1.0, 2))
                 })
-
-    # Extract ASR lyrics and acoustic breath landmarks
-    lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps)
-    first_vocal_sec = lyrics_blocks[0]["start_sec"] if lyrics_blocks else None
 
     # Infer structural labels with real acoustic energy and vocal onset
     sections = infer_section_labels(raw_sections, duration, first_vocal_sec=first_vocal_sec)

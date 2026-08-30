@@ -490,8 +490,11 @@ class BeatStudioManager:
         # Merge in beat grid metadata for UI ruler
         choreo["track_id"] = track_id
         choreo["title"] = track_meta.get("title", track_id)
-        choreo["artist"] = track_meta.get("artist", "Unknown Artist")
-        choreo["tempo"] = float(track_meta.get("bpm") or track_meta.get("tempo") or analysis.get("bpm") or analysis.get("tempo", 120.0))
+        choreo["artist"] = track_meta.get("artist", "")
+        tempo_val = track_meta.get("bpm") or track_meta.get("tempo") or analysis.get("bpm") or analysis.get("tempo")
+        if tempo_val is None:
+            raise KeyError(f"Track '{track_id}' missing 'bpm' or 'tempo' in manifest or audio analysis.")
+        choreo["tempo"] = float(tempo_val)
         choreo["beat_times"] = analysis.get("beat_times", [])
         choreo["drops"] = analysis.get("drops", [])
         choreo["amplitude_envelope"] = analysis.get("amplitude_envelope", [])
