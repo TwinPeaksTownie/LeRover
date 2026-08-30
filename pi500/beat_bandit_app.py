@@ -40,6 +40,13 @@ except ImportError:
     from beat_studio import BeatStudioManager, DEFAULT_SETTINGS, compile_default_choreography, load_dance_presets
 
 try:
+    from choreography_compiler import ROM_POSES
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from choreography_compiler import ROM_POSES
+
+try:
     import network_resolver
 except ImportError:
     import sys
@@ -528,27 +535,53 @@ class BeatBanditApp(BaseApp):
                 spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if spine_block:
                     pattern = spine_block.get("pattern", "hold_stand")
-                    b_mid = (spine_block["start_sec"] + spine_block["end_sec"]) / 2.0
+                    b_st = float(spine_block["start_sec"])
+                    b_et = float(spine_block["end_sec"])
+                    b_dur = max(0.1, b_et - b_st)
 
                     if pattern == "stand_dip_stand":
-                        active_pose_name = spine_block.get("mid_pose", "squat") if elapsed < b_mid else "stand"
-                    elif pattern == "return_stand_mid":
-                        active_pose_name = spine_block.get("start_pose", "stand") if elapsed < b_mid else "stand"
-                    elif pattern == "return_stand_late":
-                        active_pose_name = spine_block.get("start_pose", "stand") if elapsed < (spine_block["end_sec"] - 0.4) else "stand"
+                        # Smooth cosine S-curve dip centered at midpoint
+                        progress = max(0.0, min(1.0, (elapsed - b_st) / b_dur))
+                        dip_weight = math.sin(progress * math.pi)
+                        p_stand = ROM_POSES.get("stand", choreo_poses.get("stand"))
+                        mid_pose_name = spine_block.get("mid_pose", "squat")
+                        p_mid = ROM_POSES.get(mid_pose_name, choreo_poses.get(mid_pose_name, p_stand))
+                        
+                        target_lift_rom = p_stand["shoulder_lift"] + (p_mid["shoulder_lift"] - p_stand["shoulder_lift"]) * dip_weight
+                        target_elbow_rom = p_stand["elbow_flex"] + (p_mid["elbow_flex"] - p_stand["elbow_flex"]) * dip_weight
+                        active_pose_name = "stand" if dip_weight < 0.3 else mid_pose_name
                     else:
-                        active_pose_name = spine_block.get("pose_name", "stand")
+                        if pattern == "return_stand_mid":
+                            active_pose_name = spine_block.get("start_pose", "stand") if elapsed < (b_st + b_dur * 0.5) else "stand"
+                        elif pattern == "return_stand_late":
+                            active_pose_name = spine_block.get("start_pose", "stand") if elapsed < (b_et - 0.4) else "stand"
+                        elif pattern == "return_stand_early":
+                            active_pose_name = "stand"
+                        else:
+                            active_pose_name = spine_block.get("pose_name", "stand")
 
-                    if active_pose_name not in choreo_poses:
-                        active_pose_name = "stand"
+                        pose_dict = ROM_POSES.get(active_pose_name, choreo_poses.get(active_pose_name, ROM_POSES["stand"]))
+                        target_lift_rom = float(pose_dict["shoulder_lift"])
+                        target_elbow_rom = float(pose_dict["elbow_flex"])
 
-                    target_posture = choreo_poses[active_pose_name]
+                    # Neck Pitch: 70.0% Audience (80%), 50.0% Up (15%), 85.0% Down (5%)
+                    if "neck_pitch_rom" in spine_block:
+                        target_pitch_rom = float(spine_block["neck_pitch_rom"])
+                    else:
+                        gaze_mode = spine_block.get("head_pitch", "level")
+                        target_pitch_rom = 50.0 if gaze_mode == "up" else (85.0 if gaze_mode == "down" else 70.0)
+
+                    # Map 0-100% ROM to -100 to +100 normalized space: norm = (rom - 50.0) * 2.0
+                    target_lift_norm = (target_lift_rom - 50.0) * 2.0
+                    target_elbow_norm = (target_elbow_rom - 50.0) * 2.0
+                    target_pitch_norm = (target_pitch_rom - 50.0) * 2.0
+
                     trans_sec = float(spine_block.get("transition_sec", 0.5))
                     alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
 
-                    smooth_posture["shoulder_lift"] += alpha * ((float(target_posture["shoulder_lift"]) + body_bounce_offset) - smooth_posture["shoulder_lift"])
-                    smooth_posture["elbow_flex"] += alpha * ((float(target_posture["elbow_flex"]) - (body_bounce_offset * 0.6)) - smooth_posture["elbow_flex"])
-                    smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + head_bob_offset) - smooth_posture["wrist_flex"])
+                    smooth_posture["shoulder_lift"] += alpha * ((target_lift_norm + body_bounce_offset) - smooth_posture["shoulder_lift"])
+                    smooth_posture["elbow_flex"] += alpha * ((target_elbow_norm - (body_bounce_offset * 0.6)) - smooth_posture["elbow_flex"])
+                    smooth_posture["wrist_flex"] += alpha * ((target_pitch_norm + head_bob_offset) - smooth_posture["wrist_flex"])
 
                     self.current_move_name = spine_block.get("name", active_pose_name)
                     self.current_energy_level = "HIGH ENERGY" if active_pose_name in ["tiptoe", "arch"] else "GROOVE"
@@ -559,16 +592,22 @@ class BeatBanditApp(BaseApp):
                 s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if s7_block:
                     s7_mode = s7_block.get("mode", "hold")
+                    if "target_pos_rom" in s7_block:
+                        base_s7_deg = (float(s7_block["target_pos_rom"]) - 50.0) * 2.7
+                        step_s7_deg = float(s7_block.get("step_rom", 0.0)) * 2.7
+                    else:
+                        base_s7_deg = float(s7_block.get("target_deg", 0.0))
+                        step_s7_deg = float(s7_block.get("step_deg", 25.0))
+
                     if s7_mode == "midpoint_pulse":
                         s7_mid = (s7_block["start_sec"] + s7_block["end_sec"]) / 2.0
                         if elapsed < s7_mid:
-                            target_s7_deg = float(s7_block.get("target_deg", 0.0)) + float(s7_block.get("step_deg", 25.0))
+                            target_s7_deg = base_s7_deg + step_s7_deg
                         else:
-                            target_s7_deg = float(s7_block.get("target_deg", 0.0))
-                        # Instantaneous write for midpoint pulse
+                            target_s7_deg = base_s7_deg
                         alpha_s7 = 0.50
                     else:
-                        target_s7_deg = float(s7_block.get("target_deg", 0.0))
+                        target_s7_deg = base_s7_deg
                         trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
                         alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
 
@@ -592,11 +631,17 @@ class BeatBanditApp(BaseApp):
                 smooth_posture["shoulder_pan"] += 0.25 * (target_pan - smooth_posture["shoulder_pan"])
 
                 # ----------------------------------------------------
-                # 4. Track 5: Head Tilt & Neck Pitch (Servo 5)
+                # 4. Track 5: Head Tilt & Wrist Roll (Servo 5)
                 # ----------------------------------------------------
                 s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                target_tilt = float(s5_block.get("tilt_deg", 0.0)) if s5_block else 0.0
-                target_roll = float(target_posture["wrist_roll"]) + target_tilt
+                if s5_block and "tilt_rom" in s5_block:
+                    tilt_rom = float(s5_block["tilt_rom"])
+                    target_roll = (tilt_rom - 50.0) * 2.0
+                elif s5_block:
+                    target_tilt = float(s5_block.get("tilt_deg", 0.0))
+                    target_roll = target_tilt
+                else:
+                    target_roll = 0.0
                 smooth_posture["wrist_roll"] += 0.25 * (target_roll - smooth_posture["wrist_roll"])
 
                 # ----------------------------------------------------
@@ -604,13 +649,38 @@ class BeatBanditApp(BaseApp):
                 # ----------------------------------------------------
                 s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if s8_block and s8_block.get("id") != last_s8_block_id:
-                    dest_s8 = int(s8_block.get("target_pos", gantry_center))
+                    s8_mode = s8_block.get("mode", "hold")
+                    s8_drop_sec = s8_block.get("drop_sec")
+
+                    if "target_pos_rom" in s8_block:
+                        dest_s8 = int(round(gantry_min + (float(s8_block["target_pos_rom"]) / 100.0) * (gantry_max - gantry_min)))
+                    else:
+                        dest_s8 = int(s8_block.get("target_pos", gantry_center))
                     spd = int(s8_block.get("speed", 500))
-                    try:
-                        backend.move_target(8, dest_s8, speed=spd, max_t=800)
-                        last_s8_block_id = s8_block.get("id")
-                    except Exception as g_err:
-                        self.logger.warning(f"Gantry timeline move warning: {g_err}")
+
+                    should_dispatch = True
+                    if s8_mode == "hold_to_drop_glide" and s8_drop_sec and elapsed < float(s8_drop_sec):
+                        should_dispatch = False
+
+                    if should_dispatch:
+                        try:
+                            backend.move_target(8, dest_s8, speed=spd, max_t=800)
+                            last_s8_block_id = s8_block.get("id")
+                        except Exception as g_err:
+                            self.logger.warning(f"Gantry timeline move warning: {g_err}")
+                elif s8_block and s8_block.get("id") == last_s8_block_id:
+                    s8_mode = s8_block.get("mode", "hold")
+                    s8_drop_sec = s8_block.get("drop_sec")
+                    if s8_mode == "hold_to_drop_glide" and s8_drop_sec and elapsed >= float(s8_drop_sec):
+                        if "target_pos_rom" in s8_block:
+                            dest_s8 = int(round(gantry_min + (float(s8_block["target_pos_rom"]) / 100.0) * (gantry_max - gantry_min)))
+                        else:
+                            dest_s8 = int(s8_block.get("target_pos", gantry_center))
+                        spd = int(s8_block.get("speed", 700))
+                        try:
+                            backend.move_target(8, dest_s8, speed=spd, max_t=800)
+                        except Exception:
+                            pass
 
                 # ----------------------------------------------------
                 # 6. Track 6: Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)

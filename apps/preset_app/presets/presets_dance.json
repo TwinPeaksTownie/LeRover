@@ -72,17 +72,17 @@
     "timestamp": 1787854700.0,
     "normalized": {
       "shoulder_pan": 0.0,
-      "shoulder_lift": -32.50,
-      "elbow_flex": -45.0,
-      "wrist_flex": 42.0,
+      "shoulder_lift": -80.0,
+      "elbow_flex": -60.0,
+      "wrist_flex": 0.0,
       "wrist_roll": 0.0,
       "gripper": 0.0
     },
     "raw_ticks": {
       "1": 2048,
-      "2": 1710,
-      "3": 850,
-      "4": 2550,
+      "2": 1150,
+      "3": 590,
+      "4": 2048,
       "5": 1971,
       "6": 1460
     },
