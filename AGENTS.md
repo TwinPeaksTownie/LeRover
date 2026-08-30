@@ -1,44 +1,60 @@
-# Core Operating Principles & Human Partnership
+# Core Operating Protocols & Human Partnership
 
 ### 1. Human Partnership & Direct Communication
-- **Direct, Plain Answers**: Answer the exact question asked without lecturing, debating, academic hedging, or defensive essays. High word count does not equal correctness.
-- **Listen to Corrections**: When corrected, pause and understand the intent. Never react with knee-jerk overcorrections, sweeping purges, or pedantic arguments about wording.
-- **No Sycophancy or Desperation Phrasing**: Never use conversational pleading or desperate openers/closers ("Tell me...", "Let me know if...", "I'm ready when you are", "Would you like me to..."). State technical facts, empirical findings, and concrete choices directly without conversational filler.
+- **Direct, Plain Answers**: Answer the exact question asked directly and clearly. State technical facts, empirical findings, and concrete choices in natural, flowing language.
+- **Adaptive Execution**: When corrected, identify the root cause and adjust execution immediately.
+- **Actionable Reporting**: State what changed, why an approach failed, and the exact operational steps to take next.
 
-### 2. Decouple Diagnosis from Code Modification
-- **No Unsolicited Code Changes**: When asked an exploratory, conceptual, or diagnostic question, explain the physical or logical reality clearly in plain language.
-- **Code Only on Explicit Command**: Do not unilaterally rewrite files, create patch scripts, or force sweeping refactors unless explicitly asked for code execution. DO NOT CODE BEFORE YOU KNOW WHAT YOU ARE DOING.
+### 2. Instruction-Gated Execution Protocol
+- **Exploratory & Diagnostic Mode**: When asked exploratory, conceptual, or diagnostic questions, provide technical explanations in plain language.
+- **Imperative Execution Mode**: Execute file writes, refactors, and deploy scripts only when given explicit commands (`fix`, `implement`, `edit`, `deploy`, `run`, `refactor`).
 
-### 3. Single Source of Truth (Zero Invented Numbers)
-- **Empirical Calibration Files Only**: Joint poses and limits load strictly from calibration files (`presets_dance.json`, `follower.json`, `calibration_aux.json`).
-- **No Arbitrary Defaults**: Never inject speculative numbers, placeholder bounce weights (e.g. `0.2`), or hardcoded tick constants. If calibration data is missing, fail loudly instead of guessing.
+### 3. Single Source of Truth & Calibration Resolution
+- **Runtime JSON Calibration Resolution**: Load motor limits and neutral poses strictly into memory from disk at startup:
+  - Follower Arm Servos 1–6: Read from `follower.json` (`calib_min`, `calib_max`, `homing_offset`).
+  - Auxiliary Actuators Servos 7–8: Read from `calibration_aux.json`.
+  - Dance Poses: Read from `presets_dance.json`.
+- **Dynamic In-Memory Arithmetic**: Calculate all spatial offsets, ticks, and safety clamping dynamically in memory against loaded calibration structures.
 
 ### 4. Separate Motion Synthesis from Runtime Execution
-- **Compile Upfront**: Complex choreography, beat-alignment, and smooth groove curves belong in the compilation pass and are saved cleanly into JSON.
-- **Deterministic Playback**: The live 50 Hz playback engine runs zero uncoordinated math hacks or competing in-loop oscillators. It focuses on clean keyframe interpolation, joint safety clamping, and serial dispatch to `/dev/ttyACM0`.
+- **Compile Upfront**: Pre-calculate choreography, beat-alignment, and motion curves during the compilation pass and save them into JSON sequence files.
+- **Deterministic 50 Hz Playback Engine**: Live playback executes keyframe interpolation, joint safety clamping, and serial dispatch to `/dev/ttyACM0`.
 
-### 5. Strict End-to-End Validation Protocol (Zero Superficial Checks)
-- **Pipeline Continuity Proof**: NEVER declare a pipeline working because a producer function wrote data or returned HTTP 200. You must trace and prove the downstream consumer explicitly reads and unmarshals those exact keys.
-- **Dynamic Variance Proof**: NEVER assume motion works because a loop runs. Verify that evaluated target positions dynamically vary across timestamps (e.g. proving stances transition between `stand`, `tiptoe`, `squat` and angles change rather than locking in one pose).
-- **Physical Sampling Proof**: NEVER declare completion because `is_running: true` or a process is alive. Sample live hardware encoder telemetry at multiple timeline checkpoints (e.g. 5s, 25s, 50s) to prove physical servos actually moved to distinct target coordinates.
+### 5. Mandatory Verification State Machine
+Every task must transition sequentially through four explicit verification states before concluding:
+1. **State 1 (Pipeline Continuity)**: Trace and prove the downstream consumer explicitly reads and unmarshals the exact keys sent by the producer.
+2. **State 2 (Dynamic Variance)**: Verify that target coordinates dynamically vary across timestamps (e.g. proving stances transition across distinct poses rather than locking in place).
+3. **State 3 (Live Telemetry & Physical Sampling)**: Sample live hardware encoder telemetry at multiple timeline checkpoints (e.g. 5s, 25s, 50s) to prove physical servos reached commanded coordinates.
+4. **State 4 (Log Audit)**: Query daemon logs (`journalctl`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
 
 ---
 
-# Operational Directives (DOs & DON'Ts)
+# Operational Protocols
 
-### Core Directives (DOs)
-1. **DO query live empirical telemetry first**: Verify physical reality, log streams (`journalctl`), running processes (`ps aux`), or raw serial responses before diagnosing hardware state.
-2. **DO use normalized percentage joint mapping**: Calculate motion using `(pos - min) / (max - min)` aligned around calibrated midpoints across both arms.
-3. **DO maintain serial bus hygiene & isolation**: Verify background processes holding `/dev/ttyACM0` are stopped before running direct serial scripts, clear buffers, and use blocking reads with timeouts.
-4. **DO deploy touchscreen UI changes directly to live target**: Upload modified UI files to `/home/carson/touch_ui/` on Pi 4B (`192.168.0.86`) and restart `backend.service` (or `touchscreen.service` for display reload) for live testing.
-5. **DO explicitly clean up remote SSH processes**: Issue explicit remote kill commands (`ssh user@192.168.0.130 "pkill -9 -f <script>"`) to prevent orphaned background jobs on the Pi 500.
-6. **DO enforce strict loud failure modes**: Raise explicit errors on hardware/telemetry failures without breaking UI resilience or crashing web servers on minor network blips.
+### 1. Telemetry & Hardware State Verification
+- Inspect physical reality, active processes (`ps aux`), port locks, and serial telemetry before diagnosing hardware state.
 
-### Core Prohibitions (DON'Ts)
-1. **DON'T assume hardware, network, or socket state without verifying**.
-2. **DON'T carte-blanche purge code or swing between extremes**.
-3. **DON'T edit `lessons_learned.md` without explicit user instruction**.
-4. **DON'T use the word "phrase"**: Never use the word "phrase" when describing musical choreography or timeline blocks; strictly use concrete terms like `4bars`, `8bars`, `measures`, or `beats`.
+### 2. Normalized Percentage Joint Mapping
+- Calculate joint motion using `(pos - min) / (max - min)` aligned around calibrated midpoints across both arms.
+
+### 3. Serial Bus Hygiene & Isolation
+- Terminate background processes holding `/dev/ttyACM0` before running direct serial scripts.
+- Flush UART software buffers and use blocking reads with explicit timeouts.
+- When serial timeouts occur on `/dev/ttyACM0`, check process locks and query downstream devices to verify electrical pass-through continuity.
+
+### 4. Target Deployment Protocol
+- Sync modified files to the target devices (`/home/user/so101/pi500/` on Pi 500 or `/home/carson/touch_ui/` on Pi 4B) immediately after local edits.
+- Restart target services (`backend.service`, `touchscreen.service`) and verify endpoint status before declaring a fix deployed.
+
+### 5. Remote Process Management
+- Issue explicit process termination commands (`pkill -9 -f <script>`) over SSH to prevent orphaned background jobs on remote nodes.
+
+### 6. Strict Fail-Fast Schema & Contract Enforcement
+- Parse explicitly defined keys from payloads.
+- Raise immediate, descriptive exceptions (`KeyError`, `FileNotFoundError`, HTTP `400 Bad Request` / `500 Internal Error`) with exact field names when reads or payload parsing fail.
+
+### 7. Musical Choreography Terminology
+- Model and describe all choreography timelines strictly using concrete musical divisions: `measures`, `beats`, `4bars`, and `8bars`.
 
 ---
 
