@@ -25,6 +25,8 @@ import numpy as np
 import soundfile as sf
 import librosa
 import torch
+import torchaudio
+import re
 
 try:
     import essentia.standard as es
@@ -223,44 +225,92 @@ def infer_section_labels(segments: list[dict], total_duration: float, first_voca
 
     return segments
 
-DANGLING_ENDINGS = {
-    "the", "a", "an", "in", "on", "at", "to", "for", "with", "and", "but", "or", "of",
-    "put", "i'm", "i'll", "i", "you", "she", "he", "it's", "my", "your", "her", "his", "our", "their"
-}
-
 def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50, chapter_boundaries: Optional[list] = None) -> list:
-    """Extracts word-timestamped ASR lyrics, groups into clean poetic clauses based on chapter boundaries,
-    punctuation endpoints, acoustic pauses (>0.25s), and non-dangling word groups, and extracts preceding breath intake blocks.
+    """Extracts spoken lyrics using Whisper text transcription + MMS_FA CTC Forced Alignment,
+    clusters words into natural acoustic phrases at silence gaps (>=0.25s) or chapter boundaries,
+    and snaps visual phrase boundaries flush against the 50Hz MMDenseLSTM vocal envelope.
     """
-    logger.info(f"Extracting lyrics and breath landmarks from {vocals_wav_path}...")
+    logger.info(f"Extracting lyrics and breath landmarks from {vocals_wav_path} via MMS_FA...")
+    
+    # 1. Load 16kHz mono audio for Whisper & MMS_FA
+    y_16k, sr_16k = librosa.load(str(vocals_wav_path), sr=16000, mono=True)
+    if len(y_16k) == 0:
+        logger.warning(f"Vocals file {vocals_wav_path} is empty.")
+        return []
+    y_16k = np.ascontiguousarray(y_16k, dtype=np.float32)
+    max_abs = np.max(np.abs(y_16k))
+    if max_abs > 1e-4:
+        y_16k = y_16k / max_abs
+
+    # 2. Text transcription via Whisper
+    raw_text = ""
     try:
-        import whisper
-        model = whisper.load_model("base.en")
-        result = model.transcribe(
-            str(vocals_wav_path),
-            word_timestamps=True,
-            condition_on_previous_text=False,
-            verbose=False
-        )
+        try:
+            from faster_whisper import WhisperModel
+            whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
+            segments, _ = whisper_model.transcribe(y_16k, beam_size=1, condition_on_previous_text=False)
+            raw_text = " ".join(s.text for s in segments).strip()
+        except ImportError:
+            import whisper
+            model = whisper.load_model("base.en")
+            result = model.transcribe(str(vocals_wav_path), condition_on_previous_text=False, verbose=False)
+            raw_text = result.get("text", "").strip()
     except Exception as e:
         logger.error(f"Whisper transcription failed on {vocals_wav_path}: {e}")
-        raise RuntimeError(f"Whisper transcription failed on {vocals_wav_path}: {e}")
+        return []
 
-    all_words = []
-    for segment in result.get("segments", []):
-        for w in segment.get("words", []):
-            word_str = w.get("word", "").strip()
-            if word_str:
-                all_words.append({
-                    "word": word_str,
-                    "start": round(float(w["start"]), 2),
-                    "end": round(float(w["end"]), 2)
-                })
-
-    if not all_words:
+    if not raw_text:
         logger.warning(f"No spoken words transcribed in {vocals_wav_path}")
         return []
 
+    # 3. MMS_FA CTC Forced Alignment
+    all_words = []
+    try:
+        bundle = torchaudio.pipelines.MMS_FA
+        fa_model = bundle.get_model().to("cpu")
+        tokenizer = bundle.get_tokenizer()
+        aligner = bundle.get_aligner()
+
+        waveform_16k = torch.from_numpy(y_16k).unsqueeze(0).float()
+        with torch.inference_mode():
+            emissions, _ = fa_model(waveform_16k)
+            emissions = torch.log_softmax(emissions, dim=-1)
+
+        emission = emissions[0].cpu().detach()
+        raw_words = [w.strip() for w in raw_text.split() if w.strip()]
+        
+        cleaned_words = []
+        valid_indices = []
+        for idx, w in enumerate(raw_words):
+            cw = re.sub(r"[^a-zA-Z']", "", w).lower()
+            if cw:
+                cleaned_words.append(cw)
+                valid_indices.append(idx)
+
+        if cleaned_words:
+            tokens = tokenizer(cleaned_words)
+            aligned_tokens_list = aligner(emission, tokens)
+            ratio = len(y_16k) / emission.shape[0] / 16000.0
+
+            for word_spans, orig_idx in zip(aligned_tokens_list, valid_indices):
+                if not word_spans:
+                    continue
+                w_start = round(float(word_spans[0].start * ratio), 2)
+                w_end = round(float(word_spans[-1].end * ratio), 2)
+                all_words.append({
+                    "word": raw_words[orig_idx],
+                    "start": w_start,
+                    "end": max(round(w_start + 0.04, 2), w_end)
+                })
+    except Exception as e:
+        logger.error(f"MMS_FA forced alignment failed on {vocals_wav_path}: {e}")
+        return []
+
+    if not all_words:
+        logger.warning(f"No words aligned in {vocals_wav_path}")
+        return []
+
+    # 4. Group words into natural acoustic phrases
     chapter_bounds = sorted(chapter_boundaries or [])
     lines = []
     current_words = []
@@ -275,27 +325,12 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         prev_word_clean = prev_w["word"].strip().rstrip("\"'”’")
         has_punct = prev_word_clean.endswith((',', '.', '?', '!', ';', ':', '—', '-', '…'))
 
-        # 1. Hard Chapter Boundary Check
+        # Hard chapter boundary
         crossed_chapter = any(prev_w["end"] <= cb <= w["start"] or (prev_w["start"] < cb <= w["start"]) for cb in chapter_bounds)
-
-        # 2. Acoustic Pause Check
+        # Acoustic silence gap >= 250ms
         is_acoustic_pause = (gap >= 0.25)
 
-        # 3. Non-dangling word split check
-        prev_lower = prev_word_clean.lower().rstrip(",.?!;:-—…")
-        is_dangling = prev_lower in DANGLING_ENDINGS
-
-        should_split = False
         if crossed_chapter or has_punct or is_acoustic_pause:
-            should_split = True
-        elif len(current_words) >= 4 and gap >= 0.15 and not is_dangling:
-            should_split = True
-        elif len(current_words) >= 6 and not is_dangling:
-            should_split = True
-        elif len(current_words) >= 8:
-            should_split = True
-
-        if should_split:
             lines.append(current_words)
             current_words = [w]
         else:
@@ -304,6 +339,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
     if current_words:
         lines.append(current_words)
 
+    # 5. Flush Envelope Snapping & Breath Extraction
     blocks = []
     lyric_idx = 1
     breath_idx = 1
@@ -313,16 +349,14 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         line_text = " ".join(w["word"] for w in line_words)
         raw_st = float(line_words[0]["start"])
         raw_en = float(line_words[-1]["end"])
-
         prev_block_end = blocks[-1]["end_sec"] if blocks else 0.0
 
-        # Determine upper boundary from next phrase onset or audio length
         if line_idx + 1 < n_lines:
             next_line_st = float(lines[line_idx + 1][0]["start"])
         else:
             next_line_st = len(mouth_envelope) / fps
 
-        # 1. Acoustic Onset Snapping (start_sec)
+        # A. Snap start_sec to the nearest acoustic vocal onset frame (>= 5.0%)
         st_sec = raw_st
         search_start = max(int(prev_block_end * fps), int((raw_st - 0.3) * fps))
         search_end = min(len(mouth_envelope), int((raw_st + 0.3) * fps))
@@ -334,7 +368,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         st_sec = max(prev_block_end, st_sec)
         line_words[0]["start"] = st_sec
 
-        # 2. Breath Inhale Detection (in pre-roll before st_sec)
+        # B. Breath Inhale Detection in silence pre-roll
         phrase_start_frame = int(st_sec * fps)
         breath_lookback_frames = int(0.7 * fps)
         breath_end_offset_frames = int(0.15 * fps)
@@ -372,7 +406,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
                 st_sec = max(prev_block_end, st_sec)
                 line_words[0]["start"] = st_sec
 
-        # 3. Acoustic Sustained Trail Snapping (end_sec)
+        # C. Snap end_sec to true vocal energy trailing decay (>= 5.0%)
         en_frame = int(raw_en * fps)
         max_frame = int(next_line_st * fps)
         last_active = max(int(st_sec * fps), en_frame)
@@ -381,7 +415,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
             for f_idx in range(en_frame, min(len(mouth_envelope), max_frame)):
                 if mouth_envelope[f_idx] >= 5.0:
                     last_active = f_idx
-                elif f_idx - last_active > int(0.25 * fps):  # 250ms silence gap
+                elif f_idx - last_active > int(0.20 * fps):  # 200ms silence gap
                     break
 
         snapped_en = round((last_active + 1) / fps, 2)
