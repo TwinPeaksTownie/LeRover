@@ -260,11 +260,6 @@ export function toggleBeatBanditApp() {
 }
 
 export function handleMainDanceBtnClick() {
-    if (!isBeatBanditAppRunning) {
-        ui.setHeaderAlert('START BEAT BANDIT FIRST');
-        api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
-        return;
-    }
     if (isBeatBanditDancing || timelineIsPlaying) {
         stopBeatBanditDance();
     } else {
@@ -273,11 +268,6 @@ export function handleMainDanceBtnClick() {
 }
 
 export function startBeatBanditFromInput() {
-    if (!isBeatBanditAppRunning) {
-        ui.setHeaderAlert('START BEAT BANDIT FIRST');
-        api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
-        return;
-    }
     const inp = document.getElementById('bbUrlInput');
     let val = (inp && inp.value) ? inp.value.trim() : '';
     if (!val) {
@@ -287,11 +277,6 @@ export function startBeatBanditFromInput() {
 }
 
 export function startBeatBanditTrack(urlOrId) {
-    if (!isBeatBanditAppRunning) {
-        ui.setHeaderAlert('START BEAT BANDIT FIRST');
-        api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
-        return;
-    }
     const btn = document.getElementById('bbMainDanceBtn');
     const txt = document.getElementById('bbMainDanceText');
     if (btn) btn.style.opacity = '0.7';
@@ -306,6 +291,7 @@ export function startBeatBanditTrack(urlOrId) {
                 api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
                 return;
             }
+            setIsBeatBanditAppRunning(true);
             setIsBeatBanditDancing(true);
             ui.renderButtonStates();
             fetchBeatBanditTracks();
@@ -340,11 +326,6 @@ export function stopBeatBanditDance() {
 }
 
 export function startBeatBanditSectionPlay() {
-    if (!isBeatBanditAppRunning) {
-        ui.setHeaderAlert('START BEAT BANDIT FIRST');
-        api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
-        return;
-    }
     const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id) || '_uu_izpVSEc';
     if (!tid) return;
 
@@ -364,6 +345,7 @@ export function startBeatBanditSectionPlay() {
                 api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
                 return;
             }
+            setIsBeatBanditAppRunning(true);
             setTimelineIsPlaying(true);
             setIsBeatBanditDancing(true);
             ui.renderTimeline();

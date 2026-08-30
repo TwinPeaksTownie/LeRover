@@ -593,10 +593,12 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             end_sec = float(body.get("end_sec")) if (body.get("end_sec") is not None and str(body.get("end_sec")) != "") else None
             loop = bool(body.get("loop", False))
             
-            # Require beat_bandit_app to be explicitly running
+            # Auto-engage beat_bandit_app session if not already active
             if self.app_manager.current_app_name != "beat_bandit_app":
-                play_chime("incorrect")
-                return self._send_json({"status": "error", "message": "Beat Bandit App is not running. Please start the app first."}, 400)
+                ok = self.app_manager.start_app_by_name("beat_bandit_app")
+                if not ok:
+                    play_chime("incorrect")
+                    return self._send_json({"status": "error", "message": "Failed to activate Beat Bandit application session."}, 500)
 
             bb_app = self.app_manager.active_app
             if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):

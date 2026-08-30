@@ -424,6 +424,7 @@ class BeatBanditApp(BaseApp):
 
         # Initialize smooth dynamic state
         smooth_posture = dict(base_home)
+        target_posture = dict(base_home)
         current_s7_deg = 0.0
         last_s7_sent_deg: Optional[float] = None
         last_s8_block_id: Optional[str] = None
@@ -460,134 +461,139 @@ class BeatBanditApp(BaseApp):
         start_time = time.time()
         self.logger.info(f"Starting 6-track measure performance loop ({target_start_sec:.1f}s -> {target_end_sec:.1f}s, loop={loop})...")
 
-        while not self.track_stop_event.is_set() and not (self.stop_event and self.stop_event.is_set()):
-            loop_start = time.time()
-            elapsed = (loop_start - start_time) + target_start_sec
-            self.current_time_sec = elapsed
+        try:
+            while not self.track_stop_event.is_set() and not (self.stop_event and self.stop_event.is_set()):
+                loop_start = time.time()
+                elapsed = (loop_start - start_time) + target_start_sec
+                self.current_time_sec = elapsed
 
-            if elapsed >= target_end_sec:
-                if loop and not self.track_stop_event.is_set():
-                    self.logger.info(f"Looping performance ({target_start_sec:.1f}s -> {target_end_sec:.1f}s)...")
-                    start_time = time.time()
-                    self._dispatch_audio_to_pi4b(wav_path, start_sec=target_start_sec, end_sec=target_end_sec)
-                    continue
+                if elapsed >= target_end_sec:
+                    if loop and not self.track_stop_event.is_set():
+                        self.logger.info(f"Looping performance ({target_start_sec:.1f}s -> {target_end_sec:.1f}s)...")
+                        start_time = time.time()
+                        self._dispatch_audio_to_pi4b(wav_path, start_sec=target_start_sec, end_sec=target_end_sec)
+                        continue
+                    else:
+                        break
+
+                self.progress_pct = min(100.0, (elapsed / duration) * 100.0)
+
+                # Current Beat Index and Phase Lookup
+                beat_idx = int(np.searchsorted(beat_times, elapsed)) - 1
+                beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
+                self.current_beat_idx = beat_idx
+
+                # Calculate continuous rhythmic sway phase across beats
+                if beat_idx < len(beat_times) - 1:
+                    b_cur = beat_times[beat_idx]
+                    b_nxt = beat_times[beat_idx + 1]
+                    b_frac = (elapsed - b_cur) / max(0.05, b_nxt - b_cur)
+                    sway_offset = math.sin((beat_idx % 2 + b_frac) * math.pi)
                 else:
-                    break
+                    sway_offset = 0.0
 
-            self.progress_pct = min(100.0, (elapsed / duration) * 100.0)
+                # 1. Track 1: Spine & Elevation (Servos 2, 3, 4)
+                spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                if spine_block:
+                    pose_name = spine_block.get("pose_name", "stand")
+                    if pose_name not in choreo_poses:
+                        pose_name = "stand"
+                    target_posture = choreo_poses[pose_name]
+                    trans_sec = float(spine_block.get("transition_sec", 0.5))
+                    alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
 
-            # Current Beat Index and Phase Lookup
-            beat_idx = int(np.searchsorted(beat_times, elapsed)) - 1
-            beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
-            self.current_beat_idx = beat_idx
+                    head_pitch = spine_block.get("head_pitch", "level")
+                    pitch_offset = 20.0 if head_pitch == "up" else (-15.0 if head_pitch == "down" else 0.0)
 
-            # Calculate continuous rhythmic sway phase across beats
-            if beat_idx < len(beat_times) - 1:
-                b_cur = beat_times[beat_idx]
-                b_nxt = beat_times[beat_idx + 1]
-                b_frac = (elapsed - b_cur) / max(0.05, b_nxt - b_cur)
-                sway_offset = math.sin((beat_idx % 2 + b_frac) * math.pi)
-            else:
-                sway_offset = 0.0
+                    smooth_posture["shoulder_lift"] += alpha * (float(target_posture["shoulder_lift"]) - smooth_posture["shoulder_lift"])
+                    smooth_posture["elbow_flex"] += alpha * (float(target_posture["elbow_flex"]) - smooth_posture["elbow_flex"])
+                    smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + pitch_offset) - smooth_posture["wrist_flex"])
 
-            # 1. Track 1: Spine & Elevation (Servos 2, 3, 4)
-            spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            if spine_block:
-                pose_name = spine_block.get("pose_name", "stand")
-                if pose_name not in choreo_poses:
-                    pose_name = "stand"
-                target_posture = choreo_poses[pose_name]
-                trans_sec = float(spine_block.get("transition_sec", 0.5))
-                alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
+                    self.current_move_name = spine_block.get("name", pose_name)
+                    self.current_energy_level = "HIGH ENERGY" if pose_name in ["tiptoe", "arch"] else "GROOVE"
 
-                head_pitch = spine_block.get("head_pitch", "level")
-                pitch_offset = 20.0 if head_pitch == "up" else (-15.0 if head_pitch == "down" else 0.0)
+                # 2. Track 4: Torso Pan & Groove Modifier (Servo 1)
+                s1_block = next((b for b in s1_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                groove_int = float(s1_block.get("groove_intensity", 0.5)) if s1_block else 0.5
+                sway_enabled = s1_block.get("sway_enabled", True) if s1_block else True
+                sway_deg = (groove_int * max_sway_deg * sway_offset) if sway_enabled else 0.0
+                target_pan = float(target_posture["shoulder_pan"]) + sway_deg
+                smooth_posture["shoulder_pan"] += 0.25 * (target_pan - smooth_posture["shoulder_pan"])
 
-                smooth_posture["shoulder_lift"] += alpha * (float(target_posture["shoulder_lift"]) - smooth_posture["shoulder_lift"])
-                smooth_posture["elbow_flex"] += alpha * (float(target_posture["elbow_flex"]) - smooth_posture["elbow_flex"])
-                smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + pitch_offset) - smooth_posture["wrist_flex"])
+                # 3. Track 5: Head Tilt (Servo 5)
+                s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                target_tilt = float(s5_block.get("tilt_deg", 0.0)) if s5_block else 0.0
+                target_roll = float(target_posture["wrist_roll"]) + target_tilt
+                smooth_posture["wrist_roll"] += 0.25 * (target_roll - smooth_posture["wrist_roll"])
 
-                self.current_move_name = spine_block.get("name", pose_name)
-                self.current_energy_level = "HIGH ENERGY" if pose_name in ["tiptoe", "arch"] else "GROOVE"
+                # 4. Track 3: Pedestal S7 (Macro Stage Facing)
+                s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                if s7_block:
+                    target_s7_deg = float(s7_block.get("target_deg", 0.0))
+                    trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
+                    alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
+                    current_s7_deg += alpha_s7 * (target_s7_deg - current_s7_deg)
+                    current_s7_deg = max(-135.0, min(135.0, current_s7_deg))
+                    self.current_s7_target_deg = current_s7_deg
 
-            # 2. Track 4: Torso Pan & Groove Modifier (Servo 1)
-            s1_block = next((b for b in s1_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            groove_int = float(s1_block.get("groove_intensity", 0.5)) if s1_block else 0.5
-            sway_enabled = s1_block.get("sway_enabled", True) if s1_block else True
-            sway_deg = (groove_int * max_sway_deg * sway_offset) if sway_enabled else 0.0
-            target_pan = float(target_posture["shoulder_pan"]) + sway_deg
-            smooth_posture["shoulder_pan"] += 0.25 * (target_pan - smooth_posture["shoulder_pan"])
+                # 5. Track 2: Gantry S8 (Tier A One-Shot Dispatch)
+                s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                if s8_block and s8_block.get("id") != last_s8_block_id:
+                    dest_s8 = int(s8_block.get("target_pos", gantry_center))
+                    spd = int(s8_block.get("speed", 500))
+                    try:
+                        backend.move_target(8, dest_s8, speed=spd, max_t=800)
+                        last_s8_block_id = s8_block.get("id")
+                    except Exception as g_err:
+                        self.logger.warning(f"Gantry timeline move warning: {g_err}")
 
-            # 3. Track 5: Head Tilt (Servo 5)
-            s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            target_tilt = float(s5_block.get("tilt_deg", 0.0)) if s5_block else 0.0
-            target_roll = float(target_posture["wrist_roll"]) + target_tilt
-            smooth_posture["wrist_roll"] += 0.25 * (target_roll - smooth_posture["wrist_roll"])
+                # 6. Track 6: Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)
+                jaw_open_pct = 0.0
+                if mouth_env_50hz:
+                    env_idx = int(elapsed * 50.0)
+                    if 0 <= env_idx < len(mouth_env_50hz):
+                        jaw_open_pct = float(mouth_env_50hz[env_idx])
+                jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
+                self.current_vocal_power = jaw_open_pct
 
-            # 4. Track 3: Pedestal S7 (Macro Stage Facing)
-            s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            if s7_block:
-                target_s7_deg = float(s7_block.get("target_deg", 0.0))
-                trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
-                alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
-                current_s7_deg += alpha_s7 * (target_s7_deg - current_s7_deg)
-                current_s7_deg = max(-135.0, min(135.0, current_s7_deg))
-                self.current_s7_target_deg = current_s7_deg
+                # 7. Assemble Goal Positions (Normalized Telemetry)
+                arm_goals = {
+                    "shoulder_pan": float(max(-100.0, min(100.0, smooth_posture["shoulder_pan"]))),
+                    "shoulder_lift": float(max(-100.0, min(100.0, smooth_posture["shoulder_lift"]))),
+                    "elbow_flex": float(max(-100.0, min(100.0, smooth_posture["elbow_flex"]))),
+                    "wrist_flex": float(max(-100.0, min(100.0, smooth_posture["wrist_flex"]))),
+                    "wrist_roll": float(max(-100.0, min(100.0, smooth_posture["wrist_roll"]))),
+                    "gripper": float(max(0.0, min(45.0, jaw_open_pct))),
+                }
 
-            # 5. Track 2: Gantry S8 (Tier A One-Shot Dispatch)
-            s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-            if s8_block and s8_block.get("id") != last_s8_block_id:
-                dest_s8 = int(s8_block.get("target_pos", gantry_center))
-                spd = int(s8_block.get("speed", 500))
+                # 8. Hardware Writes (50 Hz Atomic Bulk sync_write for Motors 1-6 & Pedestal S7)
                 try:
-                    backend.move_target(8, dest_s8, speed=spd, max_t=800)
-                    last_s8_block_id = s8_block.get("id")
-                except Exception as g_err:
-                    self.logger.warning(f"Gantry timeline move warning: {g_err}")
+                    with SERIAL_LOCK:
+                        # Atomic write to Motors 1-6
+                        if backend.bus and hasattr(backend.bus, "sync_write"):
+                            backend.bus.sync_write("Goal_Position", arm_goals)
 
-            # 6. Track 6: Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)
-            jaw_open_pct = 0.0
-            if mouth_env_50hz:
-                env_idx = int(elapsed * 50.0)
-                if 0 <= env_idx < len(mouth_env_50hz):
-                    jaw_open_pct = float(mouth_env_50hz[env_idx])
-            jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
-            self.current_vocal_power = jaw_open_pct
+                        # Write to Servo 7 (Pedestal) if angle changed by >= 0.5 deg
+                        if last_s7_sent_deg is None or abs(current_s7_deg - last_s7_sent_deg) >= 0.5:
+                            if hasattr(backend, "ctrl") and backend.ctrl:
+                                s7_ticks = degrees_to_ticks_s7(current_s7_deg, center_ticks=aux_s7_center)
+                                backend.ctrl.write_goal_raw(7, s7_ticks, speed=800)
+                                last_s7_sent_deg = current_s7_deg
+                                backend.aux_positions[7] = s7_ticks
+                                with backend.lock:
+                                    backend.servos[7]["pos"] = s7_ticks
+                                    backend.servos[7]["raw"] = s7_ticks % 4096
+                                    backend.servos[7]["torque"] = True
+                except Exception as cmd_err:
+                    self.logger.warning(f"Hardware write tick error: {cmd_err}")
 
-            # 7. Assemble Goal Positions (Normalized Telemetry)
-            arm_goals = {
-                "shoulder_pan": float(max(-100.0, min(100.0, smooth_posture["shoulder_pan"]))),
-                "shoulder_lift": float(max(-100.0, min(100.0, smooth_posture["shoulder_lift"]))),
-                "elbow_flex": float(max(-100.0, min(100.0, smooth_posture["elbow_flex"]))),
-                "wrist_flex": float(max(-100.0, min(100.0, smooth_posture["wrist_flex"]))),
-                "wrist_roll": float(max(-100.0, min(100.0, smooth_posture["wrist_roll"]))),
-                "gripper": float(max(0.0, min(45.0, jaw_open_pct))),
-            }
+                elapsed_loop = time.time() - loop_start
+                sleep_time = max(0.002, 0.020 - elapsed_loop)
+                time.sleep(sleep_time)
 
-            # 8. Hardware Writes (50 Hz Atomic Bulk sync_write for Motors 1-6 & Pedestal S7)
-            try:
-                with SERIAL_LOCK:
-                    # Atomic write to Motors 1-6
-                    if backend.bus and hasattr(backend.bus, "sync_write"):
-                        backend.bus.sync_write("Goal_Position", arm_goals)
-
-                    # Write to Servo 7 (Pedestal) if angle changed by >= 0.5 deg
-                    if last_s7_sent_deg is None or abs(current_s7_deg - last_s7_sent_deg) >= 0.5:
-                        if hasattr(backend, "ctrl") and backend.ctrl:
-                            s7_ticks = degrees_to_ticks_s7(current_s7_deg, center_ticks=aux_s7_center)
-                            backend.ctrl.write_goal_raw(7, s7_ticks, speed=800)
-                            last_s7_sent_deg = current_s7_deg
-                            backend.aux_positions[7] = s7_ticks
-                            with backend.lock:
-                                backend.servos[7]["pos"] = s7_ticks
-                                backend.servos[7]["raw"] = s7_ticks % 4096
-                                backend.servos[7]["torque"] = True
-            except Exception as cmd_err:
-                self.logger.warning(f"Hardware write tick error: {cmd_err}")
-
-            elapsed_loop = time.time() - loop_start
-            sleep_time = max(0.002, 0.020 - elapsed_loop)
-            time.sleep(sleep_time)
+        except Exception as loop_err:
+            self.logger.error(f"Fatal error in _dance_loop: {loop_err}", exc_info=True)
+            self.error = str(loop_err)
 
         # Teardown return home
         self.current_state = "IDLE"

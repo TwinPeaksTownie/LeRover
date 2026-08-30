@@ -183,8 +183,8 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
 
     # Check intro before first beat if any
     first_beat = float(beat_times[0])
-    if first_beat > 2.5:
-        # Pre-beat intro measure
+    if first_beat > 0.05:
+        # Pre-beat intro measure covering from 0.0 to first beat
         spine_moves.append({
             "id": f"sp_{uuid.uuid4().hex[:6]}",
             "name": "Intro Stance",
@@ -192,7 +192,7 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
             "head_pitch": "level",
             "start_sec": 0.0,
             "end_sec": round(first_beat, 2),
-            "transition_sec": 1.2,
+            "transition_sec": 0.5,
         })
         s8_moves.append({
             "id": f"s8_{uuid.uuid4().hex[:6]}",
@@ -209,7 +209,7 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
             "start_sec": 0.0,
             "end_sec": round(first_beat, 2),
             "target_deg": 0.0,
-            "transition_sec": 0.8,
+            "transition_sec": 0.5,
         })
         s1_moves.append({
             "id": f"s1_{uuid.uuid4().hex[:6]}",
@@ -228,7 +228,7 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
         })
 
     for m_idx, b_start in enumerate(measure_indices):
-        m_st = float(beat_times[b_start])
+        m_st = 0.0 if (m_idx == 0 and first_beat <= 0.05) else float(beat_times[b_start])
         b_end = b_start + 4
         if b_end < len(beat_times):
             m_et = float(beat_times[b_end])
