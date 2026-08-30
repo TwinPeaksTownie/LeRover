@@ -18,8 +18,9 @@ count = 0
 for tid, track in manifest.items():
     analysis = track.get("analysis", track)
     duration = float(track.get("duration", analysis.get("duration", 0.0)))
+    existing_choreo = track.get("choreography")
     if duration > 0 and "beat_times" in analysis:
-        choreo = compile_default_choreography(analysis, duration)
+        choreo = compile_default_choreography(analysis, duration, existing_choreo=existing_choreo)
         track["choreography"] = choreo
         count += 1
         print(f"Recompiled {tid} ({track.get('title', '')}) -> {len(choreo['blocks'])} blocks, version {choreo['version']}")
@@ -27,4 +28,4 @@ for tid, track in manifest.items():
 with open(m_path, "w", encoding="utf-8") as f:
     json.dump(manifest, f, indent=2)
 
-print(f"Successfully recompiled {count} tracks to Version 3.1.0 on Pi 500!")
+print(f"Successfully recompiled {count} tracks to Version 3.2.0 on Pi 500!")

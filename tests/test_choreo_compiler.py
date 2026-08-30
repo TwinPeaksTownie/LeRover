@@ -6,11 +6,11 @@ from pathlib import Path
 # Add pi500 to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pi500"))
 
-from beat_studio import (
-    compile_default_choreography,
+from choreography_compiler import (
+    compile_choreography_tracks,
     partition_timeline_into_blocks,
     load_dance_presets,
-    get_s8_rail_bounds,
+    CHOREO_SCHEMA_VERSION,
 )
 
 
@@ -52,8 +52,8 @@ class TestChoreographyCompiler(unittest.TestCase):
                                    msg=f"Gap detected between block {i} ({curr_end}s) and {i+1} ({next_start}s)")
 
     def test_compile_default_choreography(self):
-        choreo = compile_default_choreography(self.mock_analysis, 45.0)
-        self.assertEqual(choreo["version"], "3.1.0")
+        choreo = compile_choreography_tracks(self.mock_analysis, 45.0)
+        self.assertEqual(choreo["version"], CHOREO_SCHEMA_VERSION)
         self.assertIn("blocks", choreo)
         self.assertIn("tracks", choreo)
 
@@ -65,12 +65,11 @@ class TestChoreographyCompiler(unittest.TestCase):
             self.assertIn(t_name, tracks)
             self.assertGreater(len(tracks[t_name]), 0, f"Track {t_name} is empty")
 
-        # Verify Gantry Bounds
-        min_t, max_t = get_s8_rail_bounds()
+        # Verify Gantry ROM Bounds (0 to 100%)
         for g_move in tracks["s8_gantry"]:
-            t_pos = g_move["target_pos"]
-            self.assertGreaterEqual(t_pos, min_t)
-            self.assertLessEqual(t_pos, max_t)
+            t_pos = g_move["target_pos_rom"]
+            self.assertGreaterEqual(t_pos, 0.0)
+            self.assertLessEqual(t_pos, 100.0)
 
         # Verify Bounce Modifiers (Strictly 1 target per block)
         valid_bounce_targets = {"hip_sway", "body_bounce", "head_bob"}
@@ -80,12 +79,13 @@ class TestChoreographyCompiler(unittest.TestCase):
             self.assertIn(b_mod["target"], valid_bounce_targets)
             self.assertEqual(b_mod.get("intensity"), 0.12)
 
-        # Verify Pedestal S7 angles
+        # Verify Pedestal S7 ROM (0 to 100%)
         for p_move in tracks["s7_pedestal"]:
-            deg = p_move["target_deg"]
-            self.assertGreaterEqual(deg, -135.0)
-            self.assertLessEqual(deg, 135.0)
+            p_rom = p_move["target_pos_rom"]
+            self.assertGreaterEqual(p_rom, 0.0)
+            self.assertLessEqual(p_rom, 100.0)
 
 
 if __name__ == "__main__":
     unittest.main()
+

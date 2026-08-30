@@ -1544,6 +1544,93 @@ class RobotBackend:
         return ok, ok, msg, target_deg, target_ticks, at_limit
 
 
+    def dispatch_dance_frame(
+        self,
+        rom_posture: Dict[str, float],
+        s7_rom: Optional[float] = None,
+        s8_goal: Optional[Union[float, int]] = None,
+        s8_is_rom: bool = True,
+        s8_speed: int = 500,
+    ) -> Dict[str, Any]:
+        """Dispatches an atomic multi-servo 0-100% ROM frame to Motors 1-8.
+        Encapsulates SERIAL_LOCK, tick conversions, and bus writes internally.
+        """
+        arm_calib = getattr(self, "arm_calibration", {})
+        goal_ticks = {}
+        for mname in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]:
+            if mname in rom_posture:
+                m_obj = arm_calib.get(mname, {})
+                r_min = int(getattr(m_obj, "range_min", m_obj.get("range_min", 0) if isinstance(m_obj, dict) else 0))
+                r_max = int(getattr(m_obj, "range_max", m_obj.get("range_max", 4095) if isinstance(m_obj, dict) else 4095))
+                clamped_rom = max(0.0, min(100.0, float(rom_posture[mname])))
+                ticks = int(round(r_min + (clamped_rom / 100.0) * (r_max - r_min)))
+                goal_ticks[mname] = ticks
+
+        s7_ticks = None
+        if s7_rom is not None:
+            aux_calib = getattr(self, "aux_calibration", {})
+            if "7" in aux_calib:
+                s7_min = int(aux_calib["7"].get("min_ticks", 0))
+                s7_max = int(aux_calib["7"].get("max_ticks", 4095))
+                clamped_s7 = max(0.0, min(100.0, float(s7_rom)))
+                s7_ticks = int(round(s7_min + (clamped_s7 / 100.0) * (s7_max - s7_min)))
+
+        s8_ticks = None
+        if s8_goal is not None:
+            g_min, g_max = self.get_s8_bounds()
+            if s8_is_rom:
+                clamped_s8 = max(0.0, min(100.0, float(s8_goal)))
+                s8_ticks = int(round(g_min + (clamped_s8 / 100.0) * (g_max - g_min)))
+            else:
+                s8_ticks = max(g_min, min(g_max, int(s8_goal)))
+
+        with SERIAL_LOCK:
+            if goal_ticks and self.bus and hasattr(self.bus, "sync_write"):
+                try:
+                    self.bus.sync_write("Goal_Position", goal_ticks, normalize=False)
+                except Exception as ex:
+                    logging.warning("sync_write Goal_Position error: %s", ex)
+
+            if s7_ticks is not None and self.ctrl:
+                last_s7 = getattr(self, "_last_dance_s7_ticks", None)
+                if last_s7 is None or abs(s7_ticks - last_s7) >= 4:
+                    try:
+                        self.ctrl.write_goal_raw(7, s7_ticks, speed=800)
+                        self._last_dance_s7_ticks = s7_ticks
+                        self.aux_positions[7] = s7_ticks
+                    except Exception as ex:
+                        logging.warning("write_goal_raw S7 error: %s", ex)
+
+            with self.lock:
+                motor_name_to_id = {
+                    "shoulder_pan": 1, "shoulder_lift": 2, "elbow_flex": 3,
+                    "wrist_flex": 4, "wrist_roll": 5, "gripper": 6
+                }
+                for mname, rom_val in rom_posture.items():
+                    sid = motor_name_to_id.get(mname)
+                    if sid and sid in self.servos:
+                        self.servos[sid]["normalized"] = round(float(rom_val), 2)
+                        self.servos[sid]["torque"] = True
+                if s7_rom is not None and 7 in self.servos:
+                    self.servos[7]["normalized"] = round(float(s7_rom), 2)
+                    if s7_ticks is not None:
+                        self.servos[7]["pos"] = s7_ticks
+                        self.servos[7]["raw"] = s7_ticks % 4096
+                    self.servos[7]["torque"] = True
+
+        if s8_ticks is not None:
+            try:
+                self.move_target(8, s8_ticks, speed=s8_speed, max_t=800)
+            except Exception as ex:
+                logging.warning("move_target S8 error: %s", ex)
+
+        return {
+            "status": "ok",
+            "goal_ticks": goal_ticks,
+            "s7_ticks": s7_ticks,
+            "s8_ticks": s8_ticks,
+        }
+
     def close(self) -> None:
         self.stop_sequence()
         if self.rover_ctrl:

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Beat Bandit Choreography Studio & Timeline Engine for SO-101.
+"""Beat Bandit Choreography Studio & Timeline Storage for SO-101.
 Provides:
-  - Multi-track linear timeline representation (Body Postures, Pedestal, Gantry, Head/Jaw, Vocal Style).
-  - 4-bar block (16 beats) choreography compiler from audio analysis.
-  - CRUD operations for movement blocks and preset loading from presets_dance.json.
-  - Live hardware preview with safe interpolation and pose capture routines.
+  - Manifest CRUD and track timeline persistence in manifest.json.
+  - Integration with choreography_compiler.py with user-edit preservation.
+  - Live hardware preview and pose capture routines.
 """
 
 from __future__ import annotations
@@ -14,228 +13,34 @@ import logging
 import math
 import os
 import time
-import uuid
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 
 try:
-    from choreography_compiler import compile_choreography_tracks, ROM_POSES, DEFAULT_CHOREO_SETTINGS
+    from choreography_compiler import (
+        compile_choreography_tracks,
+        load_dance_presets,
+        ROM_POSES,
+        CHOREO_SCHEMA_VERSION,
+        DEFAULT_CHOREO_SETTINGS,
+    )
 except ImportError:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from choreography_compiler import compile_choreography_tracks, ROM_POSES, DEFAULT_CHOREO_SETTINGS
+    from choreography_compiler import (
+        compile_choreography_tracks,
+        load_dance_presets,
+        ROM_POSES,
+        CHOREO_SCHEMA_VERSION,
+        DEFAULT_CHOREO_SETTINGS,
+    )
 
-DEFAULT_SETTINGS = {
-    "jaw_gate_threshold": 0.18,
-    "jaw_max_open": 45.0,
-    "head_nod_depth": 6.0,
-    "vibrato_amplitude": 20.0,
-    "groove_max_sway_deg": 18.0,
-    "head_tilt_max_deg": 15.0,
-    "gantry_default_speed": 800,
-    "joint_alphas": {
-        "wrist_flex": 0.35,
-        "elbow_flex": 0.35,
-        "wrist_roll": 0.25,
-        "shoulder_lift": 0.15,
-        "shoulder_pan": 0.15,
-    },
-}
+logger = logging.getLogger("so101.beat_studio")
 
 
-def get_dance_presets_path() -> Path:
-    """Resolves the empirical presets_dance.json file path."""
-    base_dir = Path(__file__).resolve().parent.parent
-    p1 = base_dir / "apps" / "preset_app" / "presets" / "presets_dance.json"
-    if p1.exists():
-        return p1
-    p2 = Path.home() / "so101" / "apps" / "preset_app" / "presets" / "presets_dance.json"
-    if p2.exists():
-        return p2
-    raise FileNotFoundError(f"presets_dance.json not found at {p1} or {p2}")
-
-
-def get_aux_calibration_path() -> Path:
-    base_dir = Path(__file__).resolve().parent.parent
-    p1 = Path.home() / "so101" / "calibration_aux.json"
-    if p1.exists():
-        return p1
-    p2 = base_dir / "calibration_aux.json"
-    if p2.exists():
-        return p2
-    return p1
-
-
-def get_s8_rail_bounds() -> Tuple[int, int]:
-    fpath = get_aux_calibration_path()
-    if not fpath.exists():
-        raise FileNotFoundError(f"Mandatory auxiliary calibration file not found at {fpath}")
-    with open(fpath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        if "8" in data and "min_ticks" in data["8"] and "max_ticks" in data["8"]:
-            return int(data["8"]["min_ticks"]), int(data["8"]["max_ticks"])
-    raise KeyError(f"Servo 8 'min_ticks' and 'max_ticks' calibration missing in {fpath}")
-
-
-def calc_s8_rail_pos(pct: float) -> int:
-    """Computes tick position for Motor 8 based on normalized travel percentage (0.0 to 1.0)
-    clamped strictly to a safe mechanical envelope between 10% and 90% travel span.
-    """
-    min_t, max_t = get_s8_rail_bounds()
-    clamped_pct = max(0.10, min(0.90, float(pct)))
-    return int(round(min_t + clamped_pct * (max_t - min_t)))
-
-
-def load_dance_presets() -> Dict[str, Dict[str, float]]:
-    """Loads empirical normalized joint postures strictly from presets_dance.json."""
-    fpath = get_dance_presets_path()
-    with open(fpath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    clean_poses = {}
-    for name, pdata in data.items():
-        if isinstance(pdata, dict) and "normalized" in pdata:
-            clean_poses[name] = {
-                k: float(v)
-                for k, v in pdata["normalized"].items()
-                if k in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
-            }
-        elif isinstance(pdata, dict):
-            clean_poses[name] = {
-                k: float(v)
-                for k, v in pdata.items()
-                if k in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
-            }
-
-    for mandatory_pose in ["stand", "squat", "tiptoe", "arch"]:
-        if mandatory_pose not in clean_poses:
-            raise KeyError(f"Mandatory posture '{mandatory_pose}' missing in {fpath}")
-    return clean_poses
-
-
-def blend_5joint_poses(p_a: Dict[str, float], p_b: Dict[str, float], alpha: float) -> Dict[str, float]:
-    """Blends between two 5-joint normalized poses (alpha 0.0 to 1.0)."""
-    alpha = max(0.0, min(1.0, float(alpha)))
-    res = {}
-    for j in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]:
-        if j not in p_a or j not in p_b:
-            raise KeyError(f"Mandatory joint '{j}' missing during pose interpolation.")
-        va = float(p_a[j])
-        vb = float(p_b[j])
-        res[j] = va + (vb - va) * alpha
-    return res
-
-
-def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) -> List[Dict[str, Any]]:
-    """Partitions the song into continuous discrete blocks spanning vocal segments
-    and instrumental gaps (subdividing long instrumental gaps into chunks of >= 8 beats).
-    """
-    beat_times = [float(b) for b in analysis.get("beat_times", [])]
-    raw_lyrics = analysis.get("lyrics", [])
-
-    # Sort lyrics chronologically
-    sorted_lyrics = []
-    for l_idx, seg in enumerate(raw_lyrics):
-        if not isinstance(seg, dict) or "start_sec" not in seg or "end_sec" not in seg:
-            continue
-        st = max(0.0, float(seg["start_sec"]))
-        et = min(duration, float(seg["end_sec"]))
-        if et > st:
-            sorted_lyrics.append({
-                "id": str(seg.get("id", f"ly_{l_idx + 1:03d}")),
-                "name": str(seg.get("name", seg.get("text", f"Lyric {l_idx + 1}"))),
-                "text": str(seg.get("text", "")),
-                "original_asr_text": str(seg.get("original_asr_text", seg.get("text", ""))),
-                "type": str(seg.get("type", "lyric")),
-                "is_user_edited": bool(seg.get("is_user_edited", False)),
-                "start_sec": round(st, 2),
-                "end_sec": round(et, 2),
-                "duration": round(et - st, 2),
-                "is_vocal": True,
-            })
-    sorted_lyrics.sort(key=lambda x: x["start_sec"])
-
-    def sub_chunk_instrumental(gap_st: float, gap_et: float, base_name: str) -> List[Dict[str, Any]]:
-        gap_dur = gap_et - gap_st
-        if gap_dur <= 0.05:
-            return []
-
-        # Find beats strictly inside this gap
-        beats_in_gap = [b for b in beat_times if gap_st <= b < gap_et]
-        chunks = []
-
-        if len(beats_in_gap) >= 16:
-            # Subdivide into 8-beat or 16-beat chunks
-            chunk_step = 8
-            for c_i in range(0, len(beats_in_gap), chunk_step):
-                c_st = gap_st if c_i == 0 else beats_in_gap[c_i]
-                c_nxt = c_i + chunk_step
-                c_et = gap_et if c_nxt >= len(beats_in_gap) else beats_in_gap[c_nxt]
-                if c_et - c_st >= 0.2:
-                    chunks.append({
-                        "id": f"inst_{uuid.uuid4().hex[:6]}",
-                        "name": f"{base_name} Part {len(chunks) + 1}",
-                        "text": "",
-                        "type": "instrumental",
-                        "is_user_edited": False,
-                        "start_sec": round(c_st, 2),
-                        "end_sec": round(c_et, 2),
-                        "duration": round(c_et - c_st, 2),
-                        "is_vocal": False,
-                    })
-        else:
-            chunks.append({
-                "id": f"inst_{uuid.uuid4().hex[:6]}",
-                "name": base_name,
-                "text": "",
-                "type": "instrumental",
-                "is_user_edited": False,
-                "start_sec": round(gap_st, 2),
-                "end_sec": round(gap_et, 2),
-                "duration": round(gap_dur, 2),
-                "is_vocal": False,
-            })
-        return chunks
-
-    master_blocks = []
-    curr_time = 0.0
-
-    if not sorted_lyrics:
-        # Pure instrumental song: partition entire duration into 8/16-beat blocks
-        master_blocks = sub_chunk_instrumental(0.0, duration, "Instrumental Block")
-    else:
-        for seg in sorted_lyrics:
-            seg_st = float(seg["start_sec"])
-            seg_et = float(seg["end_sec"])
-
-            if seg_st > curr_time + 0.2:
-                # Instrumental gap before this lyric
-                gap_name = "Intro" if curr_time == 0.0 else "Instrumental Break"
-                gap_chunks = sub_chunk_instrumental(curr_time, seg_st, gap_name)
-                master_blocks.extend(gap_chunks)
-
-            master_blocks.append(seg)
-            curr_time = max(curr_time, seg_et)
-
-        if curr_time < duration - 0.2:
-            outro_chunks = sub_chunk_instrumental(curr_time, duration, "Outro")
-            master_blocks.extend(outro_chunks)
-
-    # Clean monotonic sequence
-    cleaned_blocks = []
-    for idx, b in enumerate(master_blocks):
-        b["block_index"] = idx
-        cleaned_blocks.append(b)
-    return cleaned_blocks
-
-
-def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> Dict[str, Any]:
-    """Compiles audio analysis into a structured bottom-up decision tree choreography timeline
-    by delegating to the pure choreography_compiler module.
-    """
-    choreo = compile_choreography_tracks(analysis, duration)
-    choreo["version"] = "3.2.0"
-    return choreo
+def compile_default_choreography(analysis: Dict[str, Any], duration: float, existing_choreo: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Compiles audio analysis into a structured choreography timeline using the compiler."""
+    return compile_choreography_tracks(analysis, duration, existing_choreography=existing_choreo)
 
 
 class BeatStudioManager:
@@ -265,7 +70,7 @@ class BeatStudioManager:
             return False
 
     def get_track_choreography(self, track_id: str) -> Dict[str, Any]:
-        """Loads choreography from manifest or auto-compiles from 4-bar blocks if not yet generated."""
+        """Loads choreography from manifest or auto-compiles if not yet generated or outdated."""
         manifest = self._load_manifest()
         track_meta = manifest.get(track_id)
         if not track_meta:
@@ -277,13 +82,12 @@ class BeatStudioManager:
         if duration <= 0.0:
             raise ValueError(f"Invalid duration '{duration}' for track '{track_id}'.")
 
-        if not choreo or not choreo.get("tracks") or choreo.get("version") != "3.1.0":
-            self.logger.info(f"Auto-compiling bottom-up decision tree choreography for '{track_meta.get('title')}' ({track_id})...")
-            choreo = compile_default_choreography(analysis, duration)
+        if not choreo or not choreo.get("tracks") or choreo.get("version") != CHOREO_SCHEMA_VERSION:
+            self.logger.info(f"Auto-compiling choreography for '{track_meta.get('title')}' ({track_id})...")
+            choreo = compile_default_choreography(analysis, duration, existing_choreo=choreo)
             track_meta["choreography"] = choreo
             manifest[track_id] = track_meta
             self._save_manifest(manifest)
-
 
         # Merge in beat grid metadata for UI ruler
         choreo["track_id"] = track_id
@@ -310,11 +114,12 @@ class BeatStudioManager:
         poses = choreo_data.get("poses") or load_dance_presets()
 
         clean_choreo = {
-            "version": choreo_data.get("version", "3.0.0"),
+            "version": CHOREO_SCHEMA_VERSION,
             "duration": float(choreo_data.get("duration", track_meta.get("duration", 0.0))),
-            "settings": choreo_data.get("settings", DEFAULT_SETTINGS),
+            "settings": choreo_data.get("settings", DEFAULT_CHOREO_SETTINGS),
             "poses": poses,
             "sections": choreo_data.get("sections", []),
+            "blocks": choreo_data.get("blocks", []),
             "tracks": choreo_data.get("tracks", {
                 "lyrics": [],
                 "spine_gaze": [],
@@ -329,19 +134,20 @@ class BeatStudioManager:
         track_meta["choreography"] = clean_choreo
         manifest[track_id] = track_meta
         self._save_manifest(manifest)
-        self.logger.info(f"Successfully saved measure choreography for '{track_meta.get('title')}' ({track_id}).")
+        self.logger.info(f"Successfully saved choreography for '{track_meta.get('title')}' ({track_id}).")
         return {"status": "ok", "track_id": track_id, "updated_at": clean_choreo["updated_at"]}
 
     def auto_generate_choreography(self, track_id: str, style: str = "balanced") -> Dict[str, Any]:
-        """Re-compiles choreography from analysis with selected style."""
+        """Re-compiles choreography from analysis with preservation of manual edits."""
         manifest = self._load_manifest()
         track_meta = manifest.get(track_id)
         if not track_meta:
             raise FileNotFoundError(f"Track '{track_id}' not found.")
 
+        existing_choreo = track_meta.get("choreography")
         analysis = track_meta.get("analysis", {})
         duration = float(track_meta.get("duration", 0.0) or analysis.get("duration", 0.0))
-        choreo = compile_default_choreography(analysis, duration)
+        choreo = compile_default_choreography(analysis, duration, existing_choreo=existing_choreo)
 
         track_meta["choreography"] = choreo
         manifest[track_id] = track_meta
@@ -349,7 +155,7 @@ class BeatStudioManager:
         return choreo
 
     def preview_pose_on_robot(self, backend: Any, pose_dict: Dict[str, float]) -> Dict[str, Any]:
-        """Smoothly drives follower arm to target normalized pose over 1.0 second for physical verification."""
+        """Drives follower arm to target normalized pose for physical verification."""
         if not backend:
             raise RuntimeError("Hardware backend uninitialized.")
 
@@ -367,8 +173,12 @@ class BeatStudioManager:
             "gripper": float(max(0.0, min(45.0, pose_dict.get("gripper", 0.0)))),
         }
 
-        backend.set_arm_torque(True)
-        backend.interpolate_arm_norm(clean_goals, duration=1.0, steps=30)
+        if hasattr(backend, "set_arm_torque"):
+            backend.set_arm_torque(True)
+        if hasattr(backend, "interpolate_arm_norm"):
+            backend.interpolate_arm_norm(clean_goals, duration=1.0, steps=30)
+        elif hasattr(backend, "dispatch_dance_frame"):
+            backend.dispatch_dance_frame(clean_goals)
         return {"status": "ok", "preview_pose": clean_goals}
 
     def capture_arm_current_pose(self, backend: Any, pose_name: str) -> Dict[str, Any]:
