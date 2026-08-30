@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+import sys
+import unittest
+from pathlib import Path
+
+# Add pi500 to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pi500"))
+
+from beat_studio import (
+    compile_default_choreography,
+    partition_timeline_into_blocks,
+    load_dance_presets,
+    get_s8_rail_bounds,
+)
+
+
+class TestChoreographyCompiler(unittest.TestCase):
+
+    def setUp(self):
+        self.mock_analysis = {
+            "duration": 45.0,
+            "bpm": 96.0,
+            "danceability": 0.75,
+            "beat_times": [i * 0.625 for i in range(72)],
+            "sections": [
+                {"start_sec": 0.0, "end_sec": 10.0, "type": "intro", "energy_score": 0.4},
+                {"start_sec": 10.0, "end_sec": 25.0, "type": "verse", "energy_score": 0.65},
+                {"start_sec": 25.0, "end_sec": 45.0, "type": "chorus", "energy_score": 0.9},
+            ],
+            "drops": [{"drop_sec": 25.0}],
+            "held_notes": [{"start_sec": 18.0, "end_sec": 22.0}],
+            "lyrics": [
+                {"id": "ly_001", "start_sec": 10.5, "end_sec": 14.0, "text": "Walking down the lane", "type": "lyric"},
+                {"id": "br_001", "start_sec": 14.0, "end_sec": 15.5, "text": "[breath]", "type": "breath"},
+                {"id": "ly_002", "start_sec": 15.5, "end_sec": 23.0, "text": "Singing in the rain", "type": "lyric"},
+                {"id": "ly_003", "start_sec": 26.0, "end_sec": 34.0, "text": "Thunder and lightning strike", "type": "lyric"},
+            ],
+        }
+
+    def test_block_partitioning_coverage(self):
+        blocks = partition_timeline_into_blocks(self.mock_analysis, 45.0)
+        self.assertGreater(len(blocks), 0)
+
+        # Verify time coverage from 0.0 to 45.0 without gaps
+        self.assertEqual(blocks[0]["start_sec"], 0.0)
+        self.assertEqual(blocks[-1]["end_sec"], 45.0)
+
+        for i in range(len(blocks) - 1):
+            curr_end = blocks[i]["end_sec"]
+            next_start = blocks[i + 1]["start_sec"]
+            self.assertAlmostEqual(curr_end, next_start, delta=0.01,
+                                   msg=f"Gap detected between block {i} ({curr_end}s) and {i+1} ({next_start}s)")
+
+    def test_compile_default_choreography(self):
+        choreo = compile_default_choreography(self.mock_analysis, 45.0)
+        self.assertEqual(choreo["version"], "3.1.0")
+        self.assertIn("blocks", choreo)
+        self.assertIn("tracks", choreo)
+
+        blocks = choreo["blocks"]
+        tracks = choreo["tracks"]
+
+        # Assert all 7 tracks are present
+        for t_name in ["lyrics", "spine_gaze", "s8_gantry", "s7_pedestal", "s1_torso", "s5_head_tilt", "s6_jaw"]:
+            self.assertIn(t_name, tracks)
+            self.assertGreater(len(tracks[t_name]), 0, f"Track {t_name} is empty")
+
+        # Verify Gantry Bounds
+        min_t, max_t = get_s8_rail_bounds()
+        for g_move in tracks["s8_gantry"]:
+            t_pos = g_move["target_pos"]
+            self.assertGreaterEqual(t_pos, min_t)
+            self.assertLessEqual(t_pos, max_t)
+
+        # Verify Bounce Modifiers (Strictly 1 target per block)
+        valid_bounce_targets = {"hip_sway", "body_bounce", "head_bob"}
+        for blk in blocks:
+            b_mod = blk.get("bounce_modifier", {})
+            self.assertIn("target", b_mod)
+            self.assertIn(b_mod["target"], valid_bounce_targets)
+            self.assertEqual(b_mod.get("intensity"), 0.12)
+
+        # Verify Pedestal S7 angles
+        for p_move in tracks["s7_pedestal"]:
+            deg = p_move["target_deg"]
+            self.assertGreaterEqual(deg, -135.0)
+            self.assertLessEqual(deg, 135.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

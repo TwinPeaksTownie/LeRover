@@ -119,10 +119,111 @@ def blend_5joint_poses(p_a: Dict[str, float], p_b: Dict[str, float], alpha: floa
     return res
 
 
-def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> Dict[str, Any]:
-    """Compiles Essentia audio analysis (sections, beats, downbeats, drops, held notes, danceability)
-    into a structured 6-track measure-by-measure linear choreography timeline.
+def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) -> List[Dict[str, Any]]:
+    """Partitions the song into continuous discrete blocks spanning vocal segments
+    and instrumental gaps (subdividing long instrumental gaps into chunks of >= 8 beats).
     """
+    beat_times = [float(b) for b in analysis.get("beat_times", [])]
+    raw_lyrics = analysis.get("lyrics", [])
+
+    # Sort lyrics chronologically
+    sorted_lyrics = []
+    for l_idx, seg in enumerate(raw_lyrics):
+        if not isinstance(seg, dict) or "start_sec" not in seg or "end_sec" not in seg:
+            continue
+        st = max(0.0, float(seg["start_sec"]))
+        et = min(duration, float(seg["end_sec"]))
+        if et > st:
+            sorted_lyrics.append({
+                "id": str(seg.get("id", f"ly_{l_idx + 1:03d}")),
+                "name": str(seg.get("name", seg.get("text", f"Lyric {l_idx + 1}"))),
+                "text": str(seg.get("text", "")),
+                "original_asr_text": str(seg.get("original_asr_text", seg.get("text", ""))),
+                "type": str(seg.get("type", "lyric")),
+                "is_user_edited": bool(seg.get("is_user_edited", False)),
+                "start_sec": round(st, 2),
+                "end_sec": round(et, 2),
+                "duration": round(et - st, 2),
+                "is_vocal": True,
+            })
+    sorted_lyrics.sort(key=lambda x: x["start_sec"])
+
+    def sub_chunk_instrumental(gap_st: float, gap_et: float, base_name: str) -> List[Dict[str, Any]]:
+        gap_dur = gap_et - gap_st
+        if gap_dur <= 0.05:
+            return []
+
+        # Find beats strictly inside this gap
+        beats_in_gap = [b for b in beat_times if gap_st <= b < gap_et]
+        chunks = []
+
+        if len(beats_in_gap) >= 16:
+            # Subdivide into 8-beat or 16-beat chunks
+            chunk_step = 8
+            for c_i in range(0, len(beats_in_gap), chunk_step):
+                c_st = gap_st if c_i == 0 else beats_in_gap[c_i]
+                c_nxt = c_i + chunk_step
+                c_et = gap_et if c_nxt >= len(beats_in_gap) else beats_in_gap[c_nxt]
+                if c_et - c_st >= 0.2:
+                    chunks.append({
+                        "id": f"inst_{uuid.uuid4().hex[:6]}",
+                        "name": f"{base_name} Part {len(chunks) + 1}",
+                        "text": "",
+                        "type": "instrumental",
+                        "is_user_edited": False,
+                        "start_sec": round(c_st, 2),
+                        "end_sec": round(c_et, 2),
+                        "duration": round(c_et - c_st, 2),
+                        "is_vocal": False,
+                    })
+        else:
+            chunks.append({
+                "id": f"inst_{uuid.uuid4().hex[:6]}",
+                "name": base_name,
+                "text": "",
+                "type": "instrumental",
+                "is_user_edited": False,
+                "start_sec": round(gap_st, 2),
+                "end_sec": round(gap_et, 2),
+                "duration": round(gap_dur, 2),
+                "is_vocal": False,
+            })
+        return chunks
+
+    master_blocks = []
+    curr_time = 0.0
+
+    if not sorted_lyrics:
+        # Pure instrumental song: partition entire duration into 8/16-beat blocks
+        master_blocks = sub_chunk_instrumental(0.0, duration, "Instrumental Block")
+    else:
+        for seg in sorted_lyrics:
+            seg_st = float(seg["start_sec"])
+            seg_et = float(seg["end_sec"])
+
+            if seg_st > curr_time + 0.2:
+                # Instrumental gap before this lyric
+                gap_name = "Intro" if curr_time == 0.0 else "Instrumental Break"
+                gap_chunks = sub_chunk_instrumental(curr_time, seg_st, gap_name)
+                master_blocks.extend(gap_chunks)
+
+            master_blocks.append(seg)
+            curr_time = max(curr_time, seg_et)
+
+        if curr_time < duration - 0.2:
+            outro_chunks = sub_chunk_instrumental(curr_time, duration, "Outro")
+            master_blocks.extend(outro_chunks)
+
+    # Clean monotonic sequence
+    cleaned_blocks = []
+    for idx, b in enumerate(master_blocks):
+        b["block_index"] = idx
+        cleaned_blocks.append(b)
+    return cleaned_blocks
+
+
+def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> Dict[str, Any]:
+    """Compiles audio analysis into a structured bottom-up decision tree choreography timeline."""
     if not analysis:
         raise ValueError("Cannot compile choreography: audio 'analysis' payload is empty or missing.")
 
@@ -134,322 +235,352 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
     if not beat_times:
         raise ValueError("Cannot compile choreography: 'beat_times' missing or empty in audio analysis.")
 
-    if "danceability" not in analysis:
-        raise ValueError("Cannot compile choreography: 'danceability' missing in audio analysis.")
-    danceability = float(analysis["danceability"])
-
+    danceability = float(analysis.get("danceability", 0.5))
+    tempo = float(analysis.get("bpm") or analysis.get("tempo", 120.0))
     raw_sections = analysis.get("sections", [])
-    if not raw_sections:
-        raise ValueError("Cannot compile choreography: empirical 'sections' missing in audio analysis.")
-
     drops = analysis.get("drops", [])
     held_notes = analysis.get("held_notes", [])
+    drop_times = [float(d.get("drop_sec", 0.0)) for d in drops]
 
-    # Load real calibration poses (stand, squat, tiptoe, arch)
     choreo_poses = load_dance_presets()
+
+    # Partition timeline into continuous blocks
+    timeline_blocks = partition_timeline_into_blocks(analysis, duration)
 
     sec_blocks = []
     for idx, s in enumerate(raw_sections):
         st = float(s["start_sec"])
         et = min(duration, float(s["end_sec"]))
-        stype = str(s["type"]).lower()
+        stype = str(s.get("type", "section")).lower()
         sec_blocks.append({
             "id": f"sec_{idx + 1}",
             "name": stype.title(),
             "type": stype,
             "start_sec": round(st, 2),
             "end_sec": round(et, 2),
-            "energy_score": float(s.get("energy_score", 0.0)),
+            "energy_score": float(s.get("energy_score", 0.5)),
         })
 
-    # Timeline Tracks (The 6 Coordinated Functional Lanes)
+    # Continuous state tracking across blocks
+    prev_state = {
+        "gantry_moving": False,
+        "gantry_pos": calc_s8_rail_pos(0.50),
+        "spine_pose": "stand",
+        "pedestal_deg": 0.0,
+    }
+
+    # Timeline Tracks
+    lyrics_moves = []
     spine_moves = []
     s8_moves = []
     s7_moves = []
     s1_moves = []
     s5_moves = []
     jaw_moves = []
+    compiled_master_blocks = []
 
-    # Drop intervals
-    drop_times = [float(d.get("drop_sec", 0.0)) for d in drops]
+    import random
+    rng = random.Random(42)  # Deterministic seed for reproducible compilation
 
-    # Partition beats into 4-beat measures
-    measure_indices = list(range(0, len(beat_times), 4))
-    total_measures = len(measure_indices)
+    for blk in timeline_blocks:
+        b_st = float(blk["start_sec"])
+        b_et = float(blk["end_sec"])
+        b_dur = b_et - b_st
+        is_vocal = bool(blk.get("is_vocal", False))
+        blk_id = blk["id"]
+        blk_name = blk["name"]
 
-    # Check intro before first beat if any
-    first_beat = float(beat_times[0])
-    if first_beat > 0.05:
-        # Pre-beat intro measure covering from 0.0 to first beat
-        spine_moves.append({
-            "id": f"sp_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Stance",
-            "pose_name": "stand",
-            "head_pitch": "level",
-            "start_sec": 0.0,
-            "end_sec": round(first_beat, 2),
-            "transition_sec": 0.5,
-        })
-        s8_moves.append({
-            "id": f"s8_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Center Hold",
-            "mode": "hold",
-            "start_sec": 0.0,
-            "end_sec": round(first_beat, 2),
-            "target_pos": calc_s8_rail_pos(0.50),
-            "speed": 200,
-        })
-        s7_moves.append({
-            "id": f"s7_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Center Facing",
-            "start_sec": 0.0,
-            "end_sec": round(first_beat, 2),
-            "target_deg": 0.0,
-            "transition_sec": 0.5,
-        })
-        s1_moves.append({
-            "id": f"s1_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Torso Stillness",
-            "start_sec": 0.0,
-            "end_sec": round(first_beat, 2),
-            "groove_intensity": 0.0,
-            "sway_enabled": False,
-        })
-        s5_moves.append({
-            "id": f"s5_{uuid.uuid4().hex[:6]}",
-            "name": "Intro Level Head",
-            "start_sec": 0.0,
-            "end_sec": round(first_beat, 2),
-            "tilt_deg": 0.0,
-        })
-
-    for m_idx, b_start in enumerate(measure_indices):
-        m_st = 0.0 if (m_idx == 0 and first_beat <= 0.05) else float(beat_times[b_start])
-        b_end = b_start + 4
-        if b_end < len(beat_times):
-            m_et = float(beat_times[b_end])
-        elif m_idx == total_measures - 1:
-            m_et = duration
-        else:
-            m_et = float(beat_times[-1]) + 2.0
-
-        m_dur = m_et - m_st
-        if m_dur <= 0.05:
-            continue
-
-        # Find parent section
-        sec = next((s for s in sec_blocks if s["start_sec"] <= m_st < s["end_sec"]), None)
+        # Check section energy
+        sec = next((s for s in sec_blocks if s["start_sec"] <= b_st < s["end_sec"]), None)
         sec_type = sec["type"] if sec else "verse"
+        sec_energy = float(sec["energy_score"]) if sec else 0.5
 
-        # Check if near drop
-        is_drop_hit = any(abs(d_t - m_st) < 2.0 for d_t in drop_times)
-        is_pre_drop = any(0.0 < (d_t - m_st) <= 4.0 for d_t in drop_times)
+        # Check drop in this block
+        is_drop_hit = any(b_st <= d_t <= b_et for d_t in drop_times)
+        drop_t_hit = next((d_t for d_t in drop_times if b_st <= d_t <= b_et), b_st)
 
-        # Check held notes in this measure
-        has_held_note = any(h["start_sec"] <= m_st < h["end_sec"] or m_st <= h["start_sec"] < m_et for h in held_notes)
-
-        # Track 1: Spine & Elevation (S2, S3, S4)
-        if is_drop_hit or sec_type == "chorus":
-            pose = "tiptoe" if m_idx % 2 == 0 else "arch"
-            head_pitch = "up" if has_held_note else "level"
-            trans_sec = 0.35
-        elif is_pre_drop:
-            pose = "squat"
-            head_pitch = "down"
-            trans_sec = 0.5
-        elif sec_type == "intro":
-            pose = "stand"
-            head_pitch = "level"
-            trans_sec = 0.8
-        elif sec_type == "bridge":
-            pose = "squat" if m_idx % 2 == 0 else "arch"
-            head_pitch = "up" if has_held_note else "down"
-            trans_sec = 0.6
-        elif sec_type == "outro":
-            pose = "stand"
-            head_pitch = "level"
-            trans_sec = 1.0
-        else:
-            # Verse groove: cycle between stand, squat, and arch
-            v_cycle = m_idx % 4
-            if v_cycle in [0, 2]:
-                pose = "stand"
-            elif v_cycle == 1:
-                pose = "squat"
+        # ----------------------------------------------------
+        # 1. Track 8: Gantry Rail (S8) Decision Tree
+        # ----------------------------------------------------
+        if is_drop_hit:
+            if prev_state["gantry_moving"]:
+                g_mode = "glide_to_drop_hold"
+                target_pct = 0.80 if prev_state["gantry_pos"] < calc_s8_rail_pos(0.50) else 0.20
+                g_target = calc_s8_rail_pos(target_pct)
+                g_spd = 600
+                prev_state["gantry_moving"] = False
+                prev_state["gantry_pos"] = g_target
             else:
-                pose = "arch"
-            head_pitch = "up" if has_held_note else "level"
-            trans_sec = 0.5
+                g_mode = "hold_to_drop_glide"
+                target_pct = 0.85 if prev_state["gantry_pos"] < calc_s8_rail_pos(0.50) else 0.15
+                g_target = calc_s8_rail_pos(target_pct)
+                g_spd = 700
+                prev_state["gantry_moving"] = True
+                prev_state["gantry_pos"] = g_target
+        else:
+            # 65% move probability scaled by section energy
+            move_prob = 0.45 + (0.35 * sec_energy)
+            if rng.random() < move_prob:
+                sub_r = rng.random()
+                if sub_r < 0.40:
+                    g_mode = "full_glide"
+                    prev_state["gantry_moving"] = True
+                elif sub_r < 0.70:
+                    g_mode = "early_step"
+                    prev_state["gantry_moving"] = False
+                else:
+                    g_mode = "late_step"
+                    prev_state["gantry_moving"] = True
+
+                # Alternate sides
+                if prev_state["gantry_pos"] <= calc_s8_rail_pos(0.50):
+                    target_pct = rng.uniform(0.60, 0.85)
+                else:
+                    target_pct = rng.uniform(0.15, 0.40)
+                g_target = calc_s8_rail_pos(target_pct)
+                g_spd = int(350 + 300 * sec_energy)
+                prev_state["gantry_pos"] = g_target
+            else:
+                g_mode = "hold"
+                g_target = prev_state["gantry_pos"]
+                g_spd = 250
+                prev_state["gantry_moving"] = False
+
+        s8_moves.append({
+            "id": f"s8_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Rail {g_mode.replace('_', ' ').title()}",
+            "mode": g_mode,
+            "start_sec": b_st,
+            "end_sec": b_et,
+            "target_pos": g_target,
+            "speed": g_spd,
+            "drop_sec": drop_t_hit if is_drop_hit else None,
+        })
+
+        # ----------------------------------------------------
+        # 2. Track 6: Singing Jaw (S6)
+        # ----------------------------------------------------
+        if is_vocal:
+            # +90% singing lip-sync tracking 50 Hz neural envelope
+            jaw_mode = "singing" if rng.random() < 0.95 else "nod"
+        else:
+            jaw_mode = "closed"
+
+        jaw_moves.append({
+            "id": f"jw_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Jaw ({jaw_mode.title()})",
+            "start_sec": b_st,
+            "end_sec": b_et,
+            "jaw_mode": jaw_mode,
+        })
+
+        # ----------------------------------------------------
+        # 3. Tracks 2-4: Spine Elevation Group (S2, S3, S4)
+        # ----------------------------------------------------
+        start_pose = prev_state["spine_pose"]
+        available_poses = ["squat", "tiptoe", "arch"]
+
+        if start_pose == "stand":
+            spine_r = rng.random()
+            if spine_r < 0.40:
+                spine_pattern = "hold_stand"
+                mid_pose = "stand"
+                end_pose = "stand"
+                trans_sec = 0.5
+            elif spine_r < 0.75:
+                spine_pattern = "stand_dip_stand"
+                mid_pose = rng.choice(available_poses)
+                end_pose = "stand"
+                trans_sec = 0.4
+            else:
+                spine_pattern = "stand_to_pose"
+                mid_pose = rng.choice(available_poses)
+                end_pose = mid_pose
+                trans_sec = 0.5
+        else:
+            spine_r = rng.random()
+            if spine_r < 0.40:
+                spine_pattern = "return_stand_early"
+                mid_pose = "stand"
+                end_pose = "stand"
+                trans_sec = 0.35
+            elif spine_r < 0.75:
+                spine_pattern = "return_stand_mid"
+                mid_pose = start_pose
+                end_pose = "stand"
+                trans_sec = 0.5
+            else:
+                spine_pattern = "return_stand_late"
+                mid_pose = start_pose
+                end_pose = "stand"
+                trans_sec = 0.6
+
+        prev_state["spine_pose"] = end_pose
 
         spine_moves.append({
-            "id": f"sp_{uuid.uuid4().hex[:6]}",
-            "name": f"M{m_idx + 1} {pose.title()}",
-            "pose_name": pose,
-            "head_pitch": head_pitch,
-            "start_sec": round(m_st, 2),
-            "end_sec": round(m_et, 2),
+            "id": f"sp_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Spine {spine_pattern.replace('_', ' ').title()}",
+            "start_pose": start_pose,
+            "mid_pose": mid_pose,
+            "end_pose": end_pose,
+            "pose_name": end_pose,
+            "pattern": spine_pattern,
+            "start_sec": b_st,
+            "end_sec": b_et,
             "transition_sec": trans_sec,
         })
 
-        # Track 2: Gantry Rail (S8)
-        if is_drop_hit:
-            g_mode = "full_glide"
-            g_target = calc_s8_rail_pos(0.85 if m_idx % 2 == 0 else 0.15)
-            g_spd = 650
-        elif sec_type == "chorus":
-            g_mode = "full_glide"
-            g_target = calc_s8_rail_pos(0.70 if m_idx % 2 == 0 else 0.30)
-            g_spd = 450
-        elif sec_type in ["intro", "outro"]:
-            g_mode = "hold"
-            g_target = calc_s8_rail_pos(0.50)
-            g_spd = 200
-        else:
-            # Verse: alternate late_move, early_settle, hold
-            v_gantry_cycle = m_idx % 4
-            if v_gantry_cycle == 0:
-                g_mode = "hold"
-                g_target = calc_s8_rail_pos(0.50)
-                g_spd = 250
-            elif v_gantry_cycle == 1:
-                g_mode = "early_settle"
-                g_target = calc_s8_rail_pos(0.65)
-                g_spd = 280
-            elif v_gantry_cycle == 2:
-                g_mode = "hold"
-                g_target = calc_s8_rail_pos(0.65)
-                g_spd = 250
-            else:
-                g_mode = "late_move"
-                g_target = calc_s8_rail_pos(0.35)
-                g_spd = 280
-
-        s8_moves.append({
-            "id": f"s8_{uuid.uuid4().hex[:6]}",
-            "name": f"M{m_idx + 1} Rail {g_mode.replace('_', ' ').title()}",
-            "mode": g_mode,
-            "start_sec": round(m_st, 2),
-            "end_sec": round(m_et, 2),
-            "target_pos": g_target,
-            "speed": g_spd,
-        })
-
-        # Track 3: Pedestal Facing (S7)
-        if is_drop_hit or sec_type in ["chorus", "intro", "outro"]:
-            target_deg = 0.0
-            p_trans = 0.35 if is_drop_hit else 0.6
-        else:
-            # Staging angle shifts every 2 measures
-            p_cycle = (m_idx // 2) % 3
-            if p_cycle == 0:
-                target_deg = 0.0
-            elif p_cycle == 1:
-                target_deg = 25.0
-            else:
-                target_deg = -25.0
+        # ----------------------------------------------------
+        # 4. Track 7: Pedestal (S7) Decision Tree
+        # ----------------------------------------------------
+        prev_deg = prev_state["pedestal_deg"]
+        # 50% hold stationary
+        if rng.random() < 0.50:
+            p_mode = "hold"
+            target_deg = prev_deg
+            step_deg = 0.0
             p_trans = 0.5
+        else:
+            if tempo < 110.0:  # Slower BPM allows midpoint back-and-forth pulse
+                p_choice = rng.random()
+                if p_choice < 0.35:
+                    p_mode = "snap_45"
+                    target_deg = float(rng.choice([-45.0, 45.0, 0.0]))
+                    step_deg = 0.0
+                    p_trans = 0.30
+                elif p_choice < 0.70:
+                    p_mode = "midpoint_pulse"
+                    target_deg = prev_deg
+                    step_deg = float(rng.choice([-25.0, 25.0]))
+                    p_trans = 0.10  # instantaneous write
+                else:
+                    p_mode = "sweep_180"
+                    target_deg = float(rng.choice([-135.0, 135.0, 0.0]))
+                    step_deg = 0.0
+                    p_trans = b_dur
+            else:
+                p_choice = rng.random()
+                if p_choice < 0.60:
+                    p_mode = "snap_45"
+                    target_deg = float(rng.choice([-45.0, 45.0, 0.0]))
+                    step_deg = 0.0
+                    p_trans = 0.30
+                else:
+                    p_mode = "sweep_180"
+                    target_deg = float(rng.choice([-135.0, 135.0, 0.0]))
+                    step_deg = 0.0
+                    p_trans = b_dur
+
+        prev_state["pedestal_deg"] = target_deg
 
         s7_moves.append({
-            "id": f"s7_{uuid.uuid4().hex[:6]}",
-            "name": f"M{m_idx + 1} Pedestal ({int(target_deg)}°)",
-            "start_sec": round(m_st, 2),
-            "end_sec": round(m_et, 2),
+            "id": f"s7_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Pedestal ({p_mode.replace('_', ' ').title()})",
+            "mode": p_mode,
+            "start_sec": b_st,
+            "end_sec": b_et,
             "target_deg": target_deg,
+            "step_deg": step_deg,
             "transition_sec": p_trans,
         })
 
-        # Track 4: Torso Pan & Groove Modifier (S1)
-        if sec_type == "chorus" or is_drop_hit:
-            groove_val = max(0.75, min(1.0, danceability * 1.2))
-        elif sec_type == "verse":
-            groove_val = max(0.30, min(0.75, danceability * 0.8))
-        elif sec_type == "bridge":
-            groove_val = 0.20
-        else:
-            groove_val = 0.0
-
+        # ----------------------------------------------------
+        # 5. Track 1: Hips / Torso Pan (S1)
+        # ----------------------------------------------------
+        # 80% audience counter-rotation against S7, 20% base aligned
+        facing_mode = "audience_counter" if rng.random() < 0.80 else "base_aligned"
         s1_moves.append({
-            "id": f"s1_{uuid.uuid4().hex[:6]}",
-            "name": f"M{m_idx + 1} Groove {int(groove_val * 100)}%",
-            "start_sec": round(m_st, 2),
-            "end_sec": round(m_et, 2),
-            "groove_intensity": round(groove_val, 2),
-            "sway_enabled": groove_val > 0.15,
+            "id": f"s1_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Hips ({facing_mode.replace('_', ' ').title()})",
+            "facing_mode": facing_mode,
+            "start_sec": b_st,
+            "end_sec": b_et,
         })
 
-        # Track 5: Head Tilt (S5)
-        if is_drop_hit:
-            tilt = 0.0
-        elif sec_type == "verse" and m_idx % 2 == 1:
-            tilt = 12.0 if (m_idx // 2) % 2 == 0 else -12.0
+        # ----------------------------------------------------
+        # 6. Track 5: Neck Pitch (S5) & Wrist Roll
+        # ----------------------------------------------------
+        neck_r = rng.random()
+        has_held_note = any(h["start_sec"] <= b_st < h["end_sec"] for h in held_notes)
+        if has_held_note or neck_r < 0.15:
+            gaze = "up"
+            tilt_deg = 15.0
+        elif neck_r < 0.20:
+            gaze = "down"
+            tilt_deg = -12.0
         else:
-            tilt = 0.0
+            gaze = "level"
+            tilt_deg = 0.0
 
         s5_moves.append({
-            "id": f"s5_{uuid.uuid4().hex[:6]}",
-            "name": f"M{m_idx + 1} Tilt ({int(tilt)}°)",
-            "start_sec": round(m_st, 2),
-            "end_sec": round(m_et, 2),
-            "tilt_deg": tilt,
+            "id": f"s5_{blk_id}",
+            "block_id": blk_id,
+            "name": f"{blk_name} Gaze ({gaze.title()})",
+            "gaze": gaze,
+            "tilt_deg": tilt_deg,
+            "start_sec": b_st,
+            "end_sec": b_et,
         })
 
-    # Track 6: Full-track Singing Jaw
-    jaw_moves = [
-        {
-            "id": f"jw_{uuid.uuid4().hex[:6]}",
-            "name": "50 Hz Neural Vocal Lip-Sync",
-            "start_sec": 0.0,
-            "end_sec": round(duration, 2),
-            "jaw_mode": "singing",
+        # Wrist roll
+        wrist_r = rng.random()
+        if wrist_r < 0.50:
+            wrist_mode = "stationary"
+        elif wrist_r < 0.80:
+            wrist_mode = "sharp_cock"
+        else:
+            wrist_mode = "oscillate_2x"
+
+        # ----------------------------------------------------
+        # 7. Bounce Modifier (Strictly 1 accent per block)
+        # ----------------------------------------------------
+        bounce_target = rng.choice(["hip_sway", "body_bounce", "head_bob"])
+        bounce_mod = {
+            "enabled": True,
+            "intensity": 0.12,
+            "target": bounce_target,
         }
-    ]
 
-    raw_lyrics = analysis.get("lyrics", [])
-    lyrics_moves = []
-    for l_idx, seg in enumerate(raw_lyrics):
-        if not isinstance(seg, dict):
-            raise TypeError(f"Lyric segment at index {l_idx} must be a dictionary.")
-        if "type" not in seg or seg["type"] not in ["lyric", "breath"]:
-            raise KeyError(f"Lyric segment at index {l_idx} missing valid 'type' ('lyric' or 'breath').")
-        if "start_sec" not in seg or "end_sec" not in seg:
-            raise KeyError(f"Lyric segment at index {l_idx} missing required timestamp 'start_sec' or 'end_sec'.")
-        if "text" not in seg:
-            raise KeyError(f"Lyric segment at index {l_idx} missing required field 'text'.")
-
-        st_val = round(float(seg["start_sec"]), 2)
-        et_val = round(float(seg["end_sec"]), 2)
-        if et_val <= st_val:
-            raise ValueError(f"Lyric segment at index {l_idx} has invalid duration (start_sec={st_val}, end_sec={et_val}).")
-
-        b_type = str(seg["type"])
-        orig_text = str(seg.get("original_asr_text", seg["text"]))
-        seg_id = str(seg.get("id", f"{'br' if b_type == 'breath' else 'ly'}_{l_idx + 1:03d}"))
-        seg_name = str(seg.get("name", seg["text"]))
-        words = list(seg.get("words", [])) if b_type == "lyric" else []
-
-        entry = {
-            "id": seg_id,
-            "name": seg_name,
-            "text": str(seg["text"]),
-            "original_asr_text": orig_text,
-            "type": b_type,
-            "is_user_edited": bool(seg.get("is_user_edited", False)),
-            "start_sec": st_val,
-            "end_sec": et_val,
-            "duration": round(et_val - st_val, 2),
+        # Master block metadata for UI inspector & overrides
+        compiled_block = {
+            "id": blk_id,
+            "name": blk_name,
+            "start_sec": b_st,
+            "end_sec": b_et,
+            "duration": b_dur,
+            "is_vocal": is_vocal,
+            "user_override": bool(blk.get("user_override", False)),
+            "bounce_modifier": bounce_mod,
+            "gantry_mode": g_mode,
+            "gantry_target": g_target,
+            "spine_pattern": spine_pattern,
+            "spine_pose": end_pose,
+            "pedestal_mode": p_mode,
+            "pedestal_deg": target_deg,
+            "facing_mode": facing_mode,
+            "gaze": gaze,
+            "wrist_mode": wrist_mode,
+            "jaw_mode": jaw_mode,
         }
-        if b_type == "lyric":
-            entry["words"] = words
+        compiled_master_blocks.append(compiled_block)
 
-        lyrics_moves.append(entry)
+        if is_vocal:
+            lyrics_moves.append(blk)
 
     return {
-        "version": "3.0.0",
+        "version": "3.1.0",
         "duration": round(duration, 2),
         "danceability": danceability,
+        "tempo": tempo,
         "settings": dict(DEFAULT_SETTINGS),
         "poses": choreo_poses,
         "sections": sec_blocks,
+        "blocks": compiled_master_blocks,
         "tracks": {
             "lyrics": lyrics_moves,
             "spine_gaze": spine_moves,

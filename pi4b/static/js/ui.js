@@ -1446,6 +1446,16 @@ export function openMoveInspector(channel, block) {
                 <button class="btn-action insp-nudge-btn" data-nudge="+1.0" style="padding: 1px 5px; font-size: 9px; height: 18px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">+1s</button>
                 <button id="inspSnapBeatBtn" class="btn-action" style="padding: 1px 6px; font-size: 9px; font-weight: 800; height: 18px; min-height: 0; background: #2e1065; border: 1px solid #a855f7; color: #e9d5ff; border-radius: 3px;">SNAP BEAT</button>
             </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 9px; color: #38bdf8; font-weight: 700; cursor: pointer;">
+                    <input type="checkbox" id="inspUserOverride" ${block.user_override ? 'checked' : ''} style="cursor: pointer;">
+                    OVERRIDE
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 9px; color: #f59e0b; font-weight: 700; cursor: pointer;">
+                    <input type="checkbox" id="inspBounceEnabled" ${(block.bounce_modifier && block.bounce_modifier.enabled !== false) ? 'checked' : ''} style="cursor: pointer;">
+                    BOUNCE 12%
+                </label>
+            </div>
         </div>
     `;
 

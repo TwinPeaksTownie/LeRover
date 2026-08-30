@@ -1201,6 +1201,15 @@ function bindEventListeners() {
                     selectedMoveBlock.name = 'Breath Inhale';
                 }
                 ui.renderTimeline();
+            } else if (id === 'inspUserOverride') {
+                selectedMoveBlock.user_override = e.target.checked;
+                ui.renderTimeline();
+            } else if (id === 'inspBounceEnabled') {
+                if (!selectedMoveBlock.bounce_modifier) {
+                    selectedMoveBlock.bounce_modifier = { enabled: true, intensity: 0.12, target: 'hip_sway' };
+                }
+                selectedMoveBlock.bounce_modifier.enabled = e.target.checked;
+                ui.renderTimeline();
             } else if (id === 'inspBasePose' || id === 'inspHeadPitch' || id === 'inspGantryMode') {
                 ui.renderTimeline();
             }

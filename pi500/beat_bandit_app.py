@@ -486,6 +486,9 @@ class BeatBanditApp(BaseApp):
 
                 self.progress_pct = min(100.0, (elapsed / duration) * 100.0)
 
+                # Current Master Block & Section Lookup
+                current_block = next((b for b in choreo.get("blocks", []) if b["start_sec"] <= elapsed < b["end_sec"]), None)
+
                 # Current Beat Index and Phase Lookup
                 beat_idx = int(np.searchsorted(beat_times, elapsed)) - 1
                 beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
@@ -500,51 +503,105 @@ class BeatBanditApp(BaseApp):
                 else:
                     sway_offset = 0.0
 
-                # 1. Track 1: Spine & Elevation (Servos 2, 3, 4)
+                # ----------------------------------------------------
+                # Bounce Modifier (Strictly 1 active accent per block)
+                # ----------------------------------------------------
+                hip_sway_deg = 0.0
+                body_bounce_offset = 0.0
+                head_bob_offset = 0.0
+
+                if current_block:
+                    bounce_mod = current_block.get("bounce_modifier", {})
+                    if bounce_mod.get("enabled", True):
+                        b_int = float(bounce_mod.get("intensity", 0.12))
+                        b_target = bounce_mod.get("target", "hip_sway")
+                        if b_target == "hip_sway":
+                            hip_sway_deg = b_int * max_sway_deg * sway_offset
+                        elif b_target == "body_bounce":
+                            body_bounce_offset = b_int * 15.0 * abs(sway_offset)
+                        elif b_target == "head_bob":
+                            head_bob_offset = b_int * 18.0 * max(0.0, sway_offset)
+
+                # ----------------------------------------------------
+                # 1. Tracks 2-4: Spine & Elevation (Servos 2, 3, 4)
+                # ----------------------------------------------------
                 spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if spine_block:
-                    pose_name = spine_block.get("pose_name", "stand")
-                    if pose_name not in choreo_poses:
-                        raise KeyError(f"Choreography specifies posture '{pose_name}' which is not in presets_dance.json")
-                    target_posture = choreo_poses[pose_name]
+                    pattern = spine_block.get("pattern", "hold_stand")
+                    b_mid = (spine_block["start_sec"] + spine_block["end_sec"]) / 2.0
+
+                    if pattern == "stand_dip_stand":
+                        active_pose_name = spine_block.get("mid_pose", "squat") if elapsed < b_mid else "stand"
+                    elif pattern == "return_stand_mid":
+                        active_pose_name = spine_block.get("start_pose", "stand") if elapsed < b_mid else "stand"
+                    elif pattern == "return_stand_late":
+                        active_pose_name = spine_block.get("start_pose", "stand") if elapsed < (spine_block["end_sec"] - 0.4) else "stand"
+                    else:
+                        active_pose_name = spine_block.get("pose_name", "stand")
+
+                    if active_pose_name not in choreo_poses:
+                        active_pose_name = "stand"
+
+                    target_posture = choreo_poses[active_pose_name]
                     trans_sec = float(spine_block.get("transition_sec", 0.5))
                     alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
 
-                    head_pitch = spine_block.get("head_pitch", "level")
-                    pitch_offset = 20.0 if head_pitch == "up" else (-15.0 if head_pitch == "down" else 0.0)
+                    smooth_posture["shoulder_lift"] += alpha * ((float(target_posture["shoulder_lift"]) + body_bounce_offset) - smooth_posture["shoulder_lift"])
+                    smooth_posture["elbow_flex"] += alpha * ((float(target_posture["elbow_flex"]) - (body_bounce_offset * 0.6)) - smooth_posture["elbow_flex"])
+                    smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + head_bob_offset) - smooth_posture["wrist_flex"])
 
-                    smooth_posture["shoulder_lift"] += alpha * (float(target_posture["shoulder_lift"]) - smooth_posture["shoulder_lift"])
-                    smooth_posture["elbow_flex"] += alpha * (float(target_posture["elbow_flex"]) - smooth_posture["elbow_flex"])
-                    smooth_posture["wrist_flex"] += alpha * ((float(target_posture["wrist_flex"]) + pitch_offset) - smooth_posture["wrist_flex"])
+                    self.current_move_name = spine_block.get("name", active_pose_name)
+                    self.current_energy_level = "HIGH ENERGY" if active_pose_name in ["tiptoe", "arch"] else "GROOVE"
 
-                    self.current_move_name = spine_block.get("name", pose_name)
-                    self.current_energy_level = "HIGH ENERGY" if pose_name in ["tiptoe", "arch"] else "GROOVE"
+                # ----------------------------------------------------
+                # 2. Track 3: Pedestal S7 (Macro Stage Facing)
+                # ----------------------------------------------------
+                s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                if s7_block:
+                    s7_mode = s7_block.get("mode", "hold")
+                    if s7_mode == "midpoint_pulse":
+                        s7_mid = (s7_block["start_sec"] + s7_block["end_sec"]) / 2.0
+                        if elapsed < s7_mid:
+                            target_s7_deg = float(s7_block.get("target_deg", 0.0)) + float(s7_block.get("step_deg", 25.0))
+                        else:
+                            target_s7_deg = float(s7_block.get("target_deg", 0.0))
+                        # Instantaneous write for midpoint pulse
+                        alpha_s7 = 0.50
+                    else:
+                        target_s7_deg = float(s7_block.get("target_deg", 0.0))
+                        trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
+                        alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
 
-                # 2. Track 4: Torso Pan & Groove Modifier (Servo 1)
+                    current_s7_deg += alpha_s7 * (target_s7_deg - current_s7_deg)
+                    current_s7_deg = max(-135.0, min(135.0, current_s7_deg))
+                    self.current_s7_target_deg = current_s7_deg
+
+                # ----------------------------------------------------
+                # 3. Track 1: Torso Pan & Hips (Servo 1)
+                # ----------------------------------------------------
                 s1_block = next((b for b in s1_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                groove_int = float(s1_block.get("groove_intensity", 0.5)) if s1_block else 0.5
-                sway_enabled = s1_block.get("sway_enabled", True) if s1_block else True
-                sway_deg = (groove_int * max_sway_deg * sway_offset) if sway_enabled else 0.0
-                target_pan = float(target_posture["shoulder_pan"]) + sway_deg
+                facing_mode = s1_block.get("facing_mode", "audience_counter") if s1_block else "audience_counter"
+
+                if facing_mode == "audience_counter":
+                    # Counter-rotate against Pedestal S7 so chest faces audience forward
+                    counter_pan_norm = (-current_s7_deg / 135.0) * 100.0
+                    target_pan = float(target_posture["shoulder_pan"]) + counter_pan_norm + hip_sway_deg
+                else:
+                    target_pan = float(target_posture["shoulder_pan"]) + hip_sway_deg
+
                 smooth_posture["shoulder_pan"] += 0.25 * (target_pan - smooth_posture["shoulder_pan"])
 
-                # 3. Track 5: Head Tilt (Servo 5)
+                # ----------------------------------------------------
+                # 4. Track 5: Head Tilt & Neck Pitch (Servo 5)
+                # ----------------------------------------------------
                 s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 target_tilt = float(s5_block.get("tilt_deg", 0.0)) if s5_block else 0.0
                 target_roll = float(target_posture["wrist_roll"]) + target_tilt
                 smooth_posture["wrist_roll"] += 0.25 * (target_roll - smooth_posture["wrist_roll"])
 
-                # 4. Track 3: Pedestal S7 (Macro Stage Facing)
-                s7_block = next((b for b in s7_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                if s7_block:
-                    target_s7_deg = float(s7_block.get("target_deg", 0.0))
-                    trans_sec_s7 = float(s7_block.get("transition_sec", 0.5))
-                    alpha_s7 = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec_s7)))
-                    current_s7_deg += alpha_s7 * (target_s7_deg - current_s7_deg)
-                    current_s7_deg = max(-135.0, min(135.0, current_s7_deg))
-                    self.current_s7_target_deg = current_s7_deg
-
-                # 5. Track 2: Gantry S8 (Tier A One-Shot Dispatch)
+                # ----------------------------------------------------
+                # 5. Track 2: Gantry S8 (One-Shot Dispatch)
+                # ----------------------------------------------------
                 s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if s8_block and s8_block.get("id") != last_s8_block_id:
                     dest_s8 = int(s8_block.get("target_pos", gantry_center))
@@ -555,12 +612,22 @@ class BeatBanditApp(BaseApp):
                     except Exception as g_err:
                         self.logger.warning(f"Gantry timeline move warning: {g_err}")
 
+                # ----------------------------------------------------
                 # 6. Track 6: Servo 6 Vocal Jaw Lip-Sync (Mode A - Capped strictly at 45%)
+                # ----------------------------------------------------
+                jaw_block = next((b for b in choreo_tracks.get("s6_jaw", []) if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                jaw_mode = jaw_block.get("jaw_mode", "singing") if jaw_block else "singing"
+
                 jaw_open_pct = 0.0
-                if mouth_env_50hz:
+                if jaw_mode == "singing" and mouth_env_50hz:
                     env_idx = int(elapsed * 50.0)
                     if 0 <= env_idx < len(mouth_env_50hz):
                         jaw_open_pct = float(mouth_env_50hz[env_idx])
+                elif jaw_mode == "nod" and sway_offset > 0.4:
+                    jaw_open_pct = 12.0
+                else:
+                    jaw_open_pct = 0.0
+
                 jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
                 self.current_vocal_power = jaw_open_pct
 
