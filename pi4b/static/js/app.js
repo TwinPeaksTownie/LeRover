@@ -1143,9 +1143,11 @@ function bindEventListeners() {
                 selectedMoveBlock.text = val;
                 selectedMoveBlock.name = val;
                 selectedMoveBlock.lyrics = val;
+                selectedMoveBlock.is_user_edited = true;
                 ui.renderTimeline();
             } else if (id === 'inspSingerType') {
                 selectedMoveBlock.singer_type = val;
+                selectedMoveBlock.is_user_edited = true;
                 if (val === 'breath') {
                     selectedMoveBlock.type = 'breath';
                     selectedMoveBlock.text = '[breath]';
@@ -1163,6 +1165,7 @@ function bindEventListeners() {
             const val = e.target.value;
             if (id === 'inspSingerType') {
                 selectedMoveBlock.singer_type = val;
+                selectedMoveBlock.is_user_edited = true;
                 if (val === 'breath') {
                     selectedMoveBlock.type = 'breath';
                     selectedMoveBlock.text = '[breath]';

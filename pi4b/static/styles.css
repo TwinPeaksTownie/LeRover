@@ -260,7 +260,8 @@ body {
 }
 
 .bb-track-label {
-    width: 105px;
+    width: 100px;
+    box-sizing: border-box;
     font-size: 11.5px;
     font-weight: 900;
     color: #a0a0c0;
@@ -394,6 +395,30 @@ body {
     color: #cbd5e1;
     font-style: italic;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.bb-move-block.user-edited::after {
+    content: "✏️";
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    font-size: 8px;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+.insp-original-ref-badge {
+    font-size: 8.5px;
+    color: #94a3b8;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 3px;
+    padding: 1px 5px;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
 }
 
 /* 5th Track: Vocal Style / Lyrics Blocks */

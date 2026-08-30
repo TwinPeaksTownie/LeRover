@@ -1142,15 +1142,15 @@ export function renderTimeline() {
                     label = `🌊 ${blk.text || blk.lyrics || blk.name}`;
                 } else {
                     effectiveClass = 'block-lyric-female';
-                    label = `🌸 ${blk.text || blk.lyrics || blk.name}`;
                 }
             }
+            const isUserEdited = !!blk.is_user_edited;
 
             html += `
-                <div class="bb-move-block ${effectiveClass} ${isSel ? 'selected' : ''}"
+                <div class="bb-move-block ${effectiveClass} ${isSel ? 'selected' : ''} ${isUserEdited ? 'user-edited' : ''}"
                      data-channel="${channelKey}" data-id="${blk.id}"
                      style="left: ${leftPx}px; width: ${widthPx}px;"
-                     title="${label} [${st.toFixed(1)}s - ${et.toFixed(1)}s]">
+                     title="${label} [${st.toFixed(1)}s - ${et.toFixed(1)}s] ${isUserEdited ? '(Edited)' : ''}">
                     ${label}
                 </div>
             `;
@@ -1178,11 +1178,8 @@ export function renderTimeline() {
         waveCanvas.style.left = '0px';
         waveCanvas.style.width = `${laneW}px`;
         waveCanvas.style.height = `${laneH}px`;
-
         const ctx = waveCanvas.getContext('2d');
         if (ctx) {
-            // Dark navy blue background
-            ctx.fillStyle = '#060d1f';
             ctx.fillRect(0, 0, laneW, laneH);
 
             // Subtle horizontal center baseline
@@ -1582,6 +1579,7 @@ export function openMoveInspector(channel, block) {
     } else if (channel === 'lyrics' || channel === 'lyrics_phrasing') {
         const lyricText = block.text || block.lyrics || block.name || '';
         const singerType = block.singer_type || (block.type === 'breath' ? 'breath' : 'female');
+        const origText = block.original_asr_text || lyricText;
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -1593,7 +1591,10 @@ export function openMoveInspector(channel, block) {
                     </select>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
-                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">LYRIC TEXT:</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 9px; color: #aaa; font-weight: 700;">LYRIC TEXT:</span>
+                        <span class="insp-original-ref-badge" title="Original ASR: ${origText.replace(/"/g, '&quot;')}">ORIG: "${origText.replace(/"/g, '&quot;')}"</span>
+                    </div>
                     <input type="text" id="inspLyricTextInput" value="${lyricText.replace(/"/g, '&quot;')}" placeholder="Enter lyric text..." style="background: #1a1a26; border: 1px solid #60a5fa; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; width: 100%; box-sizing: border-box;">
                 </div>
             </div>

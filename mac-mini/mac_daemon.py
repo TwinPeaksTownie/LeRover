@@ -210,8 +210,8 @@ def infer_section_labels(segments: list[dict], total_duration: float) -> list[di
         seg["energy_score"] = round(float(z), 3)
 
 def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50) -> list:
-    """Extracts word-timestamped ASR lyrics, groups into 2-8 word phrases on >0.65s pauses,
-    and extracts preceding acoustic breath intake blocks from the 50Hz vocal envelope.
+    """Extracts word-timestamped ASR lyrics, groups into 2-5 word clauses based on punctuation
+    and acoustic micro-pauses (>0.20s), and extracts preceding acoustic breath intake blocks.
     """
     logger.info(f"Extracting lyrics and breath landmarks from {vocals_wav_path}...")
     try:
@@ -252,11 +252,14 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
 
         prev_w = current_words[-1]
         gap = w["start"] - prev_w["end"]
+        prev_word_str = prev_w["word"].strip().rstrip("\"'”’")
+        has_punct = prev_word_str.endswith((',', '.', '?', '!', ';', ':', '—', '-', '…'))
 
-        # Split conditions:
-        # 1. Gap > 0.65s (acoustic silence)
-        # 2. Already reached 8 words (hard limit)
-        if gap > 0.65 or len(current_words) >= 8:
+        # Refined Split conditions:
+        # 1. Punctuation boundary on previous word (natural clause break)
+        # 2. Acoustic micro-pause > 0.20s between words
+        # 3. Hard limit of 5 words (target 2-5 words for 8-16 increments/verse)
+        if has_punct or gap > 0.20 or len(current_words) >= 5:
             lines.append(current_words)
             current_words = [w]
         else:
@@ -301,8 +304,10 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
                     "id": f"br_{breath_idx:03d}",
                     "name": "Breath Inhale",
                     "text": "[breath]",
+                    "original_asr_text": "[breath]",
                     "type": "breath",
                     "singer_type": "breath",
+                    "is_user_edited": False,
                     "start_sec": b_actual_start,
                     "end_sec": b_actual_end,
                     "duration": round(b_actual_end - b_actual_start, 2)
@@ -313,8 +318,10 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
             "id": f"ly_{lyric_idx:03d}",
             "name": f"Line {lyric_idx}",
             "text": line_text,
+            "original_asr_text": line_text,
             "type": "lyric",
             "singer_type": "female",
+            "is_user_edited": False,
             "start_sec": st_sec,
             "end_sec": en_sec,
             "duration": dur,
