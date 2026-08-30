@@ -223,9 +223,14 @@ def infer_section_labels(segments: list[dict], total_duration: float, first_voca
 
     return segments
 
-def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50) -> list:
-    """Extracts word-timestamped ASR lyrics, groups into 2-5 word clauses based on punctuation
-    and acoustic micro-pauses (>0.20s), and extracts preceding acoustic breath intake blocks.
+DANGLING_ENDINGS = {
+    "the", "a", "an", "in", "on", "at", "to", "for", "with", "and", "but", "or", "of",
+    "put", "i'm", "i'll", "i", "you", "she", "he", "it's", "my", "your", "her", "his", "our", "their"
+}
+
+def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50, chapter_boundaries: Optional[list] = None) -> list:
+    """Extracts word-timestamped ASR lyrics, groups into clean poetic clauses based on chapter boundaries,
+    punctuation endpoints, acoustic pauses (>0.25s), and non-dangling word groups, and extracts preceding breath intake blocks.
     """
     logger.info(f"Extracting lyrics and breath landmarks from {vocals_wav_path}...")
     try:
@@ -256,6 +261,7 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         logger.warning(f"No spoken words transcribed in {vocals_wav_path}")
         return []
 
+    chapter_bounds = sorted(chapter_boundaries or [])
     lines = []
     current_words = []
 
@@ -266,14 +272,30 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
 
         prev_w = current_words[-1]
         gap = w["start"] - prev_w["end"]
-        prev_word_str = prev_w["word"].strip().rstrip("\"'”’")
-        has_punct = prev_word_str.endswith((',', '.', '?', '!', ';', ':', '—', '-', '…'))
+        prev_word_clean = prev_w["word"].strip().rstrip("\"'”’")
+        has_punct = prev_word_clean.endswith((',', '.', '?', '!', ';', ':', '—', '-', '…'))
 
-        # Refined Split conditions:
-        # 1. Punctuation boundary on previous word (natural clause break)
-        # 2. Acoustic micro-pause > 0.20s between words
-        # 3. Hard limit of 5 words (target 2-5 words for 8-16 increments/verse)
-        if has_punct or gap > 0.20 or len(current_words) >= 5:
+        # 1. Hard Chapter Boundary Check
+        crossed_chapter = any(prev_w["end"] <= cb <= w["start"] or (prev_w["start"] < cb <= w["start"]) for cb in chapter_bounds)
+
+        # 2. Acoustic Pause Check
+        is_acoustic_pause = (gap >= 0.25)
+
+        # 3. Non-dangling word split check
+        prev_lower = prev_word_clean.lower().rstrip(",.?!;:-—…")
+        is_dangling = prev_lower in DANGLING_ENDINGS
+
+        should_split = False
+        if crossed_chapter or has_punct or is_acoustic_pause:
+            should_split = True
+        elif len(current_words) >= 4 and gap >= 0.15 and not is_dangling:
+            should_split = True
+        elif len(current_words) >= 6 and not is_dangling:
+            should_split = True
+        elif len(current_words) >= 8:
+            should_split = True
+
+        if should_split:
             lines.append(current_words)
             current_words = [w]
         else:
@@ -488,7 +510,7 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
     raw_b_times = [float(beat_times[min(idx, len(beat_times) - 1)]) for idx in change_indices]
 
     # Extract ASR lyrics and acoustic breath landmarks
-    lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps)
+    lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps, chapter_boundaries=raw_b_times)
     first_vocal_sec = lyrics_blocks[0]["start_sec"] if lyrics_blocks else None
 
     # Snap boundary timeline (ensuring opening aligns with first vocal onset)
