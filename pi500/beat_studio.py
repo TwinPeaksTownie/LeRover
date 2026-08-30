@@ -632,12 +632,13 @@ class BeatStudioManager:
         if duration <= 0.0:
             raise ValueError(f"Invalid duration '{duration}' for track '{track_id}'.")
 
-        if not choreo or not choreo.get("tracks"):
-            self.logger.info(f"Auto-compiling 4-bar block choreography for '{track_meta.get('title')}' ({track_id})...")
+        if not choreo or not choreo.get("tracks") or choreo.get("version") != "3.1.0":
+            self.logger.info(f"Auto-compiling bottom-up decision tree choreography for '{track_meta.get('title')}' ({track_id})...")
             choreo = compile_default_choreography(analysis, duration)
             track_meta["choreography"] = choreo
             manifest[track_id] = track_meta
             self._save_manifest(manifest)
+
 
         # Merge in beat grid metadata for UI ruler
         choreo["track_id"] = track_id
