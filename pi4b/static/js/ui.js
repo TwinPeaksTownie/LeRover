@@ -8,7 +8,6 @@ import {
     isFollowerRunning,
     isPokeballRunning,
     isPokeballConnected,
-    isRoverStandaloneRunning,
     isMasterDaemonRunning,
     isStudioRunning,
     isClackPoseRunning,
@@ -38,6 +37,7 @@ import {
     selectedPoseName,
     currentCustomPoseJoints,
     currentConfig,
+    mergeConfigTelemetry,
     lastRenderedButtonsKey,
     lastRenderedConfigKey,
     lastRenderedSliderText,
@@ -48,7 +48,6 @@ import {
     setIsFollowerRunning,
     setIsPokeballRunning,
     setIsPokeballConnected,
-    setIsRoverStandaloneRunning,
     setIsMasterDaemonRunning,
     setIsStudioRunning,
     setIsClackPoseRunning,
@@ -210,26 +209,6 @@ export function renderButtonStates() {
         } else {
             appsStatus.innerText = 'ROBOT APPS IDLE';
             appsStatus.style.color = '#888888';
-        }
-    }
-
-    // Rover button
-    const roverBtn = document.getElementById('roverStandaloneBtn');
-    const roverTitle = document.getElementById('roverBtnTitle');
-    const roverSub = document.getElementById('roverBtnSub');
-    if (roverBtn) {
-        if (isRoverStandaloneRunning) {
-            roverBtn.style.borderColor = '#00ff66';
-            roverBtn.style.color = '#00ff66';
-            roverBtn.style.background = 'rgba(0, 255, 102, 0.15)';
-            if (roverTitle) roverTitle.innerHTML = '<span style="color:#00ff66;">🟢 STOP ROVER</span>';
-            if (roverSub) roverSub.innerHTML = '<span style="color:#aaffcc;">Rover Running - Pokéball BLE Active</span>';
-        } else {
-            roverBtn.style.borderColor = '#00e5ff';
-            roverBtn.style.color = '#ffffff';
-            roverBtn.style.background = '#181818';
-            if (roverTitle) roverTitle.innerHTML = '🏎️ START ROVER';
-            if (roverSub) roverSub.innerHTML = 'Standalone Overlander-4 Driver (No 12V Req)';
         }
     }
 
@@ -841,8 +820,6 @@ export function updateTelemetryUI(data) {
     setIsPokeballConnected(!!pkData.connected);
     const pkTelem = pkData.telemetry || (ht.pokeball);
 
-    const pkrData = data.pokeball_rover || {};
-    setIsRoverStandaloneRunning(!!pkrData.running);
     setIsMasterDaemonRunning(!!data.daemon_running);
 
     // Parse Pokeball Live Telemetry
@@ -1024,7 +1001,7 @@ export function updateTelemetryUI(data) {
     }
 
     if (data.config) {
-        setCurrentConfig(Object.assign({}, currentConfig, data.config));
+        mergeConfigTelemetry(data.config);
         updateConfigUI();
     }
 }

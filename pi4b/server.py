@@ -41,7 +41,6 @@ def get_current_mac_ip(port=8086) -> str:
 
 STATUS_CACHE = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
-    "pokeball_rover": {"running": False, "pid": ""},
     "follower": {"running": False, "pid": ""},
     "leader": {"running": False, "pid": ""},
     "clack_pose": {"running": False},
@@ -329,7 +328,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
             return
 
-        if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences"]:
+        if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences", "/api/pokeball_reconnect"]:
             try:
                 p500_ip = get_current_pi500_ip(port=8085)
                 req = urllib.request.Request(f"http://{p500_ip}:8085{self.path}")
@@ -490,56 +489,15 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 if action == "stop":
                     STATUS_CACHE["daemon_running"] = False
                 elif action in ["start", "restart"]:
-                    STATUS_CACHE["daemon_running"] = True
-                    STATUS_CACHE["pokeball_rover"] = {"running": False}
+                    STATUS_CACHE["daemon_running"] = (res.returncode == 0)
 
-                self.send_response(200)
+                self.send_response(200 if res.returncode == 0 else 500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "action": action, "message": f"Pi 500 Master Daemon {action} executed", "stdout": res.stdout, "stderr": res.stderr}).encode())
+                self.wfile.write(json.dumps({"status": "ok" if res.returncode == 0 else "error", "action": action, "message": f"Pi 500 sewer-daemon.service {action} executed", "stdout": res.stdout, "stderr": res.stderr}).encode())
                 return
             except Exception as e:
                 print(f"[TouchUI] Daemon {action} failed: {e}", flush=True)
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
-                return
-
-        if path == "/api/pokeball_rover_toggle":
-            action = req_data.get("action", "toggle")
-            try:
-                try:
-                    import rover_launcher
-                except ImportError:
-                    sys.path.insert(0, DIRECTORY)
-                    import rover_launcher
-
-                running = rover_launcher.is_running()
-                if action == "toggle":
-                    action = "stop" if running else "start"
-
-                if action == "start":
-                    rover_launcher.start_rover()
-                    time.sleep(0.6)
-                    running = rover_launcher.is_running()
-                    STATUS_CACHE["pokeball_rover"] = {"running": running}
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "action": "started", "running": running}).encode())
-                    return
-                else:
-                    rover_launcher.stop_rover()
-                    time.sleep(0.3)
-                    running = rover_launcher.is_running()
-                    STATUS_CACHE["pokeball_rover"] = {"running": running}
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped", "running": running}).encode())
-                    return
-            except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -731,8 +689,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 url = f"http://{p500_ip}:8085{path}"
                 post_data = body.encode('utf-8')
                 req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
-                timeout_val = 240.0 if "stage_director" in path else 8.0
-                with urllib.request.urlopen(req, timeout=timeout_val) as resp:
+                with urllib.request.urlopen(req, timeout=8.0) as resp:
                     resp_body = resp.read()
                     self.send_response(resp.status)
                     self.send_header("Content-Type", "application/json")
@@ -753,6 +710,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/pedestal",
             "/api/move",
             "/api/sync_position",
+            "/api/calibration",
+            "/api/torque",
             "/api/arm/torque",
             "/api/arm/capture_pose",
             "/api/arm/commit_preset",
@@ -760,6 +719,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/arm/delete_preset",
             "/api/arm/resume_last_pose",
             "/api/arm/move_to_preset",
+            "/api/arm/move_norm",
             "/api/arm/execute_sequence",
             "/api/arm/sequence",
             "/api/arm/attack_sequence",
@@ -770,7 +730,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
                     if path in ["/api/arm/attack_sequence", "/api/arm/attack", "/api/arm/execute_sequence"]:
                         TAP_DETECTOR.mute(12.0)
-                    elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset"]:
+                    elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset", "/api/arm/move_norm"]:
                         TAP_DETECTOR.mute(2.5)
                     else:
                         TAP_DETECTOR.mute(1.5)

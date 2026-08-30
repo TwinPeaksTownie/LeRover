@@ -7,7 +7,6 @@ export let isLeaderRunning = false;
 export let isFollowerRunning = false;
 export let isPokeballRunning = false;
 export let isPokeballConnected = false;
-export let isRoverStandaloneRunning = false;
 export let isMasterDaemonRunning = true;
 export let isStudioRunning = false;
 export let isClackPoseRunning = false;
@@ -80,7 +79,6 @@ export function setIsLeaderRunning(val) { isLeaderRunning = !!val; }
 export function setIsFollowerRunning(val) { isFollowerRunning = !!val; }
 export function setIsPokeballRunning(val) { isPokeballRunning = !!val; }
 export function setIsPokeballConnected(val) { isPokeballConnected = !!val; }
-export function setIsRoverStandaloneRunning(val) { isRoverStandaloneRunning = !!val; }
 export function setIsMasterDaemonRunning(val) { isMasterDaemonRunning = !!val; }
 export function setIsStudioRunning(val) { isStudioRunning = !!val; }
 export function setIsClackPoseRunning(val) { isClackPoseRunning = !!val; }
@@ -110,8 +108,25 @@ export function setTimelineLoopEnabled(val) { timelineLoopEnabled = !!val; }
 export function setTimelineIsPlaying(val) { timelineIsPlaying = !!val; }
 export function setSelectedPoseName(val) { selectedPoseName = val; }
 export function setCurrentCustomPoseJoints(val) { currentCustomPoseJoints = val; }
+
+export const configSettlingLocks = {};
+export function setConfigSettlingLock(key, ms = 800) {
+    configSettlingLocks[key] = Date.now() + ms;
+}
+export function isConfigLocked(key) {
+    return (configSettlingLocks[key] || 0) > Date.now();
+}
+
 export function setCurrentConfig(val) { currentConfig = val; }
 export function updateConfigKey(key, val) { currentConfig[key] = val; }
+export function mergeConfigTelemetry(newConfig) {
+    if (!newConfig || typeof newConfig !== 'object') return;
+    for (const [k, v] of Object.entries(newConfig)) {
+        if (!isConfigLocked(k)) {
+            currentConfig[k] = v;
+        }
+    }
+}
 
 export function setLastRenderedButtonsKey(val) { lastRenderedButtonsKey = val; }
 export function setLastRenderedConfigKey(val) { lastRenderedConfigKey = val; }
@@ -122,9 +137,4 @@ export function setLastRenderedPowerText(val) { lastRenderedPowerText = val; }
 export function setIsPollingInProgress(val) { isPollingInProgress = !!val; }
 export function setIsFetchingTracks(val) { isFetchingTracks = !!val; }
 export function setIsFetchingPresets(val) { isFetchingPresets = !!val; }
-
-export let activeDirectorSessionId = null;
-export let activeDirectorBrief = null;
-export function setActiveDirectorSessionId(val) { activeDirectorSessionId = val; }
-export function setActiveDirectorBrief(val) { activeDirectorBrief = val; }
 

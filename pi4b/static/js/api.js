@@ -187,20 +187,12 @@ export function previewBeatBanditMovement(channel, target) {
     }, 2500);
 }
 
-export function startStageDirectorSession(trackId) {
-    return safeFetch('/api/apps/beat_bandit/stage_director/start', {
+export function sendArmMoveNorm(target, duration = 1.5, steps = 40) {
+    return safeFetch('/api/arm/move_norm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track_id: trackId })
-    }, 240000);
-}
-
-export function sendStageDirectorFeedback(sessionId, feedback, acceptAsIs = false) {
-    return safeFetch('/api/apps/beat_bandit/stage_director/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, feedback, accept_as_is: acceptAsIs })
-    }, 240000);
+        body: JSON.stringify({ target, duration, steps })
+    }, 3000);
 }
 
 // Arm & Presets Control
@@ -282,15 +274,7 @@ export function sendMasterDaemonRestart(action) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
-    }, 3000);
-}
-
-export function sendPokeballRoverToggle(action) {
-    return safeFetch('/api/pokeball_rover_toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
-    }, 3000);
+    }, 5000);
 }
 
 export function sendEmergencyKillAll() {
@@ -298,13 +282,7 @@ export function sendEmergencyKillAll() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'kill_all' })
-    }, 2500).then(() => {
-        return safeFetch('/api/pokeball_rover_toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'stop' })
-        }, 2000).catch(() => {});
-    });
+    }, 2500);
 }
 
 export function sendWifiRestore() {

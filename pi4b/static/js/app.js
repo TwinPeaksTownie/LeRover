@@ -7,7 +7,6 @@ import {
     isLeaderRunning,
     isFollowerRunning,
     isPokeballRunning,
-    isRoverStandaloneRunning,
     isMasterDaemonRunning,
     isStudioRunning,
     isClackPoseRunning,
@@ -45,7 +44,6 @@ import {
     setIsFollowerRunning,
     setIsPokeballRunning,
     setIsPokeballConnected,
-    setIsRoverStandaloneRunning,
     setIsMasterDaemonRunning,
     setIsStudioRunning,
     setIsClackPoseRunning,
@@ -70,13 +68,11 @@ import {
     setTimelineIsPlaying,
     setSelectedPoseName,
     setCurrentCustomPoseJoints,
+    setConfigSettlingLock,
+    updateConfigKey,
     setIsPollingInProgress,
     setIsFetchingTracks,
-    setIsFetchingPresets,
-    activeDirectorSessionId,
-    activeDirectorBrief,
-    setActiveDirectorSessionId,
-    setActiveDirectorBrief
+    setIsFetchingPresets
 } from './state.js';
 
 import * as api from './api.js';
@@ -639,12 +635,7 @@ export function triggerPi500MasterDaemonRestart() {
         .then(r => r.json())
         .then(() => {
             if (btn) btn.style.opacity = '1.0';
-            if (action === 'stop') {
-                setIsMasterDaemonRunning(false);
-            } else {
-                setIsMasterDaemonRunning(true);
-                setIsRoverStandaloneRunning(false);
-            }
+            setIsMasterDaemonRunning(action !== 'stop');
             ui.renderButtonStates();
         })
         .catch(() => {
@@ -652,29 +643,6 @@ export function triggerPi500MasterDaemonRestart() {
                 btn.style.opacity = '1.0';
                 if (txt) txt.innerText = '❌ DAEMON ERROR';
             }
-        });
-}
-
-export function togglePokeballRoverStandalone() {
-    const action = isRoverStandaloneRunning ? 'stop' : 'start';
-    const btn = document.getElementById('roverStandaloneBtn');
-    const title = document.getElementById('roverBtnTitle');
-    if (btn) {
-        btn.style.opacity = '0.5';
-        if (title) title.innerText = action === 'start' ? '⌛ STARTING ROVER...' : '⌛ STOPPING ROVER...';
-    }
-    api.sendPokeballRoverToggle(action)
-        .then(r => r.json())
-        .then(d => {
-            if (d.running !== undefined) setIsRoverStandaloneRunning(d.running);
-            if (action === 'start') {
-                setIsMasterDaemonRunning(false);
-            }
-            if (btn) btn.style.opacity = '1.0';
-            ui.renderButtonStates();
-        })
-        .catch(() => {
-            if (btn) btn.style.opacity = '1.0';
         });
 }
 
@@ -695,9 +663,16 @@ export function triggerWifiDisable() {
 }
 
 export function applyConfig(key, val) {
+    setConfigSettlingLock(key, 800);
+    const prevVal = currentConfig[key];
     updateConfigKey(key, val);
     ui.updateConfigUI();
-    api.sendSetConfig({ [key]: val }).catch(() => {});
+    api.sendSetConfig({ [key]: val })
+        .catch(() => {
+            updateConfigKey(key, prevVal);
+            ui.updateConfigUI();
+            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+        });
 }
 
 // ==========================================
@@ -1439,11 +1414,9 @@ function bindEventListeners() {
     // View 1: Main Launcher
     const backendPowerMenuBtn = document.getElementById('backendPowerMenuBtn');
     const backendConfigMenuBtn = document.getElementById('backendConfigMenuBtn');
-    const roverStandaloneBtn = document.getElementById('roverStandaloneBtn');
 
     if (backendPowerMenuBtn) backendPowerMenuBtn.addEventListener('click', () => ui.openBackendSubView('power'));
     if (backendConfigMenuBtn) backendConfigMenuBtn.addEventListener('click', () => ui.openBackendSubView('config'));
-    if (roverStandaloneBtn) roverStandaloneBtn.addEventListener('click', () => togglePokeballRoverStandalone());
 
     // View 2: Power Management
     const powerBackBtn = document.getElementById('powerBackBtn');

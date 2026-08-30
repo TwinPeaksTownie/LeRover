@@ -248,36 +248,9 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
                 script_path = os.path.join(DIRECTORY, "restart_daemon.py")
                 res = subprocess.run([sys.executable, script_path], capture_output=True, text=True, timeout=10)
                 logging.info("[ApiGateway] Daemon restart stdout: '%s', stderr: '%s'", res.stdout.strip(), res.stderr.strip())
-                self._send_json({"status": "ok", "message": "Pi 500 Master Daemon restart initiated", "stdout": res.stdout, "stderr": res.stderr})
+                self._send_json({"status": "ok", "message": "Pi 500 sewer-daemon.service restart initiated", "stdout": res.stdout, "stderr": res.stderr})
             except Exception as e:
                 logging.error("[ApiGateway] Daemon restart failed: %s", e)
-                self._send_json({"error": str(e), "status": "failed"}, 500)
-        # 5.5 Standalone Pokéball Rover Toggle
-        if path == "/api/pokeball_rover_toggle":
-            action = req_data.get("action", "toggle")
-            try:
-                try:
-                    import rover_launcher
-                except ImportError:
-                    sys.path.insert(0, DIRECTORY)
-                    import rover_launcher
-
-                running = rover_launcher.is_running()
-                if action == "toggle":
-                    action = "stop" if running else "start"
-
-                if action == "start":
-                    rover_launcher.start_rover()
-                    time.sleep(0.6)
-                    running = rover_launcher.is_running()
-                    self._send_json({"status": "ok", "action": "started", "running": running})
-                else:
-                    rover_launcher.stop_rover()
-                    time.sleep(0.3)
-                    running = rover_launcher.is_running()
-                    self._send_json({"status": "ok", "action": "stopped", "running": running})
-            except Exception as e:
-                logging.error("[ApiGateway] Rover toggle failed: %s", e)
                 self._send_json({"error": str(e), "status": "failed"}, 500)
             return
 
@@ -336,7 +309,7 @@ class ApiGatewayHandler(SimpleHTTPRequestHandler):
                 return
 
         # 7. Direct Motor Commands & Position Sync Forwarding
-        if path in ["/api/slider", "/api/nudge_physical", "/api/pedestal_step", "/api/pedestal", "/api/move", "/api/sync_position"]:
+        if path in ["/api/slider", "/api/nudge_physical", "/api/pedestal_step", "/api/pedestal", "/api/move", "/api/sync_position", "/api/calibration", "/api/torque"]:
             try:
                 target_url = f"http://{get_pi500_ip()}:8085{path}"
 
