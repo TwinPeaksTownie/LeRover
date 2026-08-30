@@ -307,19 +307,40 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
     blocks = []
     lyric_idx = 1
     breath_idx = 1
+    n_lines = len(lines)
 
-    for line_words in lines:
+    for line_idx, line_words in enumerate(lines):
         line_text = " ".join(w["word"] for w in line_words)
-        st_sec = line_words[0]["start"]
-        en_sec = line_words[-1]["end"]
-        dur = round(en_sec - st_sec, 2)
+        raw_st = float(line_words[0]["start"])
+        raw_en = float(line_words[-1]["end"])
 
+        prev_block_end = blocks[-1]["end_sec"] if blocks else 0.0
+
+        # Determine upper boundary from next phrase onset or audio length
+        if line_idx + 1 < n_lines:
+            next_line_st = float(lines[line_idx + 1][0]["start"])
+        else:
+            next_line_st = len(mouth_envelope) / fps
+
+        # 1. Acoustic Onset Snapping (start_sec)
+        st_sec = raw_st
+        search_start = max(int(prev_block_end * fps), int((raw_st - 0.3) * fps))
+        search_end = min(len(mouth_envelope), int((raw_st + 0.3) * fps))
+        if search_end > search_start:
+            for f_idx in range(search_start, search_end):
+                if mouth_envelope[f_idx] >= 5.0:
+                    st_sec = round(f_idx / fps, 2)
+                    break
+        st_sec = max(prev_block_end, st_sec)
+        line_words[0]["start"] = st_sec
+
+        # 2. Breath Inhale Detection (in pre-roll before st_sec)
         phrase_start_frame = int(st_sec * fps)
         breath_lookback_frames = int(0.7 * fps)
         breath_end_offset_frames = int(0.15 * fps)
 
-        b_start_frame = max(0, phrase_start_frame - breath_lookback_frames)
-        b_end_frame = max(0, phrase_start_frame - breath_end_offset_frames)
+        b_start_frame = max(int(prev_block_end * fps), phrase_start_frame - breath_lookback_frames)
+        b_end_frame = max(b_start_frame, phrase_start_frame - breath_end_offset_frames)
 
         has_breath = False
         b_actual_start = None
@@ -334,7 +355,6 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
                 b_actual_end = round((b_start_frame + active_frames[-1] + 1) / fps, 2)
 
         if has_breath and b_actual_start is not None and b_actual_end is not None:
-            prev_block_end = blocks[-1]["end_sec"] if blocks else 0.0
             if b_actual_start >= prev_block_end and b_actual_end <= st_sec:
                 blocks.append({
                     "id": f"br_{breath_idx:03d}",
@@ -348,6 +368,26 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
                     "duration": round(b_actual_end - b_actual_start, 2)
                 })
                 breath_idx += 1
+                prev_block_end = b_actual_end
+                st_sec = max(prev_block_end, st_sec)
+                line_words[0]["start"] = st_sec
+
+        # 3. Acoustic Sustained Trail Snapping (end_sec)
+        en_frame = int(raw_en * fps)
+        max_frame = int(next_line_st * fps)
+        last_active = max(int(st_sec * fps), en_frame)
+
+        if en_frame < len(mouth_envelope):
+            for f_idx in range(en_frame, min(len(mouth_envelope), max_frame)):
+                if mouth_envelope[f_idx] >= 5.0:
+                    last_active = f_idx
+                elif f_idx - last_active > int(0.25 * fps):  # 250ms silence gap
+                    break
+
+        snapped_en = round((last_active + 1) / fps, 2)
+        en_sec = max(round(st_sec + 0.1, 2), min(snapped_en, next_line_st))
+        line_words[-1]["end"] = en_sec
+        dur = round(en_sec - st_sec, 2)
 
         blocks.append({
             "id": f"ly_{lyric_idx:03d}",

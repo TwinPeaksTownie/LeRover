@@ -21815,13 +21815,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 21.12,
-          "end_sec": 22.52,
-          "duration": 1.4,
+          "end_sec": 22.54,
+          "duration": 1.42,
           "words": [
             {
               "word": "VPaulagain",
               "start": 21.12,
-              "end": 22.52
+              "end": 22.54
             }
           ]
         },
@@ -21899,8 +21899,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 31.78,
-          "end_sec": 32.52,
-          "duration": 0.74,
+          "end_sec": 32.96,
+          "duration": 1.18,
           "words": [
             {
               "word": "as",
@@ -21910,7 +21910,7 @@
             {
               "word": "massage",
               "start": 32.1,
-              "end": 32.52
+              "end": 32.96
             }
           ]
         },
@@ -21921,13 +21921,13 @@
           "original_asr_text": "The night is almost over,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 32.98,
-          "end_sec": 34.72,
-          "duration": 1.74,
+          "start_sec": 32.96,
+          "end_sec": 35.18,
+          "duration": 2.22,
           "words": [
             {
               "word": "The",
-              "start": 32.98,
+              "start": 32.96,
               "end": 33.32
             },
             {
@@ -21948,7 +21948,7 @@
             {
               "word": "over,",
               "start": 34.26,
-              "end": 34.72
+              "end": 35.18
             }
           ]
         },
@@ -21960,8 +21960,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 35.18,
-          "end_sec": 36.7,
-          "duration": 1.52,
+          "end_sec": 37.1,
+          "duration": 1.92,
           "words": [
             {
               "word": "I'm",
@@ -21991,7 +21991,7 @@
             {
               "word": "are",
               "start": 36.5,
-              "end": 36.7
+              "end": 37.1
             }
           ]
         },
@@ -22002,13 +22002,13 @@
           "original_asr_text": "The shadows are taking me pretty",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 37.16,
+          "start_sec": 37.2,
           "end_sec": 39.46,
-          "duration": 2.3,
+          "duration": 2.26,
           "words": [
             {
               "word": "The",
-              "start": 37.16,
+              "start": 37.2,
               "end": 37.5
             },
             {
@@ -22046,8 +22046,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 39.46,
-          "end_sec": 40.82,
-          "duration": 1.36,
+          "end_sec": 41.46,
+          "duration": 2.0,
           "words": [
             {
               "word": "like",
@@ -22067,7 +22067,7 @@
             {
               "word": "star",
               "start": 40.56,
-              "end": 40.82
+              "end": 41.46
             }
           ]
         },
@@ -22122,8 +22122,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 43.02,
-          "end_sec": 44.16,
-          "duration": 1.14,
+          "end_sec": 44.62,
+          "duration": 1.6,
           "words": [
             {
               "word": "like",
@@ -22138,7 +22138,7 @@
             {
               "word": "now",
               "start": 43.78,
-              "end": 44.16
+              "end": 44.62
             }
           ]
         },
@@ -22150,8 +22150,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 44.62,
-          "end_sec": 45.96,
-          "duration": 1.34,
+          "end_sec": 46.36,
+          "duration": 1.74,
           "words": [
             {
               "word": "I'm",
@@ -22171,7 +22171,7 @@
             {
               "word": "why",
               "start": 45.14,
-              "end": 45.96
+              "end": 46.36
             }
           ]
         },
@@ -22183,8 +22183,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 46.36,
-          "end_sec": 47.14,
-          "duration": 0.78,
+          "end_sec": 47.5,
+          "duration": 1.14,
           "words": [
             {
               "word": "In",
@@ -22199,7 +22199,7 @@
             {
               "word": "end,",
               "start": 46.92,
-              "end": 47.14
+              "end": 47.5
             }
           ]
         },
@@ -22211,8 +22211,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 47.5,
-          "end_sec": 48.86,
-          "duration": 1.36,
+          "end_sec": 49.8,
+          "duration": 2.3,
           "words": [
             {
               "word": "I'll",
@@ -22237,20 +22237,9 @@
             {
               "word": "deep",
               "start": 48.52,
-              "end": 48.86
+              "end": 49.8
             }
           ]
-        },
-        {
-          "id": "br_001",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 49.26,
-          "end_sec": 49.8,
-          "duration": 0.54
         },
         {
           "id": "ly_014",
@@ -22259,13 +22248,13 @@
           "original_asr_text": "In the darkness I would never",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 49.94,
+          "start_sec": 50.0,
           "end_sec": 52.46,
-          "duration": 2.52,
+          "duration": 2.46,
           "words": [
             {
               "word": "In",
-              "start": 49.94,
+              "start": 50.0,
               "end": 50.58
             },
             {
@@ -22518,8 +22507,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 65.22,
-          "end_sec": 67.4,
-          "duration": 2.18,
+          "end_sec": 67.8,
+          "duration": 2.58,
           "words": [
             {
               "word": "through",
@@ -22549,7 +22538,7 @@
             {
               "word": "Mr.",
               "start": 67.1,
-              "end": 67.4
+              "end": 67.8
             }
           ]
         },
@@ -22604,8 +22593,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 70.18,
-          "end_sec": 72.54,
-          "duration": 2.36,
+          "end_sec": 72.62,
+          "duration": 2.44,
           "words": [
             {
               "word": "My",
@@ -22635,7 +22624,7 @@
             {
               "word": "up,",
               "start": 72.18,
-              "end": 72.54
+              "end": 72.62
             }
           ]
         },
@@ -22695,8 +22684,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 75.66,
-          "end_sec": 77.9,
-          "duration": 2.24,
+          "end_sec": 79.44,
+          "duration": 3.78,
           "words": [
             {
               "word": "wanna",
@@ -22726,20 +22715,9 @@
             {
               "word": "are",
               "start": 77.22,
-              "end": 77.9
+              "end": 79.44
             }
           ]
-        },
-        {
-          "id": "br_002",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 78.74,
-          "end_sec": 79.3,
-          "duration": 0.56
         },
         {
           "id": "ly_025",
@@ -22748,13 +22726,13 @@
           "original_asr_text": "In the end I hope it's you and",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 79.46,
+          "start_sec": 79.44,
           "end_sec": 81.92,
-          "duration": 2.46,
+          "duration": 2.48,
           "words": [
             {
               "word": "In",
-              "start": 79.46,
+              "start": 79.44,
               "end": 80.1
             },
             {
@@ -22802,26 +22780,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 81.92,
-          "end_sec": 82.6,
-          "duration": 0.68,
+          "end_sec": 83.38,
+          "duration": 1.46,
           "words": [
             {
               "word": "me",
               "start": 81.92,
-              "end": 82.6
+              "end": 83.38
             }
           ]
-        },
-        {
-          "id": "br_003",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 82.84,
-          "end_sec": 83.38,
-          "duration": 0.54
         },
         {
           "id": "ly_027",
@@ -22831,8 +22798,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 83.54,
-          "end_sec": 85.56,
-          "duration": 2.02,
+          "end_sec": 86.2,
+          "duration": 2.66,
           "words": [
             {
               "word": "In",
@@ -22857,7 +22824,7 @@
             {
               "word": "wonder,",
               "start": 85.3,
-              "end": 85.56
+              "end": 86.2
             }
           ]
         },
@@ -22869,8 +22836,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 86.2,
-          "end_sec": 89.98,
-          "duration": 3.78,
+          "end_sec": 90.26,
+          "duration": 4.06,
           "words": [
             {
               "word": "leave",
@@ -22905,7 +22872,7 @@
             {
               "word": "fall,",
               "start": 89.72,
-              "end": 89.98
+              "end": 90.26
             }
           ]
         },
@@ -22917,8 +22884,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 90.26,
-          "end_sec": 90.84,
-          "duration": 0.58,
+          "end_sec": 91.48,
+          "duration": 1.22,
           "words": [
             {
               "word": "and",
@@ -22928,7 +22895,7 @@
             {
               "word": "fall,",
               "start": 90.26,
-              "end": 90.84
+              "end": 91.48
             }
           ]
         },
@@ -22983,8 +22950,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 93.12,
-          "end_sec": 95.34,
-          "duration": 2.22,
+          "end_sec": 95.7,
+          "duration": 2.58,
           "words": [
             {
               "word": "Run",
@@ -23004,7 +22971,7 @@
             {
               "word": "sun,",
               "start": 95.0,
-              "end": 95.34
+              "end": 95.7
             }
           ]
         },
@@ -23016,8 +22983,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 95.7,
-          "end_sec": 96.16,
-          "duration": 0.46,
+          "end_sec": 97.5,
+          "duration": 1.8,
           "words": [
             {
               "word": "like",
@@ -23027,20 +22994,9 @@
             {
               "word": "Dracula",
               "start": 95.82,
-              "end": 96.16
+              "end": 97.5
             }
           ]
-        },
-        {
-          "id": "br_004",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 96.8,
-          "end_sec": 97.36,
-          "duration": 0.56
         },
         {
           "id": "ly_033",
@@ -23050,8 +23006,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 97.5,
-          "end_sec": 99.46,
-          "duration": 1.96,
+          "end_sec": 99.86,
+          "duration": 2.36,
           "words": [
             {
               "word": "Run",
@@ -23071,7 +23027,7 @@
             {
               "word": "sun,",
               "start": 99.18,
-              "end": 99.46
+              "end": 99.86
             }
           ]
         },
@@ -23083,8 +23039,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 99.86,
-          "end_sec": 100.62,
-          "duration": 0.76,
+          "end_sec": 101.78,
+          "duration": 1.92,
           "words": [
             {
               "word": "like",
@@ -23094,20 +23050,9 @@
             {
               "word": "Dracula",
               "start": 99.98,
-              "end": 100.62
+              "end": 101.78
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 101.08,
-          "end_sec": 101.64,
-          "duration": 0.56
         },
         {
           "id": "ly_035",
@@ -23117,8 +23062,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 101.78,
-          "end_sec": 103.66,
-          "duration": 1.88,
+          "end_sec": 104.06,
+          "duration": 2.28,
           "words": [
             {
               "word": "Run",
@@ -23138,7 +23083,7 @@
             {
               "word": "sun,",
               "start": 103.36,
-              "end": 103.66
+              "end": 104.06
             }
           ]
         },
@@ -23150,8 +23095,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 104.06,
-          "end_sec": 104.82,
-          "duration": 0.76,
+          "end_sec": 106.24,
+          "duration": 2.18,
           "words": [
             {
               "word": "like",
@@ -23161,20 +23106,9 @@
             {
               "word": "Dracula",
               "start": 104.2,
-              "end": 104.82
+              "end": 106.24
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 105.54,
-          "end_sec": 106.1,
-          "duration": 0.56
         },
         {
           "id": "ly_037",
@@ -23184,8 +23118,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 106.24,
-          "end_sec": 108.5,
-          "duration": 2.26,
+          "end_sec": 110.94,
+          "duration": 4.7,
           "words": [
             {
               "word": "Is",
@@ -23210,7 +23144,7 @@
             {
               "word": "spectacular?",
               "start": 107.82,
-              "end": 108.5
+              "end": 110.94
             }
           ]
         },
@@ -23222,8 +23156,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 113.04,
-          "end_sec": 113.92,
-          "duration": 0.88,
+          "end_sec": 114.22,
+          "duration": 1.18,
           "words": [
             {
               "word": "Hey",
@@ -23233,7 +23167,7 @@
             {
               "word": "Kevin,",
               "start": 113.72,
-              "end": 113.92
+              "end": 114.22
             }
           ]
         },
@@ -23245,8 +23179,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 114.22,
-          "end_sec": 114.58,
-          "duration": 0.36,
+          "end_sec": 114.9,
+          "duration": 0.68,
           "words": [
             {
               "word": "what's",
@@ -23256,7 +23190,7 @@
             {
               "word": "up?",
               "start": 114.44,
-              "end": 114.58
+              "end": 114.9
             }
           ]
         },
@@ -23407,8 +23341,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 121.16,
-          "end_sec": 121.56,
-          "duration": 0.4,
+          "end_sec": 121.78,
+          "duration": 0.62,
           "words": [
             {
               "word": "this",
@@ -23418,7 +23352,7 @@
             {
               "word": "world,",
               "start": 121.38,
-              "end": 121.56
+              "end": 121.78
             }
           ]
         },
@@ -23430,8 +23364,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 121.78,
-          "end_sec": 122.54,
-          "duration": 0.76,
+          "end_sec": 122.8,
+          "duration": 1.02,
           "words": [
             {
               "word": "how",
@@ -23446,7 +23380,7 @@
             {
               "word": "girls,",
               "start": 122.06,
-              "end": 122.54
+              "end": 122.8
             }
           ]
         },
@@ -23458,13 +23392,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 122.8,
-          "end_sec": 122.9,
-          "duration": 0.1,
+          "end_sec": 123.2,
+          "duration": 0.4,
           "words": [
             {
               "word": "guys,",
               "start": 122.8,
-              "end": 122.9
+              "end": 123.2
             }
           ]
         },
@@ -23476,8 +23410,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 123.2,
-          "end_sec": 124.68,
-          "duration": 1.48,
+          "end_sec": 124.94,
+          "duration": 1.74,
           "words": [
             {
               "word": "turn",
@@ -23512,7 +23446,7 @@
             {
               "word": "smoke,",
               "start": 124.5,
-              "end": 124.68
+              "end": 124.94
             }
           ]
         },
@@ -23523,13 +23457,13 @@
           "original_asr_text": "keep staying on the moon And pieces",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 124.96,
+          "start_sec": 125.0,
           "end_sec": 126.06,
-          "duration": 1.1,
+          "duration": 1.06,
           "words": [
             {
               "word": "keep",
-              "start": 124.96,
+              "start": 125.0,
               "end": 124.96
             },
             {
@@ -23572,8 +23506,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 126.06,
-          "end_sec": 126.76,
-          "duration": 0.7,
+          "end_sec": 126.96,
+          "duration": 0.9,
           "words": [
             {
               "word": "about",
@@ -23588,7 +23522,7 @@
             {
               "word": "blow,",
               "start": 126.6,
-              "end": 126.76
+              "end": 126.96
             }
           ]
         },
@@ -23676,26 +23610,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 129.2,
-          "end_sec": 129.78,
-          "duration": 0.58,
+          "end_sec": 130.62,
+          "duration": 1.42,
           "words": [
             {
               "word": "Please,",
               "start": 129.2,
-              "end": 129.78
+              "end": 130.62
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 130.1,
-          "end_sec": 130.62,
-          "duration": 0.52
         },
         {
           "id": "ly_052",
@@ -23753,26 +23676,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 133.46,
-          "end_sec": 134.06,
-          "duration": 0.6,
+          "end_sec": 134.8,
+          "duration": 1.34,
           "words": [
             {
               "word": "mean?",
               "start": 133.46,
-              "end": 134.06
+              "end": 134.8
             }
           ]
-        },
-        {
-          "id": "br_008",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 134.38,
-          "end_sec": 134.8,
-          "duration": 0.42
         },
         {
           "id": "ly_054",
@@ -23781,13 +23693,13 @@
           "original_asr_text": "Cause I dream of that you must",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 135.08,
+          "start_sec": 135.28,
           "end_sec": 137.48,
-          "duration": 2.4,
+          "duration": 2.2,
           "words": [
             {
               "word": "Cause",
-              "start": 135.08,
+              "start": 135.28,
               "end": 135.38
             },
             {
@@ -23830,26 +23742,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 137.48,
-          "end_sec": 138.14,
-          "duration": 0.66,
+          "end_sec": 139.06,
+          "duration": 1.58,
           "words": [
             {
               "word": "sleep",
               "start": 137.48,
-              "end": 138.14
+              "end": 139.06
             }
           ]
-        },
-        {
-          "id": "br_009",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 138.36,
-          "end_sec": 138.92,
-          "duration": 0.56
         },
         {
           "id": "ly_056",
@@ -23902,26 +23803,26 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 141.74,
-          "end_sec": 142.32,
-          "duration": 0.58,
+          "end_sec": 143.08,
+          "duration": 1.34,
           "words": [
             {
               "word": "me?",
               "start": 141.74,
-              "end": 142.32
+              "end": 143.08
             }
           ]
         },
         {
-          "id": "br_010",
+          "id": "br_001",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 145.7,
-          "end_sec": 146.04,
-          "duration": 0.34
+          "start_sec": 145.18,
+          "end_sec": 145.74,
+          "duration": 0.56
         },
         {
           "id": "ly_058",
@@ -23930,13 +23831,13 @@
           "original_asr_text": "And the end I hope it's you and",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 146.2,
+          "start_sec": 145.88,
           "end_sec": 148.7,
-          "duration": 2.5,
+          "duration": 2.82,
           "words": [
             {
               "word": "And",
-              "start": 146.2,
+              "start": 145.88,
               "end": 146.92
             },
             {
@@ -24027,8 +23928,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 152.32,
-          "end_sec": 153.62,
-          "duration": 1.3,
+          "end_sec": 154.16,
+          "duration": 1.84,
           "words": [
             {
               "word": "never",
@@ -24038,7 +23939,7 @@
             {
               "word": "leave",
               "start": 152.76,
-              "end": 153.62
+              "end": 154.16
             }
           ]
         },
@@ -24093,8 +23994,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 156.26,
-          "end_sec": 157.36,
-          "duration": 1.1,
+          "end_sec": 158.16,
+          "duration": 1.9,
           "words": [
             {
               "word": "in",
@@ -24114,20 +24015,9 @@
             {
               "word": "far",
               "start": 157.0,
-              "end": 157.36
+              "end": 158.16
             }
           ]
-        },
-        {
-          "id": "br_011",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 157.46,
-          "end_sec": 158.02,
-          "duration": 0.56
         },
         {
           "id": "ly_063",
@@ -24137,8 +24027,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 158.16,
-          "end_sec": 160.02,
-          "duration": 1.86,
+          "end_sec": 160.24,
+          "duration": 2.08,
           "words": [
             {
               "word": "Now",
@@ -24158,7 +24048,7 @@
             {
               "word": "are",
               "start": 159.12,
-              "end": 160.02
+              "end": 160.24
             }
           ]
         },
@@ -24170,8 +24060,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 160.24,
-          "end_sec": 162.94,
-          "duration": 2.7,
+          "end_sec": 166.14,
+          "duration": 5.9,
           "words": [
             {
               "word": "The",
@@ -24201,20 +24091,9 @@
             {
               "word": "Dracula",
               "start": 162.4,
-              "end": 162.94
+              "end": 166.14
             }
           ]
-        },
-        {
-          "id": "br_012",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 165.44,
-          "end_sec": 166.0,
-          "duration": 0.56
         },
         {
           "id": "ly_065",
@@ -24224,26 +24103,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 166.14,
-          "end_sec": 167.54,
-          "duration": 1.4,
+          "end_sec": 193.52,
+          "duration": 27.38,
           "words": [
             {
               "word": "Dracula",
               "start": 166.14,
-              "end": 167.54
+              "end": 193.52
             }
           ]
-        },
-        {
-          "id": "br_013",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 192.82,
-          "end_sec": 193.38,
-          "duration": 0.56
         },
         {
           "id": "ly_066",
@@ -24253,8 +24121,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 193.52,
-          "end_sec": 195.78,
-          "duration": 2.26,
+          "end_sec": 196.26,
+          "duration": 2.74,
           "words": [
             {
               "word": "Run",
@@ -24274,7 +24142,7 @@
             {
               "word": "sunlight,",
               "start": 195.16,
-              "end": 195.78
+              "end": 196.26
             }
           ]
         },
@@ -24286,26 +24154,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 196.26,
-          "end_sec": 196.7,
-          "duration": 0.44,
+          "end_sec": 198.08,
+          "duration": 1.82,
           "words": [
             {
               "word": "Dracula",
               "start": 196.26,
-              "end": 196.7
+              "end": 198.08
             }
           ]
-        },
-        {
-          "id": "br_014",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 197.38,
-          "end_sec": 197.94,
-          "duration": 0.56
         },
         {
           "id": "ly_068",
@@ -24315,8 +24172,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 198.08,
-          "end_sec": 200.42,
-          "duration": 2.34,
+          "end_sec": 202.3,
+          "duration": 4.22,
           "words": [
             {
               "word": "Isn't",
@@ -24336,7 +24193,7 @@
             {
               "word": "spectacular?",
               "start": 199.58,
-              "end": 200.42
+              "end": 202.3
             }
           ]
         }
@@ -57930,8 +57787,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 46.4,
-          "end_sec": 47.1,
-          "duration": 0.7,
+          "end_sec": 48.22,
+          "duration": 1.82,
           "words": [
             {
               "word": "your",
@@ -57941,7 +57798,7 @@
             {
               "word": "hair",
               "start": 46.62,
-              "end": 47.1
+              "end": 48.22
             }
           ]
         },
@@ -57996,8 +57853,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 51.04,
-          "end_sec": 52.66,
-          "duration": 1.62,
+          "end_sec": 52.9,
+          "duration": 1.86,
           "words": [
             {
               "word": "and",
@@ -58022,7 +57879,7 @@
             {
               "word": "flight,",
               "start": 52.42,
-              "end": 52.66
+              "end": 52.9
             }
           ]
         },
@@ -58105,8 +57962,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 54.96,
-          "end_sec": 55.66,
-          "duration": 0.7,
+          "end_sec": 55.84,
+          "duration": 0.88,
           "words": [
             {
               "word": "fitter",
@@ -58116,7 +57973,7 @@
             {
               "word": "please,",
               "start": 55.26,
-              "end": 55.66
+              "end": 55.84
             }
           ]
         },
@@ -58128,8 +57985,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 55.84,
-          "end_sec": 56.56,
-          "duration": 0.72,
+          "end_sec": 56.78,
+          "duration": 0.94,
           "words": [
             {
               "word": "if",
@@ -58149,7 +58006,7 @@
             {
               "word": "fuck,",
               "start": 56.34,
-              "end": 56.56
+              "end": 56.78
             }
           ]
         },
@@ -58161,13 +58018,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 56.78,
-          "end_sec": 56.9,
-          "duration": 0.12,
+          "end_sec": 57.24,
+          "duration": 0.46,
           "words": [
             {
               "word": "baby,",
               "start": 56.78,
-              "end": 56.9
+              "end": 57.24
             }
           ]
         },
@@ -58222,13 +58079,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 58.78,
-          "end_sec": 59.04,
-          "duration": 0.26,
+          "end_sec": 59.14,
+          "duration": 0.36,
           "words": [
             {
               "word": "know,",
               "start": 58.78,
-              "end": 59.04
+              "end": 59.14
             }
           ]
         },
@@ -58326,8 +58183,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 63.36,
-          "end_sec": 63.56,
-          "duration": 0.2,
+          "end_sec": 63.7,
+          "duration": 0.34,
           "words": [
             {
               "word": "help",
@@ -58337,7 +58194,7 @@
             {
               "word": "it,",
               "start": 63.44,
-              "end": 63.56
+              "end": 63.7
             }
           ]
         },
@@ -58349,8 +58206,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 63.7,
-          "end_sec": 64.12,
-          "duration": 0.42,
+          "end_sec": 64.62,
+          "duration": 0.92,
           "words": [
             {
               "word": "I'm",
@@ -58365,7 +58222,7 @@
             {
               "word": "people,",
               "start": 63.9,
-              "end": 64.12
+              "end": 64.62
             }
           ]
         },
@@ -58377,13 +58234,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 64.62,
-          "end_sec": 64.78,
-          "duration": 0.16,
+          "end_sec": 64.98,
+          "duration": 0.36,
           "words": [
             {
               "word": "please,",
               "start": 64.62,
-              "end": 64.78
+              "end": 64.98
             }
           ]
         },
@@ -58476,8 +58333,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 67.6,
-          "end_sec": 68.06,
-          "duration": 0.46,
+          "end_sec": 68.22,
+          "duration": 0.62,
           "words": [
             {
               "word": "it's",
@@ -58487,7 +58344,7 @@
             {
               "word": "up,",
               "start": 67.88,
-              "end": 68.06
+              "end": 68.22
             }
           ]
         },
@@ -58499,8 +58356,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 68.22,
-          "end_sec": 68.72,
-          "duration": 0.5,
+          "end_sec": 68.86,
+          "duration": 0.64,
           "words": [
             {
               "word": "if",
@@ -58515,7 +58372,7 @@
             {
               "word": "up,",
               "start": 68.52,
-              "end": 68.72
+              "end": 68.86
             }
           ]
         },
@@ -58527,8 +58384,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 68.86,
-          "end_sec": 69.4,
-          "duration": 0.54,
+          "end_sec": 69.5,
+          "duration": 0.64,
           "words": [
             {
               "word": "if",
@@ -58543,7 +58400,7 @@
             {
               "word": "up,",
               "start": 69.18,
-              "end": 69.4
+              "end": 69.5
             }
           ]
         },
@@ -58555,8 +58412,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 69.5,
-          "end_sec": 69.5,
-          "duration": 0.0,
+          "end_sec": 69.6,
+          "duration": 0.1,
           "words": [
             {
               "word": "if",
@@ -58571,7 +58428,7 @@
             {
               "word": "up,",
               "start": 69.5,
-              "end": 69.5
+              "end": 69.6
             }
           ]
         },
@@ -58582,13 +58439,13 @@
           "original_asr_text": "then it's stuck I want to need",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 69.5,
+          "start_sec": 69.6,
           "end_sec": 70.58,
-          "duration": 1.08,
+          "duration": 0.98,
           "words": [
             {
               "word": "then",
-              "start": 69.5,
+              "start": 69.6,
               "end": 69.56
             },
             {
@@ -58631,8 +58488,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 70.58,
-          "end_sec": 70.98,
-          "duration": 0.4,
+          "end_sec": 71.22,
+          "duration": 0.64,
           "words": [
             {
               "word": "the",
@@ -58642,7 +58499,7 @@
             {
               "word": "time,",
               "start": 70.68,
-              "end": 70.98
+              "end": 71.22
             }
           ]
         },
@@ -58653,13 +58510,13 @@
           "original_asr_text": "and I'm like someone like a Naomi",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 71.24,
+          "start_sec": 71.22,
           "end_sec": 72.9,
-          "duration": 1.66,
+          "duration": 1.68,
           "words": [
             {
               "word": "and",
-              "start": 71.24,
+              "start": 71.22,
               "end": 71.4
             },
             {
@@ -58702,8 +58559,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 72.9,
-          "end_sec": 74.16,
-          "duration": 1.26,
+          "end_sec": 74.4,
+          "duration": 1.5,
           "words": [
             {
               "word": "Sal",
@@ -58713,7 +58570,7 @@
             {
               "word": "Peace,",
               "start": 73.54,
-              "end": 74.16
+              "end": 74.4
             }
           ]
         },
@@ -58725,13 +58582,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 74.4,
-          "end_sec": 74.54,
-          "duration": 0.14,
+          "end_sec": 74.92,
+          "duration": 0.52,
           "words": [
             {
               "word": "city,",
               "start": 74.4,
-              "end": 74.54
+              "end": 74.92
             }
           ]
         },
@@ -58743,13 +58600,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 74.92,
-          "end_sec": 74.96,
-          "duration": 0.04,
+          "end_sec": 75.26,
+          "duration": 0.34,
           "words": [
             {
               "word": "fuck,",
               "start": 74.92,
-              "end": 74.96
+              "end": 75.26
             }
           ]
         },
@@ -58809,8 +58666,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 76.9,
-          "end_sec": 77.56,
-          "duration": 0.66,
+          "end_sec": 77.7,
+          "duration": 0.8,
           "words": [
             {
               "word": "back",
@@ -58830,7 +58687,7 @@
             {
               "word": "night,",
               "start": 77.38,
-              "end": 77.56
+              "end": 77.7
             }
           ]
         },
@@ -58885,8 +58742,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 78.74,
-          "end_sec": 80.02,
-          "duration": 1.28,
+          "end_sec": 80.12,
+          "duration": 1.38,
           "words": [
             {
               "word": "up",
@@ -58911,7 +58768,7 @@
             {
               "word": "school,",
               "start": 79.72,
-              "end": 80.02
+              "end": 80.12
             }
           ]
         },
@@ -58923,8 +58780,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 80.12,
-          "end_sec": 81.34,
-          "duration": 1.22,
+          "end_sec": 81.52,
+          "duration": 1.4,
           "words": [
             {
               "word": "when",
@@ -58954,7 +58811,7 @@
             {
               "word": "drop,",
               "start": 81.02,
-              "end": 81.34
+              "end": 81.52
             }
           ]
         },
@@ -58965,13 +58822,13 @@
           "original_asr_text": "you can blame it all on me",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 81.54,
+          "start_sec": 81.56,
           "end_sec": 83.04,
-          "duration": 1.5,
+          "duration": 1.48,
           "words": [
             {
               "word": "you",
-              "start": 81.54,
+              "start": 81.56,
               "end": 81.62
             },
             {
@@ -59014,8 +58871,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 83.04,
-          "end_sec": 84.24,
-          "duration": 1.2,
+          "end_sec": 84.44,
+          "duration": 1.4,
           "words": [
             {
               "word": "Let",
@@ -59045,7 +58902,7 @@
             {
               "word": "side,",
               "start": 84.12,
-              "end": 84.24
+              "end": 84.44
             }
           ]
         },
@@ -59141,8 +58998,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 86.6,
-          "end_sec": 87.72,
-          "duration": 1.12,
+          "end_sec": 88.4,
+          "duration": 1.8,
           "words": [
             {
               "word": "you",
@@ -59152,7 +59009,7 @@
             {
               "word": "tonight,",
               "start": 87.36,
-              "end": 87.72
+              "end": 88.4
             }
           ]
         },
@@ -59255,8 +59112,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 92.36,
-          "end_sec": 93.46,
-          "duration": 1.1,
+          "end_sec": 93.62,
+          "duration": 1.26,
           "words": [
             {
               "word": "It's",
@@ -59276,7 +59133,7 @@
             {
               "word": "good,",
               "start": 93.26,
-              "end": 93.46
+              "end": 93.62
             }
           ]
         },
@@ -59373,13 +59230,13 @@
           "original_asr_text": "I can't reach my mind and if",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 96.82,
+          "start_sec": 96.88,
           "end_sec": 98.96,
-          "duration": 2.14,
+          "duration": 2.08,
           "words": [
             {
               "word": "I",
-              "start": 96.82,
+              "start": 96.88,
               "end": 97.4
             },
             {
@@ -59421,13 +59278,13 @@
           "original_asr_text": "I could I would be terrified",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 98.96,
+          "start_sec": 98.98,
           "end_sec": 100.78,
-          "duration": 1.82,
+          "duration": 1.8,
           "words": [
             {
               "word": "I",
-              "start": 98.96,
+              "start": 98.98,
               "end": 99.06
             },
             {
@@ -59465,8 +59322,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 100.78,
-          "end_sec": 102.52,
-          "duration": 1.74,
+          "end_sec": 102.82,
+          "duration": 2.04,
           "words": [
             {
               "word": "But",
@@ -59491,7 +59348,7 @@
             {
               "word": "neck,",
               "start": 102.28,
-              "end": 102.52
+              "end": 102.82
             }
           ]
         },
@@ -59503,13 +59360,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 102.82,
-          "end_sec": 102.92,
-          "duration": 0.1,
+          "end_sec": 103.16,
+          "duration": 0.34,
           "words": [
             {
               "word": "guys,",
               "start": 102.82,
-              "end": 102.92
+              "end": 103.16
             }
           ]
         },
@@ -59564,8 +59421,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 105.5,
-          "end_sec": 107.2,
-          "duration": 1.7,
+          "end_sec": 107.62,
+          "duration": 2.12,
           "words": [
             {
               "word": "out",
@@ -59580,7 +59437,7 @@
             {
               "word": "me",
               "start": 106.66,
-              "end": 107.2
+              "end": 107.62
             }
           ]
         },
@@ -59603,8 +59460,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 116.62,
-          "end_sec": 118.18,
-          "duration": 1.56,
+          "end_sec": 118.46,
+          "duration": 1.84,
           "words": [
             {
               "word": "You",
@@ -59624,7 +59481,7 @@
             {
               "word": "talk,",
               "start": 117.96,
-              "end": 118.18
+              "end": 118.46
             }
           ]
         },
@@ -59636,8 +59493,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 118.46,
-          "end_sec": 119.6,
-          "duration": 1.14,
+          "end_sec": 119.68,
+          "duration": 1.22,
           "words": [
             {
               "word": "just",
@@ -59662,7 +59519,7 @@
             {
               "word": "sign,",
               "start": 119.04,
-              "end": 119.6
+              "end": 119.68
             }
           ]
         },
@@ -59717,8 +59574,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 120.86,
-          "end_sec": 121.42,
-          "duration": 0.56,
+          "end_sec": 121.58,
+          "duration": 0.72,
           "words": [
             {
               "word": "me",
@@ -59728,7 +59585,7 @@
             {
               "word": "in,",
               "start": 121.16,
-              "end": 121.42
+              "end": 121.58
             }
           ]
         },
@@ -59740,8 +59597,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 121.58,
-          "end_sec": 122.08,
-          "duration": 0.5,
+          "end_sec": 122.36,
+          "duration": 0.78,
           "words": [
             {
               "word": "that's",
@@ -59751,7 +59608,7 @@
             {
               "word": "fine.",
               "start": 121.78,
-              "end": 122.08
+              "end": 122.36
             }
           ]
         },
@@ -59857,8 +59714,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 125.06,
-          "end_sec": 125.86,
-          "duration": 0.8,
+          "end_sec": 125.98,
+          "duration": 0.92,
           "words": [
             {
               "word": "damn",
@@ -59868,7 +59725,7 @@
             {
               "word": "enough,",
               "start": 125.46,
-              "end": 125.86
+              "end": 125.98
             }
           ]
         },
@@ -59879,19 +59736,19 @@
           "original_asr_text": "damn enough.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 126.12,
-          "end_sec": 126.86,
-          "duration": 0.74,
+          "start_sec": 126.22,
+          "end_sec": 127.24,
+          "duration": 1.02,
           "words": [
             {
               "word": "damn",
-              "start": 126.12,
+              "start": 126.22,
               "end": 126.34
             },
             {
               "word": "enough.",
               "start": 126.34,
-              "end": 126.86
+              "end": 127.24
             }
           ]
         },
@@ -59903,8 +59760,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 127.24,
-          "end_sec": 128.66,
-          "duration": 1.42,
+          "end_sec": 128.76,
+          "duration": 1.52,
           "words": [
             {
               "word": "I",
@@ -59944,7 +59801,7 @@
             {
               "word": "day,",
               "start": 128.42,
-              "end": 128.66
+              "end": 128.76
             }
           ]
         },
@@ -59989,8 +59846,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 129.98,
-          "end_sec": 132.64,
-          "duration": 2.66,
+          "end_sec": 133.44,
+          "duration": 3.46,
           "words": [
             {
               "word": "but",
@@ -60020,20 +59877,9 @@
             {
               "word": "covers.",
               "start": 132.22,
-              "end": 132.64
+              "end": 133.44
             }
           ]
-        },
-        {
-          "id": "br_003",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 132.76,
-          "end_sec": 133.3,
-          "duration": 0.54
         },
         {
           "id": "ly_065",
@@ -60086,8 +59932,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 134.44,
-          "end_sec": 135.28,
-          "duration": 0.84,
+          "end_sec": 136.06,
+          "duration": 1.62,
           "words": [
             {
               "word": "and",
@@ -60097,20 +59943,9 @@
             {
               "word": "deflamations,",
               "start": 134.68,
-              "end": 135.28
+              "end": 136.06
             }
           ]
-        },
-        {
-          "id": "br_004",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 135.36,
-          "end_sec": 135.92,
-          "duration": 0.56
         },
         {
           "id": "ly_067",
@@ -60163,8 +59998,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 137.18,
-          "end_sec": 140.32,
-          "duration": 3.14,
+          "end_sec": 140.98,
+          "duration": 3.8,
           "words": [
             {
               "word": "I'm",
@@ -60189,20 +60024,9 @@
             {
               "word": "reputation,",
               "start": 139.76,
-              "end": 140.32
+              "end": 140.98
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 140.32,
-          "end_sec": 140.88,
-          "duration": 0.56
         },
         {
           "id": "ly_069",
@@ -60211,13 +60035,13 @@
           "original_asr_text": "I'm not a fight of mad",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 141.02,
+          "start_sec": 140.98,
           "end_sec": 142.38,
-          "duration": 1.36,
+          "duration": 1.4,
           "words": [
             {
               "word": "I'm",
-              "start": 141.02,
+              "start": 140.98,
               "end": 141.02
             },
             {
@@ -60255,26 +60079,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 142.38,
-          "end_sec": 142.84,
-          "duration": 0.46,
+          "end_sec": 143.58,
+          "duration": 1.2,
           "words": [
             {
               "word": "reputation",
               "start": 142.38,
-              "end": 142.84
+              "end": 143.58
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 142.88,
-          "end_sec": 143.44,
-          "duration": 0.56
         },
         {
           "id": "ly_071",
@@ -60327,13 +60140,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 145.98,
-          "end_sec": 146.6,
-          "duration": 0.62,
+          "end_sec": 147.02,
+          "duration": 1.04,
           "words": [
             {
               "word": "true",
               "start": 145.98,
-              "end": 146.6
+              "end": 147.02
             }
           ]
         },
@@ -60421,13 +60234,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 149.9,
-          "end_sec": 150.54,
-          "duration": 0.64,
+          "end_sec": 150.96,
+          "duration": 1.06,
           "words": [
             {
               "word": "complicated",
               "start": 149.9,
-              "end": 150.54
+              "end": 150.96
             }
           ]
         },
@@ -60438,13 +60251,13 @@
           "original_asr_text": "I've got the reality that you've",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 150.98,
+          "start_sec": 150.96,
           "end_sec": 153.04,
-          "duration": 2.06,
+          "duration": 2.08,
           "words": [
             {
               "word": "I've",
-              "start": 150.98,
+              "start": 150.96,
               "end": 151.34
             },
             {
@@ -60481,13 +60294,13 @@
           "original_asr_text": "created So suddenly,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 153.04,
-          "end_sec": 154.46,
-          "duration": 1.42,
+          "start_sec": 153.14,
+          "end_sec": 155.0,
+          "duration": 1.86,
           "words": [
             {
               "word": "created",
-              "start": 153.04,
+              "start": 153.14,
               "end": 153.48
             },
             {
@@ -60498,7 +60311,7 @@
             {
               "word": "suddenly,",
               "start": 153.84,
-              "end": 154.46
+              "end": 155.0
             }
           ]
         },
@@ -60510,8 +60323,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 155.0,
-          "end_sec": 156.2,
-          "duration": 1.2,
+          "end_sec": 156.46,
+          "duration": 1.46,
           "words": [
             {
               "word": "you",
@@ -60531,7 +60344,7 @@
             {
               "word": "around,",
               "start": 155.88,
-              "end": 156.2
+              "end": 156.46
             }
           ]
         },
@@ -60542,13 +60355,13 @@
           "original_asr_text": "you're talking now I don't know",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 156.48,
+          "start_sec": 156.46,
           "end_sec": 158.56,
-          "duration": 2.08,
+          "duration": 2.1,
           "words": [
             {
               "word": "you're",
-              "start": 156.48,
+              "start": 156.46,
               "end": 156.52
             },
             {
@@ -60629,8 +60442,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 160.18,
-          "end_sec": 162.22,
-          "duration": 2.04,
+          "end_sec": 162.54,
+          "duration": 2.36,
           "words": [
             {
               "word": "It's",
@@ -60655,7 +60468,7 @@
             {
               "word": "about",
               "start": 161.92,
-              "end": 162.22
+              "end": 162.54
             }
           ]
         },
@@ -60910,8 +60723,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 173.34,
-          "end_sec": 175.02,
-          "duration": 1.68,
+          "end_sec": 175.44,
+          "duration": 2.1,
           "words": [
             {
               "word": "out",
@@ -60926,7 +60739,7 @@
             {
               "word": "me",
               "start": 174.56,
-              "end": 175.02
+              "end": 175.44
             }
           ]
         },
@@ -60937,13 +60750,13 @@
           "original_asr_text": "Screaming little out around me,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 184.92,
-          "end_sec": 186.84,
-          "duration": 1.92,
+          "start_sec": 185.18,
+          "end_sec": 186.86,
+          "duration": 1.68,
           "words": [
             {
               "word": "Screaming",
-              "start": 184.92,
+              "start": 185.18,
               "end": 185.52
             },
             {
@@ -60964,7 +60777,7 @@
             {
               "word": "me,",
               "start": 186.5,
-              "end": 186.84
+              "end": 186.86
             }
           ]
         },
@@ -61148,8 +60961,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 193.26,
-          "end_sec": 193.88,
-          "duration": 0.62,
+          "end_sec": 193.9,
+          "duration": 0.64,
           "words": [
             {
               "word": "some",
@@ -61159,7 +60972,7 @@
             {
               "word": "attention,",
               "start": 193.52,
-              "end": 193.88
+              "end": 193.9
             }
           ]
         },
@@ -61171,13 +60984,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 193.9,
-          "end_sec": 194.7,
-          "duration": 0.8,
+          "end_sec": 194.96,
+          "duration": 1.06,
           "words": [
             {
               "word": "lonely,",
               "start": 193.9,
-              "end": 194.7
+              "end": 194.96
             }
           ]
         },
@@ -61189,13 +61002,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 194.96,
-          "end_sec": 195.36,
-          "duration": 0.4,
+          "end_sec": 195.54,
+          "duration": 0.58,
           "words": [
             {
               "word": "terribly,",
               "start": 194.96,
-              "end": 195.36
+              "end": 195.54
             }
           ]
         },
@@ -61298,8 +61111,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 199.42,
-          "end_sec": 199.74,
-          "duration": 0.32,
+          "end_sec": 199.96,
+          "duration": 0.54,
           "words": [
             {
               "word": "and",
@@ -61309,7 +61122,7 @@
             {
               "word": "you,",
               "start": 199.56,
-              "end": 199.74
+              "end": 199.96
             }
           ]
         },
@@ -61320,13 +61133,13 @@
           "original_asr_text": "the narrative You got me wrong,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 199.98,
-          "end_sec": 201.68,
-          "duration": 1.7,
+          "start_sec": 200.16,
+          "end_sec": 202.0,
+          "duration": 1.84,
           "words": [
             {
               "word": "the",
-              "start": 199.98,
+              "start": 200.16,
               "end": 200.14
             },
             {
@@ -61352,7 +61165,7 @@
             {
               "word": "wrong,",
               "start": 201.46,
-              "end": 201.68
+              "end": 202.0
             }
           ]
         },
@@ -61407,8 +61220,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 203.34,
-          "end_sec": 204.4,
-          "duration": 1.06,
+          "end_sec": 204.54,
+          "duration": 1.2,
           "words": [
             {
               "word": "And",
@@ -61428,7 +61241,7 @@
             {
               "word": "am,",
               "start": 204.14,
-              "end": 204.4
+              "end": 204.54
             }
           ]
         },
@@ -61483,26 +61296,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 205.98,
-          "end_sec": 206.22,
-          "duration": 0.24,
+          "end_sec": 207.14,
+          "duration": 1.16,
           "words": [
             {
               "word": "Suddenly,",
               "start": 205.98,
-              "end": 206.22
+              "end": 207.14
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 206.44,
-          "end_sec": 207.0,
-          "duration": 0.56
         },
         {
           "id": "ly_105",
@@ -61512,8 +61314,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 207.14,
-          "end_sec": 208.4,
-          "duration": 1.26,
+          "end_sec": 208.64,
+          "duration": 1.5,
           "words": [
             {
               "word": "you",
@@ -61533,7 +61335,7 @@
             {
               "word": "around,",
               "start": 208.1,
-              "end": 208.4
+              "end": 208.64
             }
           ]
         },
@@ -61679,8 +61481,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 214.92,
-          "end_sec": 216.4,
-          "duration": 1.48,
+          "end_sec": 216.48,
+          "duration": 1.56,
           "words": [
             {
               "word": "All",
@@ -61700,7 +61502,7 @@
             {
               "word": "do,",
               "start": 216.1,
-              "end": 216.4
+              "end": 216.48
             }
           ]
         },
@@ -61712,8 +61514,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 216.48,
-          "end_sec": 216.76,
-          "duration": 0.28,
+          "end_sec": 217.3,
+          "duration": 0.82,
           "words": [
             {
               "word": "you",
@@ -61723,7 +61525,7 @@
             {
               "word": "explode,",
               "start": 216.56,
-              "end": 216.76
+              "end": 217.3
             }
           ]
         },
@@ -61783,8 +61585,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 218.96,
-          "end_sec": 219.22,
-          "duration": 0.26,
+          "end_sec": 219.44,
+          "duration": 0.48,
           "words": [
             {
               "word": "I",
@@ -61794,7 +61596,7 @@
             {
               "word": "could,",
               "start": 219.08,
-              "end": 219.22
+              "end": 219.44
             }
           ]
         },
@@ -61806,8 +61608,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 219.44,
-          "end_sec": 220.58,
-          "duration": 1.14,
+          "end_sec": 249.5,
+          "duration": 30.06,
           "words": [
             {
               "word": "I",
@@ -61827,7 +61629,7 @@
             {
               "word": "terrified",
               "start": 220.14,
-              "end": 220.58
+              "end": 249.5
             }
           ]
         }
@@ -89937,13 +89739,13 @@
           "original_asr_text": "She was a playboy,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 2.8,
-          "end_sec": 5.44,
-          "duration": 2.64,
+          "start_sec": 2.86,
+          "end_sec": 5.74,
+          "duration": 2.88,
           "words": [
             {
               "word": "She",
-              "start": 2.8,
+              "start": 2.86,
               "end": 3.52
             },
             {
@@ -89959,7 +89761,7 @@
             {
               "word": "playboy,",
               "start": 4.08,
-              "end": 5.44
+              "end": 5.74
             }
           ]
         },
@@ -90014,8 +89816,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 9.2,
-          "end_sec": 11.2,
-          "duration": 2.0,
+          "end_sec": 11.48,
+          "duration": 2.28,
           "words": [
             {
               "word": "I",
@@ -90030,7 +89832,7 @@
             {
               "word": "know,",
               "start": 10.86,
-              "end": 11.2
+              "end": 11.48
             }
           ]
         },
@@ -90042,8 +89844,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 11.72,
-          "end_sec": 13.68,
-          "duration": 1.96,
+          "end_sec": 13.7,
+          "duration": 1.98,
           "words": [
             {
               "word": "she",
@@ -90068,7 +89870,7 @@
             {
               "word": "there,",
               "start": 13.16,
-              "end": 13.68
+              "end": 13.7
             }
           ]
         },
@@ -90079,13 +89881,13 @@
           "original_asr_text": "out on the deck Put her K9's",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 13.92,
+          "start_sec": 14.08,
           "end_sec": 16.76,
-          "duration": 2.84,
+          "duration": 2.68,
           "words": [
             {
               "word": "out",
-              "start": 13.92,
+              "start": 14.08,
               "end": 14.26
             },
             {
@@ -90209,8 +90011,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 21.36,
-          "end_sec": 22.98,
-          "duration": 1.62,
+          "end_sec": 23.58,
+          "duration": 2.22,
           "words": [
             {
               "word": "for",
@@ -90220,20 +90022,9 @@
             {
               "word": "you",
               "start": 22.46,
-              "end": 22.98
+              "end": 23.58
             }
           ]
-        },
-        {
-          "id": "br_001",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 22.98,
-          "end_sec": 23.54,
-          "duration": 0.56
         },
         {
           "id": "ly_009",
@@ -90242,13 +90033,13 @@
           "original_asr_text": "Mini skirt and my cool girl",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 23.68,
+          "start_sec": 23.78,
           "end_sec": 25.98,
-          "duration": 2.3,
+          "duration": 2.2,
           "words": [
             {
               "word": "Mini",
-              "start": 23.68,
+              "start": 23.78,
               "end": 24.24
             },
             {
@@ -90334,8 +90125,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 29.46,
-          "end_sec": 31.7,
-          "duration": 2.24,
+          "end_sec": 32.02,
+          "duration": 2.56,
           "words": [
             {
               "word": "a",
@@ -90360,7 +90151,7 @@
             {
               "word": "down,",
               "start": 31.3,
-              "end": 31.7
+              "end": 32.02
             }
           ]
         },
@@ -90372,8 +90163,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 32.02,
-          "end_sec": 33.12,
-          "duration": 1.1,
+          "end_sec": 33.78,
+          "duration": 1.76,
           "words": [
             {
               "word": "sit",
@@ -90393,7 +90184,7 @@
             {
               "word": "smell",
               "start": 32.78,
-              "end": 33.12
+              "end": 33.78
             }
           ]
         },
@@ -90404,13 +90195,13 @@
           "original_asr_text": "I just wanna get in love",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 34.54,
+          "start_sec": 34.38,
           "end_sec": 38.02,
-          "duration": 3.48,
+          "duration": 3.64,
           "words": [
             {
               "word": "I",
-              "start": 34.54,
+              "start": 34.38,
               "end": 35.26
             },
             {
@@ -90587,8 +90378,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 44.96,
-          "end_sec": 47.2,
-          "duration": 2.24,
+          "end_sec": 47.34,
+          "duration": 2.38,
           "words": [
             {
               "word": "of",
@@ -90618,7 +90409,7 @@
             {
               "word": "up,",
               "start": 46.78,
-              "end": 47.2
+              "end": 47.34
             }
           ]
         },
@@ -90630,8 +90421,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 47.44,
-          "end_sec": 49.52,
-          "duration": 2.08,
+          "end_sec": 49.54,
+          "duration": 2.1,
           "words": [
             {
               "word": "they",
@@ -90656,19 +90447,19 @@
             {
               "word": "Baby,",
               "start": 48.74,
-              "end": 49.52
+              "end": 49.54
             }
           ]
         },
         {
-          "id": "br_002",
+          "id": "br_001",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 51.6,
-          "end_sec": 52.16,
+          "start_sec": 51.3,
+          "end_sec": 51.86,
           "duration": 0.56
         },
         {
@@ -90678,13 +90469,13 @@
           "original_asr_text": "why don't you come over",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 52.3,
-          "end_sec": 55.28,
-          "duration": 2.98,
+          "start_sec": 52.0,
+          "end_sec": 56.18,
+          "duration": 4.18,
           "words": [
             {
               "word": "why",
-              "start": 52.3,
+              "start": 52.0,
               "end": 52.76
             },
             {
@@ -90705,20 +90496,9 @@
             {
               "word": "over",
               "start": 54.14,
-              "end": 55.28
+              "end": 56.18
             }
           ]
-        },
-        {
-          "id": "br_003",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 55.48,
-          "end_sec": 56.04,
-          "duration": 0.56
         },
         {
           "id": "ly_020",
@@ -90728,8 +90508,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 56.18,
-          "end_sec": 58.66,
-          "duration": 2.48,
+          "end_sec": 59.86,
+          "duration": 3.68,
           "words": [
             {
               "word": "Rain",
@@ -90749,20 +90529,9 @@
             {
               "word": "low",
               "start": 57.64,
-              "end": 58.66
+              "end": 59.86
             }
           ]
-        },
-        {
-          "id": "br_004",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 59.26,
-          "end_sec": 59.82,
-          "duration": 0.56
         },
         {
           "id": "ly_021",
@@ -90771,13 +90540,13 @@
           "original_asr_text": "Falling into me",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 59.96,
-          "end_sec": 62.84,
-          "duration": 2.88,
+          "start_sec": 60.22,
+          "end_sec": 64.0,
+          "duration": 3.78,
           "words": [
             {
               "word": "Falling",
-              "start": 59.96,
+              "start": 60.22,
               "end": 60.92
             },
             {
@@ -90788,20 +90557,9 @@
             {
               "word": "me",
               "start": 61.88,
-              "end": 62.84
+              "end": 64.0
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 63.38,
-          "end_sec": 63.94,
-          "duration": 0.56
         },
         {
           "id": "ly_022",
@@ -90859,8 +90617,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 67.62,
-          "end_sec": 70.24,
-          "duration": 2.62,
+          "end_sec": 70.62,
+          "duration": 3.0,
           "words": [
             {
               "word": "care",
@@ -90885,7 +90643,7 @@
             {
               "word": "song",
               "start": 69.18,
-              "end": 70.24
+              "end": 70.62
             }
           ]
         },
@@ -90897,8 +90655,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 70.62,
-          "end_sec": 74.12,
-          "duration": 3.5,
+          "end_sec": 75.26,
+          "duration": 4.64,
           "words": [
             {
               "word": "Rain",
@@ -90918,7 +90676,7 @@
             {
               "word": "low",
               "start": 73.08,
-              "end": 74.12
+              "end": 75.26
             }
           ]
         },
@@ -90930,8 +90688,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 81.56,
-          "end_sec": 82.84,
-          "duration": 1.28,
+          "end_sec": 82.86,
+          "duration": 1.3,
           "words": [
             {
               "word": "I",
@@ -90941,7 +90699,7 @@
             {
               "word": "like,",
               "start": 82.32,
-              "end": 82.84
+              "end": 82.86
             }
           ]
         },
@@ -90952,13 +90710,13 @@
           "original_asr_text": "I like you,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 82.92,
-          "end_sec": 84.18,
-          "duration": 1.26,
+          "start_sec": 83.02,
+          "end_sec": 84.54,
+          "duration": 1.52,
           "words": [
             {
               "word": "I",
-              "start": 82.92,
+              "start": 83.02,
               "end": 83.26
             },
             {
@@ -90969,7 +90727,7 @@
             {
               "word": "you,",
               "start": 83.78,
-              "end": 84.18
+              "end": 84.54
             }
           ]
         },
@@ -90981,8 +90739,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 84.54,
-          "end_sec": 86.6,
-          "duration": 2.06,
+          "end_sec": 86.92,
+          "duration": 2.38,
           "words": [
             {
               "word": "I",
@@ -91002,7 +90760,7 @@
             {
               "word": "hair,",
               "start": 86.08,
-              "end": 86.6
+              "end": 86.92
             }
           ]
         },
@@ -91014,8 +90772,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 86.92,
-          "end_sec": 87.64,
-          "duration": 0.72,
+          "end_sec": 87.7,
+          "duration": 0.78,
           "words": [
             {
               "word": "help",
@@ -91025,7 +90783,7 @@
             {
               "word": "rocks,",
               "start": 87.22,
-              "end": 87.64
+              "end": 87.7
             }
           ]
         },
@@ -91037,8 +90795,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 87.7,
-          "end_sec": 88.4,
-          "duration": 0.7,
+          "end_sec": 88.78,
+          "duration": 1.08,
           "words": [
             {
               "word": "my",
@@ -91048,7 +90806,7 @@
             {
               "word": "tight,",
               "start": 88.04,
-              "end": 88.4
+              "end": 88.78
             }
           ]
         },
@@ -91059,19 +90817,19 @@
           "original_asr_text": "that's right,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 88.82,
-          "end_sec": 89.42,
-          "duration": 0.6,
+          "start_sec": 88.86,
+          "end_sec": 89.84,
+          "duration": 0.98,
           "words": [
             {
               "word": "that's",
-              "start": 88.82,
+              "start": 88.86,
               "end": 89.22
             },
             {
               "word": "right,",
               "start": 89.22,
-              "end": 89.42
+              "end": 89.84
             }
           ]
         },
@@ -91083,8 +90841,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 89.84,
-          "end_sec": 91.04,
-          "duration": 1.2,
+          "end_sec": 91.32,
+          "duration": 1.48,
           "words": [
             {
               "word": "you",
@@ -91104,7 +90862,7 @@
             {
               "word": "me,",
               "start": 90.48,
-              "end": 91.04
+              "end": 91.32
             }
           ]
         },
@@ -91115,13 +90873,13 @@
           "original_asr_text": "want me up,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 91.32,
-          "end_sec": 92.06,
-          "duration": 0.74,
+          "start_sec": 91.5,
+          "end_sec": 92.1,
+          "duration": 0.6,
           "words": [
             {
               "word": "want",
-              "start": 91.32,
+              "start": 91.5,
               "end": 91.58
             },
             {
@@ -91132,7 +90890,7 @@
             {
               "word": "up,",
               "start": 91.86,
-              "end": 92.06
+              "end": 92.1
             }
           ]
         },
@@ -91143,14 +90901,14 @@
           "original_asr_text": "you,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 92.44,
-          "end_sec": 92.8,
-          "duration": 0.36,
+          "start_sec": 92.7,
+          "end_sec": 93.16,
+          "duration": 0.46,
           "words": [
             {
               "word": "you,",
-              "start": 92.44,
-              "end": 92.8
+              "start": 92.7,
+              "end": 93.16
             }
           ]
         },
@@ -91161,13 +90919,13 @@
           "original_asr_text": "baby I will cause I really",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 93.18,
+          "start_sec": 93.2,
           "end_sec": 95.38,
-          "duration": 2.2,
+          "duration": 2.18,
           "words": [
             {
               "word": "baby",
-              "start": 93.18,
+              "start": 93.2,
               "end": 93.36
             },
             {
@@ -91205,8 +90963,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 95.38,
-          "end_sec": 96.74,
-          "duration": 1.36,
+          "end_sec": 96.98,
+          "duration": 1.6,
           "words": [
             {
               "word": "want",
@@ -91216,7 +90974,7 @@
             {
               "word": "you,",
               "start": 96.32,
-              "end": 96.74
+              "end": 96.98
             }
           ]
         },
@@ -91227,13 +90985,13 @@
           "original_asr_text": "I just wanna get to know",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 97.08,
+          "start_sec": 97.24,
           "end_sec": 99.94,
-          "duration": 2.86,
+          "duration": 2.7,
           "words": [
             {
               "word": "I",
-              "start": 97.08,
+              "start": 97.24,
               "end": 97.24
             },
             {
@@ -91471,13 +91229,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 110.2,
-          "end_sec": 110.68,
-          "duration": 0.48,
+          "end_sec": 110.9,
+          "duration": 0.7,
           "words": [
             {
               "word": "out",
               "start": 110.2,
-              "end": 110.68
+              "end": 110.9
             }
           ]
         },
@@ -91489,26 +91247,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 112.14,
-          "end_sec": 112.98,
-          "duration": 0.84,
+          "end_sec": 114.2,
+          "duration": 2.06,
           "words": [
             {
               "word": "Baby,",
               "start": 112.14,
-              "end": 112.98
+              "end": 114.2
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 113.5,
-          "end_sec": 114.06,
-          "duration": 0.56
         },
         {
           "id": "ly_044",
@@ -91518,8 +91265,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 114.2,
-          "end_sec": 117.34,
-          "duration": 3.14,
+          "end_sec": 118.16,
+          "duration": 3.96,
           "words": [
             {
               "word": "what",
@@ -91544,20 +91291,9 @@
             {
               "word": "over?",
               "start": 116.08,
-              "end": 117.34
+              "end": 118.16
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 117.46,
-          "end_sec": 117.98,
-          "duration": 0.52
         },
         {
           "id": "ly_045",
@@ -91610,8 +91346,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 122.98,
-          "end_sec": 124.4,
-          "duration": 1.42,
+          "end_sec": 125.34,
+          "duration": 2.36,
           "words": [
             {
               "word": "into",
@@ -91621,20 +91357,9 @@
             {
               "word": "me",
               "start": 123.78,
-              "end": 124.4
+              "end": 125.34
             }
           ]
-        },
-        {
-          "id": "br_008",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 124.64,
-          "end_sec": 125.2,
-          "duration": 0.56
         },
         {
           "id": "ly_047",
@@ -91644,8 +91369,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 125.34,
-          "end_sec": 126.64,
-          "duration": 1.3,
+          "end_sec": 126.78,
+          "duration": 1.44,
           "words": [
             {
               "word": "Okay",
@@ -91660,7 +91385,7 @@
             {
               "word": "'all,",
               "start": 126.44,
-              "end": 126.64
+              "end": 126.78
             }
           ]
         },
@@ -91672,8 +91397,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 126.78,
-          "end_sec": 129.4,
-          "duration": 2.62,
+          "end_sec": 129.56,
+          "duration": 2.78,
           "words": [
             {
               "word": "let",
@@ -91708,7 +91433,7 @@
             {
               "word": "all,",
               "start": 129.08,
-              "end": 129.4
+              "end": 129.56
             }
           ]
         },
@@ -91719,13 +91444,13 @@
           "original_asr_text": "care that it's your story",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 129.8,
-          "end_sec": 132.0,
-          "duration": 2.2,
+          "start_sec": 130.0,
+          "end_sec": 133.4,
+          "duration": 3.4,
           "words": [
             {
               "word": "care",
-              "start": 129.8,
+              "start": 130.0,
               "end": 130.14
             },
             {
@@ -91746,20 +91471,9 @@
             {
               "word": "story",
               "start": 131.18,
-              "end": 132.0
+              "end": 133.4
             }
           ]
-        },
-        {
-          "id": "br_009",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 132.74,
-          "end_sec": 133.3,
-          "duration": 0.56
         },
         {
           "id": "ly_050",
@@ -91768,19 +91482,19 @@
           "original_asr_text": "Red voice,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 133.44,
-          "end_sec": 134.48,
-          "duration": 1.04,
+          "start_sec": 133.54,
+          "end_sec": 134.88,
+          "duration": 1.34,
           "words": [
             {
               "word": "Red",
-              "start": 133.44,
+              "start": 133.54,
               "end": 134.08
             },
             {
               "word": "voice,",
               "start": 134.08,
-              "end": 134.48
+              "end": 134.88
             }
           ]
         },
@@ -91792,26 +91506,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 134.88,
-          "end_sec": 136.16,
-          "duration": 1.28,
+          "end_sec": 137.2,
+          "duration": 2.32,
           "words": [
             {
               "word": "supernova",
               "start": 134.88,
-              "end": 136.16
+              "end": 137.2
             }
           ]
-        },
-        {
-          "id": "br_010",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 136.52,
-          "end_sec": 137.08,
-          "duration": 0.56
         },
         {
           "id": "ly_052",
@@ -91820,13 +91523,13 @@
           "original_asr_text": "Fall right into",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 137.22,
+          "start_sec": 137.2,
           "end_sec": 139.26,
-          "duration": 2.04,
+          "duration": 2.06,
           "words": [
             {
               "word": "Fall",
-              "start": 137.22,
+              "start": 137.2,
               "end": 137.86
             },
             {
@@ -91849,13 +91552,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 139.26,
-          "end_sec": 140.02,
-          "duration": 0.76,
+          "end_sec": 141.34,
+          "duration": 2.08,
           "words": [
             {
               "word": "me",
               "start": 139.26,
-              "end": 140.02
+              "end": 141.34
             }
           ]
         },
@@ -91866,14 +91569,14 @@
           "original_asr_text": "Well,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 142.34,
-          "end_sec": 142.98,
-          "duration": 0.64,
+          "start_sec": 142.32,
+          "end_sec": 143.66,
+          "duration": 1.34,
           "words": [
             {
               "word": "Well,",
-              "start": 142.34,
-              "end": 142.98
+              "start": 142.32,
+              "end": 143.66
             }
           ]
         },
@@ -91885,8 +91588,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 143.66,
-          "end_sec": 144.48,
-          "duration": 0.82,
+          "end_sec": 144.68,
+          "duration": 1.02,
           "words": [
             {
               "word": "back",
@@ -91906,7 +91609,7 @@
             {
               "word": "house,",
               "start": 144.02,
-              "end": 144.48
+              "end": 144.68
             }
           ]
         },
@@ -91918,8 +91621,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 144.68,
-          "end_sec": 147.0,
-          "duration": 2.32,
+          "end_sec": 147.18,
+          "duration": 2.5,
           "words": [
             {
               "word": "I",
@@ -91949,7 +91652,7 @@
             {
               "word": "Okay,",
               "start": 146.42,
-              "end": 147.0
+              "end": 147.18
             }
           ]
         },
@@ -91960,13 +91663,13 @@
           "original_asr_text": "maybe it's a twin bed,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 147.2,
+          "start_sec": 147.18,
           "end_sec": 148.56,
-          "duration": 1.36,
+          "duration": 1.38,
           "words": [
             {
               "word": "maybe",
-              "start": 147.2,
+              "start": 147.18,
               "end": 147.5
             },
             {
@@ -91999,8 +91702,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 148.56,
-          "end_sec": 150.44,
-          "duration": 1.88,
+          "end_sec": 150.62,
+          "duration": 2.06,
           "words": [
             {
               "word": "it's",
@@ -92025,7 +91728,7 @@
             {
               "word": "worry,",
               "start": 150.24,
-              "end": 150.44
+              "end": 150.62
             }
           ]
         },
@@ -92108,8 +91811,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 153.04,
-          "end_sec": 155.26,
-          "duration": 2.22,
+          "end_sec": 155.62,
+          "duration": 2.58,
           "words": [
             {
               "word": "one",
@@ -92139,7 +91842,7 @@
             {
               "word": "baby,",
               "start": 154.96,
-              "end": 155.26
+              "end": 155.62
             }
           ]
         },
@@ -92150,13 +91853,13 @@
           "original_asr_text": "let's get freaky Let's make this",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 155.64,
+          "start_sec": 155.62,
           "end_sec": 157.88,
-          "duration": 2.24,
+          "duration": 2.26,
           "words": [
             {
               "word": "let's",
-              "start": 155.64,
+              "start": 155.62,
               "end": 155.82
             },
             {
@@ -92193,13 +91896,13 @@
           "original_asr_text": "back to a kid Baby,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 157.88,
-          "end_sec": 159.46,
-          "duration": 1.58,
+          "start_sec": 157.9,
+          "end_sec": 160.1,
+          "duration": 2.2,
           "words": [
             {
               "word": "back",
-              "start": 157.88,
+              "start": 157.9,
               "end": 158.18
             },
             {
@@ -92220,7 +91923,7 @@
             {
               "word": "Baby,",
               "start": 158.9,
-              "end": 159.46
+              "end": 160.1
             }
           ]
         },
@@ -92232,8 +91935,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 160.1,
-          "end_sec": 164.04,
-          "duration": 3.94,
+          "end_sec": 164.6,
+          "duration": 4.5,
           "words": [
             {
               "word": "what",
@@ -92258,7 +91961,7 @@
             {
               "word": "over?",
               "start": 162.48,
-              "end": 164.04
+              "end": 164.6
             }
           ]
         },
@@ -92270,8 +91973,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 164.6,
-          "end_sec": 167.06,
-          "duration": 2.46,
+          "end_sec": 168.28,
+          "duration": 3.68,
           "words": [
             {
               "word": "Red",
@@ -92286,20 +91989,9 @@
             {
               "word": "supernova",
               "start": 165.5,
-              "end": 167.06
+              "end": 168.28
             }
           ]
-        },
-        {
-          "id": "br_011",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 167.58,
-          "end_sec": 168.14,
-          "duration": 0.56
         },
         {
           "id": "ly_066",
@@ -92308,13 +92000,13 @@
           "original_asr_text": "For the human to me",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 168.29,
-          "end_sec": 170.98,
-          "duration": 2.69,
+          "start_sec": 168.28,
+          "end_sec": 174.32,
+          "duration": 6.04,
           "words": [
             {
               "word": "For",
-              "start": 168.29,
+              "start": 168.28,
               "end": 168.8
             },
             {
@@ -92335,20 +92027,9 @@
             {
               "word": "me",
               "start": 170.26,
-              "end": 170.98
+              "end": 174.32
             }
           ]
-        },
-        {
-          "id": "br_012",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 173.62,
-          "end_sec": 174.18,
-          "duration": 0.56
         },
         {
           "id": "ly_067",
@@ -92449,13 +92130,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 183.16,
-          "end_sec": 183.7,
-          "duration": 0.54,
+          "end_sec": 184.0,
+          "duration": 0.84,
           "words": [
             {
               "word": "back,",
               "start": 183.16,
-              "end": 183.7
+              "end": 184.0
             }
           ]
         },
@@ -92466,13 +92147,13 @@
           "original_asr_text": "fall right into me",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 184.02,
-          "end_sec": 186.4,
-          "duration": 2.38,
+          "start_sec": 184.14,
+          "end_sec": 189.72,
+          "duration": 5.58,
           "words": [
             {
               "word": "fall",
-              "start": 184.02,
+              "start": 184.14,
               "end": 184.34
             },
             {
@@ -92488,7 +92169,7 @@
             {
               "word": "me",
               "start": 185.74,
-              "end": 186.4
+              "end": 189.72
             }
           ]
         }
@@ -109065,8 +108746,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 5.28,
-          "end_sec": 6.32,
-          "duration": 1.04,
+          "end_sec": 6.34,
+          "duration": 1.06,
           "words": [
             {
               "word": "and",
@@ -109086,7 +108767,7 @@
             {
               "word": "love,",
               "start": 5.98,
-              "end": 6.32
+              "end": 6.34
             }
           ]
         },
@@ -109097,19 +108778,19 @@
           "original_asr_text": "Princess Peach.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 7.32,
-          "end_sec": 8.2,
-          "duration": 0.88,
+          "start_sec": 7.52,
+          "end_sec": 8.42,
+          "duration": 0.9,
           "words": [
             {
               "word": "Princess",
-              "start": 7.32,
+              "start": 7.52,
               "end": 7.74
             },
             {
               "word": "Peach.",
               "start": 7.74,
-              "end": 8.2
+              "end": 8.42
             }
           ]
         },
@@ -109120,27 +108801,16 @@
           "original_asr_text": "Peach,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 10.58,
-          "end_sec": 11.04,
-          "duration": 0.46,
+          "start_sec": 10.7,
+          "end_sec": 11.52,
+          "duration": 0.82,
           "words": [
             {
               "word": "Peach,",
-              "start": 10.58,
-              "end": 11.04
+              "start": 10.7,
+              "end": 11.52
             }
           ]
-        },
-        {
-          "id": "br_001",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 11.22,
-          "end_sec": 11.52,
-          "duration": 0.3
         },
         {
           "id": "ly_005",
@@ -109150,8 +108820,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 11.92,
-          "end_sec": 13.32,
-          "duration": 1.4,
+          "end_sec": 13.62,
+          "duration": 1.7,
           "words": [
             {
               "word": "you're",
@@ -109166,7 +108836,7 @@
             {
               "word": "cool.",
               "start": 12.7,
-              "end": 13.32
+              "end": 13.62
             }
           ]
         },
@@ -109206,8 +108876,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 16.38,
-          "end_sec": 19.22,
-          "duration": 2.84,
+          "end_sec": 19.84,
+          "duration": 3.46,
           "words": [
             {
               "word": "star",
@@ -109227,12 +108897,12 @@
             {
               "word": "rule.",
               "start": 18.34,
-              "end": 19.22
+              "end": 19.84
             }
           ]
         },
         {
-          "id": "br_002",
+          "id": "br_001",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
@@ -109268,26 +108938,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 23.04,
-          "end_sec": 23.68,
-          "duration": 0.64,
+          "end_sec": 24.46,
+          "duration": 1.42,
           "words": [
             {
               "word": "understand,",
               "start": 23.04,
-              "end": 23.68
+              "end": 24.46
             }
           ]
-        },
-        {
-          "id": "br_003",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 24.18,
-          "end_sec": 24.46,
-          "duration": 0.28
         },
         {
           "id": "ly_010",
@@ -109296,13 +108955,13 @@
           "original_asr_text": "I'm gonna love you child,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 24.88,
+          "start_sec": 25.04,
           "end_sec": 27.5,
-          "duration": 2.62,
+          "duration": 2.46,
           "words": [
             {
               "word": "I'm",
-              "start": 24.88,
+              "start": 25.04,
               "end": 25.64
             },
             {
@@ -109335,8 +108994,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 27.5,
-          "end_sec": 29.84,
-          "duration": 2.34,
+          "end_sec": 30.16,
+          "duration": 2.66,
           "words": [
             {
               "word": "love",
@@ -109351,7 +109010,7 @@
             {
               "word": "end.",
               "start": 28.82,
-              "end": 29.84
+              "end": 30.16
             }
           ]
         },
@@ -109363,13 +109022,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 31.26,
-          "end_sec": 31.9,
-          "duration": 0.64,
+          "end_sec": 32.06,
+          "duration": 0.8,
           "words": [
             {
               "word": "Peaches,",
               "start": 31.26,
-              "end": 31.9
+              "end": 32.06
             }
           ]
         },
@@ -109380,14 +109039,14 @@
           "original_asr_text": "peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 32.16,
-          "end_sec": 32.46,
-          "duration": 0.3,
+          "start_sec": 32.22,
+          "end_sec": 32.78,
+          "duration": 0.56,
           "words": [
             {
               "word": "peaches,",
-              "start": 32.16,
-              "end": 32.46
+              "start": 32.22,
+              "end": 32.78
             }
           ]
         },
@@ -109399,13 +109058,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 32.78,
-          "end_sec": 32.98,
-          "duration": 0.2,
+          "end_sec": 33.54,
+          "duration": 0.76,
           "words": [
             {
               "word": "peaches,",
               "start": 32.78,
-              "end": 32.98
+              "end": 33.54
             }
           ]
         },
@@ -109417,13 +109076,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 33.54,
-          "end_sec": 33.82,
-          "duration": 0.28,
+          "end_sec": 33.84,
+          "duration": 0.3,
           "words": [
             {
               "word": "peaches,",
               "start": 33.54,
-              "end": 33.82
+              "end": 33.84
             }
           ]
         },
@@ -109435,13 +109094,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 33.84,
-          "end_sec": 34.5,
-          "duration": 0.66,
+          "end_sec": 34.52,
+          "duration": 0.68,
           "words": [
             {
               "word": "peaches,",
               "start": 33.84,
-              "end": 34.5
+              "end": 34.52
             }
           ]
         },
@@ -109453,13 +109112,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 34.52,
-          "end_sec": 35.62,
-          "duration": 1.1,
+          "end_sec": 35.64,
+          "duration": 1.12,
           "words": [
             {
               "word": "peaches,",
               "start": 34.52,
-              "end": 35.62
+              "end": 35.64
             }
           ]
         },
@@ -109471,13 +109130,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 35.64,
-          "end_sec": 35.96,
-          "duration": 0.32,
+          "end_sec": 36.14,
+          "duration": 0.5,
           "words": [
             {
               "word": "peaches,",
               "start": 35.64,
-              "end": 35.96
+              "end": 36.14
             }
           ]
         },
@@ -109489,13 +109148,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 36.14,
-          "end_sec": 36.44,
-          "duration": 0.3,
+          "end_sec": 36.72,
+          "duration": 0.58,
           "words": [
             {
               "word": "peaches,",
               "start": 36.14,
-              "end": 36.44
+              "end": 36.72
             }
           ]
         },
@@ -109507,13 +109166,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 36.72,
-          "end_sec": 36.72,
-          "duration": 0.0,
+          "end_sec": 36.82,
+          "duration": 0.1,
           "words": [
             {
               "word": "peaches,",
               "start": 36.72,
-              "end": 36.72
+              "end": 36.82
             }
           ]
         },
@@ -109524,13 +109183,13 @@
           "original_asr_text": "oh yeah,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 36.74,
+          "start_sec": 36.82,
           "end_sec": 39.28,
-          "duration": 2.54,
+          "duration": 2.46,
           "words": [
             {
               "word": "oh",
-              "start": 36.74,
+              "start": 36.82,
               "end": 36.98
             },
             {
@@ -109548,13 +109207,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 39.28,
-          "end_sec": 39.56,
-          "duration": 0.28,
+          "end_sec": 40.08,
+          "duration": 0.8,
           "words": [
             {
               "word": "No!",
               "start": 39.28,
-              "end": 39.56
+              "end": 40.08
             }
           ]
         },
@@ -109565,27 +109224,16 @@
           "original_asr_text": "No!",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 40.12,
-          "end_sec": 40.58,
-          "duration": 0.46,
+          "start_sec": 40.1,
+          "end_sec": 41.74,
+          "duration": 1.64,
           "words": [
             {
               "word": "No!",
-              "start": 40.12,
-              "end": 40.58
+              "start": 40.1,
+              "end": 41.74
             }
           ]
-        },
-        {
-          "id": "br_004",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 41.04,
-          "end_sec": 41.6,
-          "duration": 0.56
         },
         {
           "id": "ly_024",
@@ -109594,14 +109242,14 @@
           "original_asr_text": "Peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 41.74,
-          "end_sec": 42.34,
-          "duration": 0.6,
+          "start_sec": 42.0,
+          "end_sec": 42.5,
+          "duration": 0.5,
           "words": [
             {
               "word": "Peaches,",
-              "start": 41.74,
-              "end": 42.34
+              "start": 42.0,
+              "end": 42.5
             }
           ]
         },
@@ -109612,14 +109260,14 @@
           "original_asr_text": "peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 42.56,
-          "end_sec": 42.92,
-          "duration": 0.36,
+          "start_sec": 42.64,
+          "end_sec": 43.14,
+          "duration": 0.5,
           "words": [
             {
               "word": "peaches,",
-              "start": 42.56,
-              "end": 42.92
+              "start": 42.64,
+              "end": 43.14
             }
           ]
         },
@@ -109631,13 +109279,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 43.14,
-          "end_sec": 43.42,
-          "duration": 0.28,
+          "end_sec": 43.88,
+          "duration": 0.74,
           "words": [
             {
               "word": "peaches,",
               "start": 43.14,
-              "end": 43.42
+              "end": 43.88
             }
           ]
         },
@@ -109648,14 +109296,14 @@
           "original_asr_text": "peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 43.92,
-          "end_sec": 44.44,
-          "duration": 0.52,
+          "start_sec": 43.94,
+          "end_sec": 44.5,
+          "duration": 0.56,
           "words": [
             {
               "word": "peaches,",
-              "start": 43.92,
-              "end": 44.44
+              "start": 43.94,
+              "end": 44.5
             }
           ]
         },
@@ -109666,14 +109314,14 @@
           "original_asr_text": "peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 44.56,
-          "end_sec": 44.98,
-          "duration": 0.42,
+          "start_sec": 44.6,
+          "end_sec": 45.14,
+          "duration": 0.54,
           "words": [
             {
               "word": "peaches,",
-              "start": 44.56,
-              "end": 44.98
+              "start": 44.6,
+              "end": 45.14
             }
           ]
         },
@@ -109684,14 +109332,14 @@
           "original_asr_text": "peaches,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 45.16,
-          "end_sec": 45.56,
-          "duration": 0.4,
+          "start_sec": 45.24,
+          "end_sec": 45.84,
+          "duration": 0.6,
           "words": [
             {
               "word": "peaches,",
-              "start": 45.16,
-              "end": 45.56
+              "start": 45.24,
+              "end": 45.84
             }
           ]
         },
@@ -109703,13 +109351,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 45.84,
-          "end_sec": 46.06,
-          "duration": 0.22,
+          "end_sec": 46.14,
+          "duration": 0.3,
           "words": [
             {
               "word": "peaches,",
               "start": 45.84,
-              "end": 46.06
+              "end": 46.14
             }
           ]
         },
@@ -109757,13 +109405,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 46.64,
-          "end_sec": 46.64,
-          "duration": 0.0,
+          "end_sec": 46.74,
+          "duration": 0.1,
           "words": [
             {
               "word": "peaches,",
               "start": 46.64,
-              "end": 46.64
+              "end": 46.74
             }
           ]
         },
@@ -109774,14 +109422,14 @@
           "original_asr_text": "peaches!",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 46.64,
-          "end_sec": 46.92,
-          "duration": 0.28,
+          "start_sec": 46.74,
+          "end_sec": 47.32,
+          "duration": 0.58,
           "words": [
             {
               "word": "peaches!",
-              "start": 46.64,
-              "end": 46.92
+              "start": 46.74,
+              "end": 47.32
             }
           ]
         },
@@ -109793,8 +109441,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 47.32,
-          "end_sec": 49.66,
-          "duration": 2.34,
+          "end_sec": 51.9,
+          "duration": 4.58,
           "words": [
             {
               "word": "I",
@@ -109809,20 +109457,9 @@
             {
               "word": "you!",
               "start": 48.74,
-              "end": 49.66
+              "end": 51.9
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 51.2,
-          "end_sec": 51.76,
-          "duration": 0.56
         },
         {
           "id": "ly_036",
@@ -109832,26 +109469,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 51.9,
-          "end_sec": 52.64,
-          "duration": 0.74,
+          "end_sec": 53.42,
+          "duration": 1.52,
           "words": [
             {
               "word": "Mario,",
               "start": 51.9,
-              "end": 52.64
+              "end": 53.42
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 52.72,
-          "end_sec": 53.28,
-          "duration": 0.56
         },
         {
           "id": "ly_037",
@@ -109861,26 +109487,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 53.42,
-          "end_sec": 53.7,
-          "duration": 0.28,
+          "end_sec": 54.46,
+          "duration": 1.04,
           "words": [
             {
               "word": "Luigi,",
               "start": 53.42,
-              "end": 53.7
+              "end": 54.46
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 53.76,
-          "end_sec": 54.32,
-          "duration": 0.56
         },
         {
           "id": "ly_038",
@@ -109981,8 +109596,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 60.66,
-          "end_sec": 61.5,
-          "duration": 0.84,
+          "end_sec": 63.04,
+          "duration": 2.38,
           "words": [
             {
               "word": "from",
@@ -109992,20 +109607,9 @@
             {
               "word": "you.",
               "start": 61.0,
-              "end": 61.5
+              "end": 63.04
             }
           ]
-        },
-        {
-          "id": "br_008",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 62.42,
-          "end_sec": 62.9,
-          "duration": 0.48
         },
         {
           "id": "ly_041",
@@ -110033,26 +109637,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 63.16,
-          "end_sec": 63.98,
-          "duration": 0.82,
+          "end_sec": 64.32,
+          "duration": 1.16,
           "words": [
             {
               "word": "Peach,",
               "start": 63.16,
-              "end": 63.98
+              "end": 64.32
             }
           ]
-        },
-        {
-          "id": "br_009",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 63.98,
-          "end_sec": 64.32,
-          "duration": 0.34
         },
         {
           "id": "ly_043",
@@ -110062,8 +109655,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 64.68,
-          "end_sec": 66.84,
-          "duration": 2.16,
+          "end_sec": 72.0,
+          "duration": 7.32,
           "words": [
             {
               "word": "at",
@@ -110093,20 +109686,20 @@
             {
               "word": "line!",
               "start": 66.16,
-              "end": 66.84
+              "end": 72.0
             }
           ]
         },
         {
-          "id": "br_010",
+          "id": "br_002",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 76.16,
-          "end_sec": 76.72,
-          "duration": 0.56
+          "start_sec": 75.88,
+          "end_sec": 76.42,
+          "duration": 0.54
         },
         {
           "id": "ly_044",
@@ -110115,13 +109708,13 @@
           "original_asr_text": "interval coming on.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 76.86,
-          "end_sec": 79.8,
-          "duration": 2.94,
+          "start_sec": 76.56,
+          "end_sec": 90.44,
+          "duration": 13.88,
           "words": [
             {
               "word": "interval",
-              "start": 76.86,
+              "start": 76.56,
               "end": 78.26
             },
             {
@@ -110132,20 +109725,20 @@
             {
               "word": "on.",
               "start": 79.66,
-              "end": 79.8
+              "end": 90.44
             }
           ]
         },
         {
-          "id": "br_011",
+          "id": "br_003",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 91.3,
-          "end_sec": 91.86,
-          "duration": 0.56
+          "start_sec": 91.04,
+          "end_sec": 91.56,
+          "duration": 0.52
         },
         {
           "id": "ly_045",
@@ -110154,19 +109747,19 @@
           "original_asr_text": "BEach Carolinafun",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 92.0,
-          "end_sec": 95.4,
-          "duration": 3.4,
+          "start_sec": 91.7,
+          "end_sec": 95.42,
+          "duration": 3.72,
           "words": [
             {
               "word": "BEach",
-              "start": 92.0,
+              "start": 91.7,
               "end": 93.4
             },
             {
               "word": "Carolinafun",
               "start": 93.4,
-              "end": 95.4
+              "end": 95.42
             }
           ]
         }
@@ -130108,8 +129701,8 @@
           "type": "breath",
           "is_user_edited": false,
           "start_sec": 9.86,
-          "end_sec": 10.32,
-          "duration": 0.46
+          "end_sec": 10.02,
+          "duration": 0.16
         },
         {
           "id": "ly_001",
@@ -130118,14 +129711,14 @@
           "original_asr_text": "Hey,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 10.46,
-          "end_sec": 11.04,
-          "duration": 0.58,
+          "start_sec": 10.16,
+          "end_sec": 11.12,
+          "duration": 0.96,
           "words": [
             {
               "word": "Hey,",
-              "start": 10.46,
-              "end": 11.04
+              "start": 10.16,
+              "end": 11.12
             }
           ]
         },
@@ -130136,14 +129729,14 @@
           "original_asr_text": "hey,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 11.14,
-          "end_sec": 11.54,
-          "duration": 0.4,
+          "start_sec": 11.4,
+          "end_sec": 11.6,
+          "duration": 0.2,
           "words": [
             {
               "word": "hey,",
-              "start": 11.14,
-              "end": 11.54
+              "start": 11.4,
+              "end": 11.6
             }
           ]
         },
@@ -130172,13 +129765,13 @@
           "original_asr_text": "hey,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 13.24,
+          "start_sec": 13.3,
           "end_sec": 13.82,
-          "duration": 0.58,
+          "duration": 0.52,
           "words": [
             {
               "word": "hey,",
-              "start": 13.24,
+              "start": 13.3,
               "end": 13.82
             }
           ]
@@ -130208,14 +129801,14 @@
           "original_asr_text": "hey.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 14.7,
-          "end_sec": 16.0,
-          "duration": 1.3,
+          "start_sec": 14.74,
+          "end_sec": 16.02,
+          "duration": 1.28,
           "words": [
             {
               "word": "hey.",
-              "start": 14.7,
-              "end": 16.0
+              "start": 14.74,
+              "end": 16.02
             }
           ]
         },
@@ -130226,13 +129819,13 @@
           "original_asr_text": "Don't want",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 17.22,
+          "start_sec": 17.04,
           "end_sec": 17.98,
-          "duration": 0.76,
+          "duration": 0.94,
           "words": [
             {
               "word": "Don't",
-              "start": 17.22,
+              "start": 17.04,
               "end": 17.8
             },
             {
@@ -130364,8 +129957,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 22.24,
-          "end_sec": 23.75,
-          "duration": 1.51,
+          "end_sec": 23.82,
+          "duration": 1.58,
           "words": [
             {
               "word": "you're",
@@ -130395,7 +129988,7 @@
             {
               "word": "tired,",
               "start": 23.75,
-              "end": 23.75
+              "end": 23.82
             }
           ]
         },
@@ -130406,13 +129999,13 @@
           "original_asr_text": "I'm so tired You gotta feel",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 23.83,
+          "start_sec": 23.82,
           "end_sec": 25.59,
-          "duration": 1.76,
+          "duration": 1.77,
           "words": [
             {
               "word": "I'm",
-              "start": 23.83,
+              "start": 23.82,
               "end": 24.71
             },
             {
@@ -130450,8 +130043,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 25.59,
-          "end_sec": 25.89,
-          "duration": 0.3,
+          "end_sec": 26.08,
+          "duration": 0.49,
           "words": [
             {
               "word": "in",
@@ -130461,7 +130054,7 @@
             {
               "word": "love,",
               "start": 25.79,
-              "end": 25.89
+              "end": 26.08
             }
           ]
         },
@@ -130472,13 +130065,13 @@
           "original_asr_text": "oh yeah You could be everything",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 26.09,
+          "start_sec": 26.08,
           "end_sec": 27.31,
-          "duration": 1.22,
+          "duration": 1.23,
           "words": [
             {
               "word": "oh",
-              "start": 26.09,
+              "start": 26.08,
               "end": 26.11
             },
             {
@@ -130625,8 +130218,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 31.75,
-          "end_sec": 32.95,
-          "duration": 1.2,
+          "end_sec": 33.04,
+          "duration": 1.29,
           "words": [
             {
               "word": "yeah",
@@ -130646,7 +130239,7 @@
             {
               "word": "like,",
               "start": 32.85,
-              "end": 32.95
+              "end": 33.04
             }
           ]
         },
@@ -130657,14 +130250,14 @@
           "original_asr_text": "stay,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 33.05,
-          "end_sec": 33.15,
-          "duration": 0.1,
+          "start_sec": 33.04,
+          "end_sec": 33.28,
+          "duration": 0.24,
           "words": [
             {
               "word": "stay,",
-              "start": 33.05,
-              "end": 33.15
+              "start": 33.04,
+              "end": 33.28
             }
           ]
         },
@@ -130675,13 +130268,13 @@
           "original_asr_text": "cause you get it like that",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 33.31,
+          "start_sec": 33.32,
           "end_sec": 34.13,
-          "duration": 0.82,
+          "duration": 0.81,
           "words": [
             {
               "word": "cause",
-              "start": 33.31,
+              "start": 33.32,
               "end": 33.37
             },
             {
@@ -130719,13 +130312,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 34.13,
-          "end_sec": 34.33,
-          "duration": 0.2,
+          "end_sec": 34.46,
+          "duration": 0.33,
           "words": [
             {
               "word": "Well,",
               "start": 34.13,
-              "end": 34.33
+              "end": 34.46
             }
           ]
         },
@@ -130736,13 +130329,13 @@
           "original_asr_text": "take a big guy and wanna",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 34.47,
+          "start_sec": 34.46,
           "end_sec": 35.31,
-          "duration": 0.84,
+          "duration": 0.85,
           "words": [
             {
               "word": "take",
-              "start": 34.47,
+              "start": 34.46,
               "end": 34.57
             },
             {
@@ -130780,8 +130373,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 35.31,
-          "end_sec": 36.45,
-          "duration": 1.14,
+          "end_sec": 36.54,
+          "duration": 1.23,
           "words": [
             {
               "word": "know",
@@ -130806,7 +130399,7 @@
             {
               "word": "No,",
               "start": 36.13,
-              "end": 36.45
+              "end": 36.54
             }
           ]
         },
@@ -130817,13 +130410,13 @@
           "original_asr_text": "I'm gonna go down when I wanna",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 36.55,
+          "start_sec": 36.54,
           "end_sec": 37.75,
-          "duration": 1.2,
+          "duration": 1.21,
           "words": [
             {
               "word": "I'm",
-              "start": 36.55,
+              "start": 36.54,
               "end": 36.65
             },
             {
@@ -130909,13 +130502,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 39.11,
-          "end_sec": 39.41,
-          "duration": 0.3,
+          "end_sec": 39.44,
+          "duration": 0.33,
           "words": [
             {
               "word": "funny,",
               "start": 39.11,
-              "end": 39.41
+              "end": 39.44
             }
           ]
         },
@@ -130926,14 +130519,14 @@
           "original_asr_text": "funny,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 39.45,
-          "end_sec": 39.57,
-          "duration": 0.12,
+          "start_sec": 39.44,
+          "end_sec": 40.0,
+          "duration": 0.56,
           "words": [
             {
               "word": "funny,",
-              "start": 39.45,
-              "end": 39.57
+              "start": 39.44,
+              "end": 40.0
             }
           ]
         },
@@ -130944,14 +130537,14 @@
           "original_asr_text": "funny",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 40.01,
-          "end_sec": 40.01,
-          "duration": 0.0,
+          "start_sec": 40.0,
+          "end_sec": 40.3,
+          "duration": 0.3,
           "words": [
             {
               "word": "funny",
-              "start": 40.01,
-              "end": 40.01
+              "start": 40.0,
+              "end": 40.3
             }
           ]
         },
@@ -130962,13 +130555,13 @@
           "original_asr_text": "When you're in love,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 40.33,
-          "end_sec": 41.53,
-          "duration": 1.2,
+          "start_sec": 40.3,
+          "end_sec": 41.84,
+          "duration": 1.54,
           "words": [
             {
               "word": "When",
-              "start": 40.33,
+              "start": 40.3,
               "end": 40.53
             },
             {
@@ -130984,7 +130577,7 @@
             {
               "word": "love,",
               "start": 41.33,
-              "end": 41.53
+              "end": 41.84
             }
           ]
         },
@@ -130995,13 +130588,13 @@
           "original_asr_text": "I'm so tired,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 41.85,
-          "end_sec": 42.29,
-          "duration": 0.44,
+          "start_sec": 41.84,
+          "end_sec": 42.32,
+          "duration": 0.48,
           "words": [
             {
               "word": "I'm",
-              "start": 41.85,
+              "start": 41.84,
               "end": 41.85
             },
             {
@@ -131012,7 +130605,7 @@
             {
               "word": "tired,",
               "start": 41.95,
-              "end": 42.29
+              "end": 42.32
             }
           ]
         },
@@ -131023,13 +130616,13 @@
           "original_asr_text": "so tired Can't let go,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 42.37,
-          "end_sec": 45.09,
-          "duration": 2.72,
+          "start_sec": 42.36,
+          "end_sec": 45.4,
+          "duration": 3.04,
           "words": [
             {
               "word": "so",
-              "start": 42.37,
+              "start": 42.36,
               "end": 42.67
             },
             {
@@ -131050,7 +130643,7 @@
             {
               "word": "go,",
               "start": 44.83,
-              "end": 45.09
+              "end": 45.4
             }
           ]
         },
@@ -131061,14 +130654,14 @@
           "original_asr_text": "no,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 45.41,
-          "end_sec": 45.75,
-          "duration": 0.34,
+          "start_sec": 45.4,
+          "end_sec": 46.26,
+          "duration": 0.86,
           "words": [
             {
               "word": "no,",
-              "start": 45.41,
-              "end": 45.75
+              "start": 45.4,
+              "end": 46.26
             }
           ]
         },
@@ -131079,13 +130672,13 @@
           "original_asr_text": "that's her mind Say,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 46.27,
-          "end_sec": 47.41,
-          "duration": 1.14,
+          "start_sec": 46.26,
+          "end_sec": 47.6,
+          "duration": 1.34,
           "words": [
             {
               "word": "that's",
-              "start": 46.27,
+              "start": 46.26,
               "end": 46.39
             },
             {
@@ -131101,7 +130694,7 @@
             {
               "word": "Say,",
               "start": 46.89,
-              "end": 47.41
+              "end": 47.6
             }
           ]
         },
@@ -131112,32 +130705,21 @@
           "original_asr_text": "I'm tired,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 47.61,
-          "end_sec": 47.85,
-          "duration": 0.24,
+          "start_sec": 47.6,
+          "end_sec": 48.56,
+          "duration": 0.96,
           "words": [
             {
               "word": "I'm",
-              "start": 47.61,
+              "start": 47.6,
               "end": 47.77
             },
             {
               "word": "tired,",
               "start": 47.77,
-              "end": 47.85
+              "end": 48.56
             }
           ]
-        },
-        {
-          "id": "br_002",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 47.86,
-          "end_sec": 48.42,
-          "duration": 0.56
         },
         {
           "id": "ly_035",
@@ -131146,19 +130728,19 @@
           "original_asr_text": "I'm tired,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 48.57,
-          "end_sec": 48.93,
-          "duration": 0.36,
+          "start_sec": 48.56,
+          "end_sec": 49.42,
+          "duration": 0.86,
           "words": [
             {
               "word": "I'm",
-              "start": 48.57,
+              "start": 48.56,
               "end": 48.77
             },
             {
               "word": "tired,",
               "start": 48.77,
-              "end": 48.93
+              "end": 49.42
             }
           ]
         },
@@ -131169,13 +130751,13 @@
           "original_asr_text": "I'm so tired I don't eat",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 49.43,
+          "start_sec": 49.42,
           "end_sec": 53.93,
-          "duration": 4.5,
+          "duration": 4.51,
           "words": [
             {
               "word": "I'm",
-              "start": 49.43,
+              "start": 49.42,
               "end": 49.57
             },
             {
@@ -131494,8 +131076,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 70.91,
-          "end_sec": 72.25,
-          "duration": 1.34,
+          "end_sec": 72.34,
+          "duration": 1.43,
           "words": [
             {
               "word": "down",
@@ -131515,7 +131097,7 @@
             {
               "word": "Why?",
               "start": 71.77,
-              "end": 72.25
+              "end": 72.34
             }
           ]
         },
@@ -131526,13 +131108,13 @@
           "original_asr_text": "Warm me up my walls up",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 72.83,
+          "start_sec": 72.6,
           "end_sec": 74.19,
-          "duration": 1.36,
+          "duration": 1.59,
           "words": [
             {
               "word": "Warm",
-              "start": 72.83,
+              "start": 72.6,
               "end": 72.83
             },
             {
@@ -131613,13 +131195,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 77.03,
-          "end_sec": 77.49,
-          "duration": 0.46,
+          "end_sec": 77.58,
+          "duration": 0.55,
           "words": [
             {
               "word": "pop",
               "start": 77.03,
-              "end": 77.49
+              "end": 77.58
             }
           ]
         },
@@ -131630,13 +131212,13 @@
           "original_asr_text": "Oh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 83.77,
+          "start_sec": 84.02,
           "end_sec": 84.17,
-          "duration": 0.4,
+          "duration": 0.15,
           "words": [
             {
               "word": "Oh,",
-              "start": 83.77,
+              "start": 84.02,
               "end": 84.17
             }
           ]
@@ -131649,8 +131231,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 84.17,
-          "end_sec": 85.05,
-          "duration": 0.88,
+          "end_sec": 85.56,
+          "duration": 1.39,
           "words": [
             {
               "word": "that's",
@@ -131670,7 +131252,7 @@
             {
               "word": "thought.",
               "start": 84.27,
-              "end": 85.05
+              "end": 85.56
             }
           ]
         },
@@ -131681,14 +131263,14 @@
           "original_asr_text": "Oh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 85.59,
-          "end_sec": 85.79,
-          "duration": 0.2,
+          "start_sec": 85.7,
+          "end_sec": 85.84,
+          "duration": 0.14,
           "words": [
             {
               "word": "Oh,",
-              "start": 85.59,
-              "end": 85.79
+              "start": 85.7,
+              "end": 85.84
             }
           ]
         },
@@ -131699,13 +131281,13 @@
           "original_asr_text": "it made me want to flip",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 86.19,
+          "start_sec": 86.2,
           "end_sec": 86.97,
-          "duration": 0.78,
+          "duration": 0.77,
           "words": [
             {
               "word": "it",
-              "start": 86.19,
+              "start": 86.2,
               "end": 86.21
             },
             {
@@ -131743,8 +131325,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 86.97,
-          "end_sec": 87.37,
-          "duration": 0.4,
+          "end_sec": 87.6,
+          "duration": 0.63,
           "words": [
             {
               "word": "the",
@@ -131754,7 +131336,7 @@
             {
               "word": "top,",
               "start": 87.15,
-              "end": 87.37
+              "end": 87.6
             }
           ]
         },
@@ -131765,13 +131347,13 @@
           "original_asr_text": "I'm gonna make your head smile.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 87.61,
-          "end_sec": 88.69,
-          "duration": 1.08,
+          "start_sec": 87.6,
+          "end_sec": 88.9,
+          "duration": 1.3,
           "words": [
             {
               "word": "I'm",
-              "start": 87.61,
+              "start": 87.6,
               "end": 87.71
             },
             {
@@ -131797,7 +131379,7 @@
             {
               "word": "smile.",
               "start": 88.41,
-              "end": 88.69
+              "end": 88.9
             }
           ]
         },
@@ -131808,13 +131390,13 @@
           "original_asr_text": "Every little drip,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 89.29,
-          "end_sec": 89.81,
-          "duration": 0.52,
+          "start_sec": 89.28,
+          "end_sec": 89.86,
+          "duration": 0.58,
           "words": [
             {
               "word": "Every",
-              "start": 89.29,
+              "start": 89.28,
               "end": 89.31
             },
             {
@@ -131825,7 +131407,7 @@
             {
               "word": "drip,",
               "start": 89.61,
-              "end": 89.81
+              "end": 89.86
             }
           ]
         },
@@ -131836,13 +131418,13 @@
           "original_asr_text": "the drop fits and pop.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 90.01,
-          "end_sec": 90.95,
-          "duration": 0.94,
+          "start_sec": 90.0,
+          "end_sec": 91.24,
+          "duration": 1.24,
           "words": [
             {
               "word": "the",
-              "start": 90.01,
+              "start": 90.0,
               "end": 90.03
             },
             {
@@ -131863,7 +131445,7 @@
             {
               "word": "pop.",
               "start": 90.75,
-              "end": 90.95
+              "end": 91.24
             }
           ]
         },
@@ -131874,13 +131456,13 @@
           "original_asr_text": "That's what I'm doing,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 91.25,
-          "end_sec": 91.73,
-          "duration": 0.48,
+          "start_sec": 91.24,
+          "end_sec": 91.9,
+          "duration": 0.66,
           "words": [
             {
               "word": "That's",
-              "start": 91.25,
+              "start": 91.24,
               "end": 91.41
             },
             {
@@ -131896,7 +131478,7 @@
             {
               "word": "doing,",
               "start": 91.55,
-              "end": 91.73
+              "end": 91.9
             }
           ]
         },
@@ -131907,13 +131489,13 @@
           "original_asr_text": "that's getting hot.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 91.91,
-          "end_sec": 92.53,
-          "duration": 0.62,
+          "start_sec": 91.9,
+          "end_sec": 93.1,
+          "duration": 1.2,
           "words": [
             {
               "word": "that's",
-              "start": 91.91,
+              "start": 91.9,
               "end": 92.07
             },
             {
@@ -131924,7 +131506,7 @@
             {
               "word": "hot.",
               "start": 92.25,
-              "end": 92.53
+              "end": 93.1
             }
           ]
         },
@@ -131935,31 +131517,31 @@
           "original_asr_text": "Just hot.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 93.11,
-          "end_sec": 93.41,
-          "duration": 0.3,
+          "start_sec": 93.1,
+          "end_sec": 102.32,
+          "duration": 9.22,
           "words": [
             {
               "word": "Just",
-              "start": 93.11,
+              "start": 93.1,
               "end": 93.19
             },
             {
               "word": "hot.",
               "start": 93.19,
-              "end": 93.41
+              "end": 102.32
             }
           ]
         },
         {
-          "id": "br_003",
+          "id": "br_002",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 112.28,
-          "end_sec": 112.84,
+          "start_sec": 111.98,
+          "end_sec": 112.54,
           "duration": 0.56
         },
         {
@@ -131969,13 +131551,13 @@
           "original_asr_text": "For a piece of soda,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 112.99,
-          "end_sec": 114.65,
-          "duration": 1.66,
+          "start_sec": 112.68,
+          "end_sec": 115.36,
+          "duration": 2.68,
           "words": [
             {
               "word": "For",
-              "start": 112.99,
+              "start": 112.68,
               "end": 113.49
             },
             {
@@ -131996,20 +131578,9 @@
             {
               "word": "soda,",
               "start": 114.37,
-              "end": 114.65
+              "end": 115.36
             }
           ]
-        },
-        {
-          "id": "br_004",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 114.66,
-          "end_sec": 115.22,
-          "duration": 0.56
         },
         {
           "id": "ly_060",
@@ -132018,14 +131589,14 @@
           "original_asr_text": "soda,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 115.37,
-          "end_sec": 115.37,
-          "duration": 0.0,
+          "start_sec": 115.36,
+          "end_sec": 115.96,
+          "duration": 0.6,
           "words": [
             {
               "word": "soda,",
-              "start": 115.37,
-              "end": 115.37
+              "start": 115.36,
+              "end": 115.96
             }
           ]
         },
@@ -132036,14 +131607,14 @@
           "original_asr_text": "wait,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 115.97,
-          "end_sec": 116.09,
-          "duration": 0.12,
+          "start_sec": 115.96,
+          "end_sec": 116.26,
+          "duration": 0.3,
           "words": [
             {
               "word": "wait,",
-              "start": 115.97,
-              "end": 116.09
+              "start": 115.96,
+              "end": 116.26
             }
           ]
         },
@@ -132054,19 +131625,19 @@
           "original_asr_text": "it's over,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 116.27,
-          "end_sec": 116.77,
-          "duration": 0.5,
+          "start_sec": 116.26,
+          "end_sec": 117.18,
+          "duration": 0.92,
           "words": [
             {
               "word": "it's",
-              "start": 116.27,
+              "start": 116.26,
               "end": 116.41
             },
             {
               "word": "over,",
               "start": 116.41,
-              "end": 116.77
+              "end": 117.18
             }
           ]
         },
@@ -132077,27 +131648,16 @@
           "original_asr_text": "baby",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 117.19,
-          "end_sec": 117.43,
-          "duration": 0.24,
+          "start_sec": 117.18,
+          "end_sec": 118.6,
+          "duration": 1.42,
           "words": [
             {
               "word": "baby",
-              "start": 117.19,
-              "end": 117.43
+              "start": 117.18,
+              "end": 118.6
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 117.9,
-          "end_sec": 118.46,
-          "duration": 0.56
         },
         {
           "id": "ly_064",
@@ -132106,13 +131666,13 @@
           "original_asr_text": "You're gonna do it,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 118.61,
-          "end_sec": 119.71,
-          "duration": 1.1,
+          "start_sec": 118.6,
+          "end_sec": 119.96,
+          "duration": 1.36,
           "words": [
             {
               "word": "You're",
-              "start": 118.61,
+              "start": 118.6,
               "end": 119.17
             },
             {
@@ -132128,7 +131688,7 @@
             {
               "word": "it,",
               "start": 119.41,
-              "end": 119.71
+              "end": 119.96
             }
           ]
         },
@@ -132139,14 +131699,14 @@
           "original_asr_text": "girl,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 119.97,
-          "end_sec": 119.97,
-          "duration": 0.0,
+          "start_sec": 119.96,
+          "end_sec": 120.1,
+          "duration": 0.14,
           "words": [
             {
               "word": "girl,",
-              "start": 119.97,
-              "end": 119.97
+              "start": 119.96,
+              "end": 120.1
             }
           ]
         },
@@ -132157,13 +131717,13 @@
           "original_asr_text": "just get gettin'",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 120.17,
-          "end_sec": 121.51,
-          "duration": 1.34,
+          "start_sec": 120.18,
+          "end_sec": 121.7,
+          "duration": 1.52,
           "words": [
             {
               "word": "just",
-              "start": 120.17,
+              "start": 120.18,
               "end": 120.49
             },
             {
@@ -132174,7 +131734,7 @@
             {
               "word": "gettin'",
               "start": 120.73,
-              "end": 121.51
+              "end": 121.7
             }
           ]
         },
@@ -132185,27 +131745,16 @@
           "original_asr_text": "up",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 121.71,
-          "end_sec": 121.97,
-          "duration": 0.26,
+          "start_sec": 121.7,
+          "end_sec": 123.7,
+          "duration": 2.0,
           "words": [
             {
               "word": "up",
-              "start": 121.71,
-              "end": 121.97
+              "start": 121.7,
+              "end": 123.7
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 123.0,
-          "end_sec": 123.56,
-          "duration": 0.56
         },
         {
           "id": "ly_068",
@@ -132214,13 +131763,13 @@
           "original_asr_text": "You're gonna be good for every",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 123.71,
+          "start_sec": 123.7,
           "end_sec": 126.33,
-          "duration": 2.62,
+          "duration": 2.63,
           "words": [
             {
               "word": "You're",
-              "start": 123.71,
+              "start": 123.7,
               "end": 124.27
             },
             {
@@ -132301,8 +131850,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 128.61,
-          "end_sec": 129.37,
-          "duration": 0.76,
+          "end_sec": 129.72,
+          "duration": 1.11,
           "words": [
             {
               "word": "start",
@@ -132317,7 +131866,7 @@
             {
               "word": "pop,",
               "start": 129.13,
-              "end": 129.37
+              "end": 129.72
             }
           ]
         },
@@ -132328,13 +131877,13 @@
           "original_asr_text": "my little soda pop You're gonna",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 129.73,
+          "start_sec": 129.72,
           "end_sec": 131.99,
-          "duration": 2.26,
+          "duration": 2.27,
           "words": [
             {
               "word": "my",
-              "start": 129.73,
+              "start": 129.72,
               "end": 129.85
             },
             {
@@ -132372,8 +131921,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 131.99,
-          "end_sec": 132.51,
-          "duration": 0.52,
+          "end_sec": 133.24,
+          "duration": 1.25,
           "words": [
             {
               "word": "get",
@@ -132383,20 +131932,9 @@
             {
               "word": "it,",
               "start": 132.31,
-              "end": 132.51
+              "end": 133.24
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 132.54,
-          "end_sec": 133.1,
-          "duration": 0.56
         },
         {
           "id": "ly_073",
@@ -132405,14 +131943,14 @@
           "original_asr_text": "girl,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 133.25,
-          "end_sec": 133.25,
-          "duration": 0.0,
+          "start_sec": 133.24,
+          "end_sec": 133.54,
+          "duration": 0.3,
           "words": [
             {
               "word": "girl,",
-              "start": 133.25,
-              "end": 133.25
+              "start": 133.24,
+              "end": 133.54
             }
           ]
         },
@@ -132423,13 +131961,13 @@
           "original_asr_text": "pull me up on one song",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 133.55,
+          "start_sec": 133.54,
           "end_sec": 135.15,
-          "duration": 1.6,
+          "duration": 1.61,
           "words": [
             {
               "word": "pull",
-              "start": 133.55,
+              "start": 133.54,
               "end": 133.69
             },
             {
@@ -132467,8 +132005,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 135.15,
-          "end_sec": 137.01,
-          "duration": 1.86,
+          "end_sec": 137.28,
+          "duration": 2.13,
           "words": [
             {
               "word": "You're",
@@ -132493,7 +132031,7 @@
             {
               "word": "pop,",
               "start": 136.77,
-              "end": 137.01
+              "end": 137.28
             }
           ]
         },
@@ -132504,13 +132042,13 @@
           "original_asr_text": "my little soda pop Oh my god,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 137.29,
-          "end_sec": 139.15,
-          "duration": 1.86,
+          "start_sec": 137.28,
+          "end_sec": 139.16,
+          "duration": 1.88,
           "words": [
             {
               "word": "my",
-              "start": 137.29,
+              "start": 137.28,
               "end": 137.47
             },
             {
@@ -132541,7 +132079,7 @@
             {
               "word": "god,",
               "start": 139.15,
-              "end": 139.15
+              "end": 139.16
             }
           ]
         },
@@ -132552,13 +132090,13 @@
           "original_asr_text": "oh my god,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 139.25,
+          "start_sec": 139.26,
           "end_sec": 142.57,
-          "duration": 3.32,
+          "duration": 3.31,
           "words": [
             {
               "word": "oh",
-              "start": 139.25,
+              "start": 139.26,
               "end": 139.91
             },
             {
@@ -132624,8 +132162,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 144.17,
-          "end_sec": 144.65,
-          "duration": 0.48,
+          "end_sec": 145.0,
+          "duration": 0.83,
           "words": [
             {
               "word": "a",
@@ -132635,7 +132173,7 @@
             {
               "word": "pop,",
               "start": 144.35,
-              "end": 144.65
+              "end": 145.0
             }
           ]
         },
@@ -132646,13 +132184,13 @@
           "original_asr_text": "gotta take that everywhere",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 145.01,
-          "end_sec": 145.89,
-          "duration": 0.88,
+          "start_sec": 145.0,
+          "end_sec": 146.12,
+          "duration": 1.12,
           "words": [
             {
               "word": "gotta",
-              "start": 145.01,
+              "start": 145.0,
               "end": 145.07
             },
             {
@@ -132668,7 +132206,7 @@
             {
               "word": "everywhere",
               "start": 145.57,
-              "end": 145.89
+              "end": 146.12
             }
           ]
         }
@@ -161417,14 +160955,14 @@
           "original_asr_text": "Oh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 0.0,
-          "end_sec": 0.3,
-          "duration": 0.3,
+          "start_sec": 0.12,
+          "end_sec": 0.52,
+          "duration": 0.4,
           "words": [
             {
               "word": "Oh,",
-              "start": 0.0,
-              "end": 0.3
+              "start": 0.12,
+              "end": 0.52
             }
           ]
         },
@@ -161436,26 +160974,15 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 0.52,
-          "end_sec": 0.94,
-          "duration": 0.42,
+          "end_sec": 1.84,
+          "duration": 1.32,
           "words": [
             {
               "word": "Ellen,",
               "start": 0.52,
-              "end": 0.94
+              "end": 1.84
             }
           ]
-        },
-        {
-          "id": "br_001",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 1.68,
-          "end_sec": 1.84,
-          "duration": 0.16
         },
         {
           "id": "ly_003",
@@ -161464,27 +160991,16 @@
           "original_asr_text": "Ellen,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 2.38,
-          "end_sec": 3.12,
-          "duration": 0.74,
+          "start_sec": 2.54,
+          "end_sec": 4.22,
+          "duration": 1.68,
           "words": [
             {
               "word": "Ellen,",
-              "start": 2.38,
-              "end": 3.12
+              "start": 2.54,
+              "end": 4.22
             }
           ]
-        },
-        {
-          "id": "br_002",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 3.52,
-          "end_sec": 4.0,
-          "duration": 0.48
         },
         {
           "id": "ly_004",
@@ -161494,13 +161010,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 4.22,
-          "end_sec": 4.32,
-          "duration": 0.1,
+          "end_sec": 4.62,
+          "duration": 0.4,
           "words": [
             {
               "word": "oh,",
               "start": 4.22,
-              "end": 4.32
+              "end": 4.62
             }
           ]
         },
@@ -161511,13 +161027,13 @@
           "original_asr_text": "Ellen,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 4.64,
+          "start_sec": 4.62,
           "end_sec": 5.04,
-          "duration": 0.4,
+          "duration": 0.42,
           "words": [
             {
               "word": "Ellen,",
-              "start": 4.64,
+              "start": 4.62,
               "end": 5.04
             }
           ]
@@ -161548,13 +161064,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 6.84,
-          "end_sec": 7.24,
-          "duration": 0.4,
+          "end_sec": 7.72,
+          "duration": 0.88,
           "words": [
             {
               "word": "Ellen,",
               "start": 6.84,
-              "end": 7.24
+              "end": 7.72
             }
           ]
         },
@@ -161565,14 +161081,14 @@
           "original_asr_text": "Ellen.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 7.82,
-          "end_sec": 7.82,
-          "duration": 0.0,
+          "start_sec": 8.1,
+          "end_sec": 8.2,
+          "duration": 0.1,
           "words": [
             {
               "word": "Ellen.",
-              "start": 7.82,
-              "end": 7.82
+              "start": 8.1,
+              "end": 8.2
             }
           ]
         },
@@ -161583,13 +161099,13 @@
           "original_asr_text": "You knew from the day you were",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 7.94,
+          "start_sec": 8.2,
           "end_sec": 11.3,
-          "duration": 3.36,
+          "duration": 3.1,
           "words": [
             {
               "word": "You",
-              "start": 7.94,
+              "start": 8.2,
               "end": 8.2
             },
             {
@@ -161632,8 +161148,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 11.3,
-          "end_sec": 13.68,
-          "duration": 2.38,
+          "end_sec": 14.06,
+          "duration": 2.76,
           "words": [
             {
               "word": "born",
@@ -161658,7 +161174,7 @@
             {
               "word": "place.",
               "start": 13.36,
-              "end": 13.68
+              "end": 14.06
             }
           ]
         },
@@ -161669,32 +161185,21 @@
           "original_asr_text": "You belong,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 14.96,
-          "end_sec": 15.64,
-          "duration": 0.68,
+          "start_sec": 14.92,
+          "end_sec": 16.14,
+          "duration": 1.22,
           "words": [
             {
               "word": "You",
-              "start": 14.96,
+              "start": 14.92,
               "end": 15.1
             },
             {
               "word": "belong,",
               "start": 15.1,
-              "end": 15.64
+              "end": 16.14
             }
           ]
-        },
-        {
-          "id": "br_003",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 15.94,
-          "end_sec": 16.5,
-          "duration": 0.56
         },
         {
           "id": "ly_012",
@@ -161703,13 +161208,13 @@
           "original_asr_text": "you've been this brave.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 16.64,
-          "end_sec": 17.84,
-          "duration": 1.2,
+          "start_sec": 16.4,
+          "end_sec": 18.2,
+          "duration": 1.8,
           "words": [
             {
               "word": "you've",
-              "start": 16.64,
+              "start": 16.4,
               "end": 16.96
             },
             {
@@ -161725,12 +161230,12 @@
             {
               "word": "brave.",
               "start": 17.46,
-              "end": 17.84
+              "end": 18.2
             }
           ]
         },
         {
-          "id": "br_004",
+          "id": "br_001",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
@@ -161747,14 +161252,14 @@
           "original_asr_text": "Oh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 19.12,
-          "end_sec": 19.26,
-          "duration": 0.14,
+          "start_sec": 19.06,
+          "end_sec": 20.02,
+          "duration": 0.96,
           "words": [
             {
               "word": "Oh,",
-              "start": 19.12,
-              "end": 19.26
+              "start": 19.06,
+              "end": 20.02
             }
           ]
         },
@@ -161765,13 +161270,13 @@
           "original_asr_text": "what broke you once made you strong?",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 20.72,
-          "end_sec": 23.96,
-          "duration": 3.24,
+          "start_sec": 20.56,
+          "end_sec": 28.4,
+          "duration": 7.84,
           "words": [
             {
               "word": "what",
-              "start": 20.72,
+              "start": 20.56,
               "end": 20.98
             },
             {
@@ -161802,20 +161307,9 @@
             {
               "word": "strong?",
               "start": 23.64,
-              "end": 23.96
+              "end": 28.4
             }
           ]
-        },
-        {
-          "id": "br_005",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 27.82,
-          "end_sec": 28.38,
-          "duration": 0.56
         },
         {
           "id": "ly_015",
@@ -161824,27 +161318,16 @@
           "original_asr_text": "IS",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 28.52,
-          "end_sec": 29.92,
-          "duration": 1.4,
+          "start_sec": 28.56,
+          "end_sec": 31.58,
+          "duration": 3.02,
           "words": [
             {
               "word": "IS",
-              "start": 28.52,
-              "end": 29.92
+              "start": 28.56,
+              "end": 31.58
             }
           ]
-        },
-        {
-          "id": "br_006",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 30.88,
-          "end_sec": 31.44,
-          "duration": 0.56
         },
         {
           "id": "ly_016",
@@ -161854,8 +161337,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 31.58,
-          "end_sec": 32.34,
-          "duration": 0.76,
+          "end_sec": 33.6,
+          "duration": 2.02,
           "words": [
             {
               "word": "Let's",
@@ -161865,7 +161348,7 @@
             {
               "word": "go.",
               "start": 32.06,
-              "end": 32.34
+              "end": 33.6
             }
           ]
         },
@@ -161876,13 +161359,13 @@
           "original_asr_text": "I'm following your desire when there's",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 40.9,
+          "start_sec": 41.18,
           "end_sec": 43.34,
-          "duration": 2.44,
+          "duration": 2.16,
           "words": [
             {
               "word": "I'm",
-              "start": 40.9,
+              "start": 41.18,
               "end": 41.38
             },
             {
@@ -161920,8 +161403,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 43.34,
-          "end_sec": 43.68,
-          "duration": 0.34,
+          "end_sec": 43.88,
+          "duration": 0.54,
           "words": [
             {
               "word": "a",
@@ -161931,7 +161414,7 @@
             {
               "word": "win,",
               "start": 43.48,
-              "end": 43.68
+              "end": 43.88
             }
           ]
         },
@@ -161943,8 +161426,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 43.88,
-          "end_sec": 44.48,
-          "duration": 0.6,
+          "end_sec": 44.6,
+          "duration": 0.72,
           "words": [
             {
               "word": "there's",
@@ -161959,7 +161442,7 @@
             {
               "word": "win.",
               "start": 44.22,
-              "end": 44.48
+              "end": 44.6
             }
           ]
         },
@@ -161970,13 +161453,13 @@
           "original_asr_text": "Honey on the roof that fire,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 45.34,
-          "end_sec": 46.62,
-          "duration": 1.28,
+          "start_sec": 45.3,
+          "end_sec": 47.14,
+          "duration": 1.84,
           "words": [
             {
               "word": "Honey",
-              "start": 45.34,
+              "start": 45.3,
               "end": 45.48
             },
             {
@@ -162002,7 +161485,7 @@
             {
               "word": "fire,",
               "start": 46.28,
-              "end": 46.62
+              "end": 47.14
             }
           ]
         },
@@ -162013,13 +161496,13 @@
           "original_asr_text": "no one can tell you you're",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 47.18,
+          "start_sec": 47.24,
           "end_sec": 48.26,
-          "duration": 1.08,
+          "duration": 1.02,
           "words": [
             {
               "word": "no",
-              "start": 47.18,
+              "start": 47.24,
               "end": 47.28
             },
             {
@@ -162057,8 +161540,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 48.26,
-          "end_sec": 48.6,
-          "duration": 0.34,
+          "end_sec": 48.76,
+          "duration": 0.5,
           "words": [
             {
               "word": "the",
@@ -162068,7 +161551,7 @@
             {
               "word": "way.",
               "start": 48.34,
-              "end": 48.6
+              "end": 48.76
             }
           ]
         },
@@ -162079,13 +161562,13 @@
           "original_asr_text": "Try to run to write your story,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 49.22,
-          "end_sec": 51.12,
-          "duration": 1.9,
+          "start_sec": 49.38,
+          "end_sec": 51.56,
+          "duration": 2.18,
           "words": [
             {
               "word": "Try",
-              "start": 49.22,
+              "start": 49.38,
               "end": 49.52
             },
             {
@@ -162116,7 +161599,7 @@
             {
               "word": "story,",
               "start": 50.44,
-              "end": 51.12
+              "end": 51.56
             }
           ]
         },
@@ -162128,8 +161611,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 51.56,
-          "end_sec": 52.76,
-          "duration": 1.2,
+          "end_sec": 53.26,
+          "duration": 1.7,
           "words": [
             {
               "word": "I",
@@ -162164,7 +161647,7 @@
             {
               "word": "way.",
               "start": 52.52,
-              "end": 52.76
+              "end": 53.26
             }
           ]
         },
@@ -162175,13 +161658,13 @@
           "original_asr_text": "You're about to reach the glory,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 53.34,
-          "end_sec": 55.08,
-          "duration": 1.74,
+          "start_sec": 53.56,
+          "end_sec": 55.4,
+          "duration": 1.84,
           "words": [
             {
               "word": "You're",
-              "start": 53.34,
+              "start": 53.56,
               "end": 53.68
             },
             {
@@ -162207,7 +161690,7 @@
             {
               "word": "glory,",
               "start": 54.54,
-              "end": 55.08
+              "end": 55.4
             }
           ]
         },
@@ -162218,13 +161701,13 @@
           "original_asr_text": "only once lived away.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 55.6,
-          "end_sec": 56.74,
-          "duration": 1.14,
+          "start_sec": 55.64,
+          "end_sec": 57.08,
+          "duration": 1.44,
           "words": [
             {
               "word": "only",
-              "start": 55.6,
+              "start": 55.64,
               "end": 55.82
             },
             {
@@ -162240,7 +161723,7 @@
             {
               "word": "away.",
               "start": 56.38,
-              "end": 56.74
+              "end": 57.08
             }
           ]
         },
@@ -162251,13 +161734,13 @@
           "original_asr_text": "On the eyes of",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 57.76,
+          "start_sec": 57.72,
           "end_sec": 58.34,
-          "duration": 0.58,
+          "duration": 0.62,
           "words": [
             {
               "word": "On",
-              "start": 57.76,
+              "start": 57.72,
               "end": 57.82
             },
             {
@@ -162285,8 +161768,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 58.34,
-          "end_sec": 58.86,
-          "duration": 0.52,
+          "end_sec": 58.92,
+          "duration": 0.58,
           "words": [
             {
               "word": "the",
@@ -162296,7 +161779,7 @@
             {
               "word": "looze,",
               "start": 58.4,
-              "end": 58.86
+              "end": 58.92
             }
           ]
         },
@@ -162307,13 +161790,13 @@
           "original_asr_text": "honey,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 59.66,
+          "start_sec": 59.74,
           "end_sec": 59.84,
-          "duration": 0.18,
+          "duration": 0.1,
           "words": [
             {
               "word": "honey,",
-              "start": 59.66,
+              "start": 59.74,
               "end": 59.84
             }
           ]
@@ -162326,8 +161809,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 59.84,
-          "end_sec": 59.9,
-          "duration": 0.06,
+          "end_sec": 59.94,
+          "duration": 0.1,
           "words": [
             {
               "word": "I'm",
@@ -162362,7 +161845,7 @@
             {
               "word": "room.",
               "start": 59.9,
-              "end": 59.9
+              "end": 59.94
             }
           ]
         },
@@ -162373,13 +161856,13 @@
           "original_asr_text": "The tears in the pain",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 59.9,
-          "end_sec": 60.78,
-          "duration": 0.88,
+          "start_sec": 59.94,
+          "end_sec": 61.42,
+          "duration": 1.48,
           "words": [
             {
               "word": "The",
-              "start": 59.9,
+              "start": 59.94,
               "end": 60.0
             },
             {
@@ -162400,7 +161883,7 @@
             {
               "word": "pain",
               "start": 60.46,
-              "end": 60.78
+              "end": 61.42
             }
           ]
         },
@@ -162411,13 +161894,13 @@
           "original_asr_text": "You've been there through it all,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 61.42,
-          "end_sec": 62.9,
-          "duration": 1.48,
+          "start_sec": 61.66,
+          "end_sec": 63.0,
+          "duration": 1.34,
           "words": [
             {
               "word": "You've",
-              "start": 61.42,
+              "start": 61.66,
               "end": 61.98
             },
             {
@@ -162443,7 +161926,7 @@
             {
               "word": "all,",
               "start": 62.62,
-              "end": 62.9
+              "end": 63.0
             }
           ]
         },
@@ -162498,8 +161981,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 64.3,
-          "end_sec": 64.86,
-          "duration": 0.56,
+          "end_sec": 65.4,
+          "duration": 1.1,
           "words": [
             {
               "word": "it",
@@ -162509,7 +161992,7 @@
             {
               "word": "again",
               "start": 64.5,
-              "end": 64.86
+              "end": 65.4
             }
           ]
         },
@@ -162520,13 +162003,13 @@
           "original_asr_text": "Now you got to believe I believe",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 65.48,
+          "start_sec": 65.74,
           "end_sec": 67.66,
-          "duration": 2.18,
+          "duration": 1.92,
           "words": [
             {
               "word": "Now",
-              "start": 65.48,
+              "start": 65.74,
               "end": 66.04
             },
             {
@@ -162617,8 +162100,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 70.36,
-          "end_sec": 71.04,
-          "duration": 0.68,
+          "end_sec": 71.52,
+          "duration": 1.16,
           "words": [
             {
               "word": "in",
@@ -162633,7 +162116,7 @@
             {
               "word": "dream",
               "start": 70.82,
-              "end": 71.04
+              "end": 71.52
             }
           ]
         },
@@ -162645,8 +162128,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 71.64,
-          "end_sec": 73.48,
-          "duration": 1.84,
+          "end_sec": 74.18,
+          "duration": 2.54,
           "words": [
             {
               "word": "And",
@@ -162676,20 +162159,9 @@
             {
               "word": "game",
               "start": 72.88,
-              "end": 73.48
+              "end": 74.18
             }
           ]
-        },
-        {
-          "id": "br_007",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 73.48,
-          "end_sec": 74.04,
-          "duration": 0.56
         },
         {
           "id": "ly_039",
@@ -162699,8 +162171,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 74.18,
-          "end_sec": 75.02,
-          "duration": 0.84,
+          "end_sec": 75.06,
+          "duration": 0.88,
           "words": [
             {
               "word": "Feel",
@@ -162710,7 +162182,7 @@
             {
               "word": "it,",
               "start": 74.74,
-              "end": 75.02
+              "end": 75.06
             }
           ]
         },
@@ -162721,13 +162193,13 @@
           "original_asr_text": "got everything you need Now bring",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 75.28,
+          "start_sec": 75.32,
           "end_sec": 77.76,
-          "duration": 2.48,
+          "duration": 2.44,
           "words": [
             {
               "word": "got",
-              "start": 75.28,
+              "start": 75.32,
               "end": 75.5
             },
             {
@@ -162841,13 +162313,13 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 81.8,
-          "end_sec": 82.9,
-          "duration": 1.1,
+          "end_sec": 83.36,
+          "duration": 1.56,
           "words": [
             {
               "word": "I,",
               "start": 81.8,
-              "end": 82.9
+              "end": 83.36
             }
           ]
         },
@@ -162858,13 +162330,13 @@
           "original_asr_text": "only the look of all it",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 83.44,
-          "end_sec": 85.9,
-          "duration": 2.46,
+          "start_sec": 83.58,
+          "end_sec": 90.5,
+          "duration": 6.92,
           "words": [
             {
               "word": "only",
-              "start": 83.44,
+              "start": 83.58,
               "end": 83.72
             },
             {
@@ -162890,7 +162362,7 @@
             {
               "word": "it",
               "start": 85.18,
-              "end": 85.9
+              "end": 90.5
             }
           ]
         },
@@ -162901,13 +162373,13 @@
           "original_asr_text": "We're going to the past no",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 117.64,
+          "start_sec": 117.62,
           "end_sec": 119.44,
-          "duration": 1.8,
+          "duration": 1.82,
           "words": [
             {
               "word": "We're",
-              "start": 117.64,
+              "start": 117.62,
               "end": 118.08
             },
             {
@@ -162945,26 +162417,26 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 119.44,
-          "end_sec": 119.98,
-          "duration": 0.54,
+          "end_sec": 120.48,
+          "duration": 1.04,
           "words": [
             {
               "word": "more.",
               "start": 119.44,
-              "end": 119.98
+              "end": 120.48
             }
           ]
         },
         {
-          "id": "br_008",
+          "id": "br_002",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
           "start_sec": 121.22,
-          "end_sec": 121.78,
-          "duration": 0.56
+          "end_sec": 121.48,
+          "duration": 0.26
         },
         {
           "id": "ly_047",
@@ -162973,13 +162445,13 @@
           "original_asr_text": "From the birds and the dares",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 121.92,
+          "start_sec": 121.62,
           "end_sec": 123.42,
-          "duration": 1.5,
+          "duration": 1.8,
           "words": [
             {
               "word": "From",
-              "start": 121.92,
+              "start": 121.62,
               "end": 121.92
             },
             {
@@ -163017,8 +162489,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 123.42,
-          "end_sec": 124.26,
-          "duration": 0.84,
+          "end_sec": 124.6,
+          "duration": 1.18,
           "words": [
             {
               "word": "we",
@@ -163028,7 +162500,7 @@
             {
               "word": "go.",
               "start": 123.64,
-              "end": 124.26
+              "end": 124.6
             }
           ]
         },
@@ -163039,13 +162511,13 @@
           "original_asr_text": "We are more than flesh and bones.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 125.58,
-          "end_sec": 127.28,
-          "duration": 1.7,
+          "start_sec": 125.74,
+          "end_sec": 127.7,
+          "duration": 1.96,
           "words": [
             {
               "word": "We",
-              "start": 125.58,
+              "start": 125.74,
               "end": 126.02
             },
             {
@@ -163076,20 +162548,9 @@
             {
               "word": "bones.",
               "start": 127.02,
-              "end": 127.28
+              "end": 127.7
             }
           ]
-        },
-        {
-          "id": "br_009",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 127.3,
-          "end_sec": 127.7,
-          "duration": 0.4
         },
         {
           "id": "ly_050",
@@ -163098,13 +162559,13 @@
           "original_asr_text": "From the eyes and lungs.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 128.0,
-          "end_sec": 128.96,
-          "duration": 0.96,
+          "start_sec": 128.02,
+          "end_sec": 130.18,
+          "duration": 2.16,
           "words": [
             {
               "word": "From",
-              "start": 128.0,
+              "start": 128.02,
               "end": 128.1
             },
             {
@@ -163125,20 +162586,9 @@
             {
               "word": "lungs.",
               "start": 128.64,
-              "end": 128.96
+              "end": 130.18
             }
           ]
-        },
-        {
-          "id": "br_010",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 129.48,
-          "end_sec": 130.04,
-          "duration": 0.56
         },
         {
           "id": "ly_051",
@@ -163148,8 +162598,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 130.18,
-          "end_sec": 131.08,
-          "duration": 0.9,
+          "end_sec": 131.74,
+          "duration": 1.56,
           "words": [
             {
               "word": "All",
@@ -163179,20 +162629,9 @@
             {
               "word": "pain.",
               "start": 130.82,
-              "end": 131.08
+              "end": 131.74
             }
           ]
-        },
-        {
-          "id": "br_011",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 131.36,
-          "end_sec": 131.74,
-          "duration": 0.38
         },
         {
           "id": "ly_052",
@@ -163201,13 +162640,13 @@
           "original_asr_text": "You been there for a while.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 132.06,
-          "end_sec": 133.16,
-          "duration": 1.1,
+          "start_sec": 132.18,
+          "end_sec": 133.58,
+          "duration": 1.4,
           "words": [
             {
               "word": "You",
-              "start": 132.06,
+              "start": 132.18,
               "end": 132.26
             },
             {
@@ -163233,7 +162672,7 @@
             {
               "word": "while.",
               "start": 132.92,
-              "end": 133.16
+              "end": 133.58
             }
           ]
         },
@@ -163245,8 +162684,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 133.58,
-          "end_sec": 134.08,
-          "duration": 0.5,
+          "end_sec": 134.5,
+          "duration": 0.92,
           "words": [
             {
               "word": "You",
@@ -163276,7 +162715,7 @@
             {
               "word": "while.",
               "start": 134.0,
-              "end": 134.08
+              "end": 134.5
             }
           ]
         },
@@ -163288,8 +162727,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 134.5,
-          "end_sec": 135.08,
-          "duration": 0.58,
+          "end_sec": 135.64,
+          "duration": 1.14,
           "words": [
             {
               "word": "Just",
@@ -163309,20 +162748,9 @@
             {
               "word": "again.",
               "start": 134.86,
-              "end": 135.08
+              "end": 135.64
             }
           ]
-        },
-        {
-          "id": "br_012",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 135.4,
-          "end_sec": 135.64,
-          "duration": 0.24
         },
         {
           "id": "ly_055",
@@ -163332,8 +162760,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 136.1,
-          "end_sec": 137.26,
-          "duration": 1.16,
+          "end_sec": 137.74,
+          "duration": 1.64,
           "words": [
             {
               "word": "You",
@@ -163353,7 +162781,7 @@
             {
               "word": "believe.",
               "start": 136.88,
-              "end": 137.26
+              "end": 137.74
             }
           ]
         },
@@ -163408,8 +162836,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 139.08,
-          "end_sec": 141.4,
-          "duration": 2.32,
+          "end_sec": 142.0,
+          "duration": 2.92,
           "words": [
             {
               "word": "takes",
@@ -163439,7 +162867,7 @@
             {
               "word": "dream.",
               "start": 141.16,
-              "end": 141.4
+              "end": 142.0
             }
           ]
         },
@@ -163450,13 +162878,13 @@
           "original_asr_text": "And the top of your game.",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 142.52,
-          "end_sec": 143.62,
-          "duration": 1.1,
+          "start_sec": 142.48,
+          "end_sec": 150.02,
+          "duration": 7.54,
           "words": [
             {
               "word": "And",
-              "start": 142.52,
+              "start": 142.48,
               "end": 142.56
             },
             {
@@ -163482,19 +162910,19 @@
             {
               "word": "game.",
               "start": 143.24,
-              "end": 143.62
+              "end": 150.02
             }
           ]
         },
         {
-          "id": "br_013",
+          "id": "br_003",
           "name": "Breath Inhale",
           "text": "[breath]",
           "original_asr_text": "[breath]",
           "type": "breath",
           "is_user_edited": false,
-          "start_sec": 172.92,
-          "end_sec": 173.48,
+          "start_sec": 172.62,
+          "end_sec": 173.18,
           "duration": 0.56
         },
         {
@@ -163504,13 +162932,13 @@
           "original_asr_text": "I'm so happy because I'm a hickoo",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 173.62,
+          "start_sec": 173.32,
           "end_sec": 175.24,
-          "duration": 1.62,
+          "duration": 1.92,
           "words": [
             {
               "word": "I'm",
-              "start": 173.62,
+              "start": 173.32,
               "end": 173.78
             },
             {
@@ -163553,8 +162981,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 175.24,
-          "end_sec": 175.62,
-          "duration": 0.38,
+          "end_sec": 175.72,
+          "duration": 0.48,
           "words": [
             {
               "word": "-jock",
@@ -163564,7 +162992,7 @@
             {
               "word": "-rock",
               "start": 175.4,
-              "end": 175.62
+              "end": 175.72
             }
           ]
         },
@@ -163575,13 +163003,13 @@
           "original_asr_text": "Korea In a lap Ooh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 176.22,
-          "end_sec": 178.36,
-          "duration": 2.14,
+          "start_sec": 176.32,
+          "end_sec": 178.62,
+          "duration": 2.3,
           "words": [
             {
               "word": "Korea",
-              "start": 176.22,
+              "start": 176.32,
               "end": 176.6
             },
             {
@@ -163602,7 +163030,7 @@
             {
               "word": "Ooh,",
               "start": 177.7,
-              "end": 178.36
+              "end": 178.62
             }
           ]
         },
@@ -163632,8 +163060,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 178.88,
-          "end_sec": 181.28,
-          "duration": 2.4,
+          "end_sec": 181.42,
+          "duration": 2.54,
           "words": [
             {
               "word": "a",
@@ -163658,7 +163086,7 @@
             {
               "word": "went",
               "start": 180.96,
-              "end": 181.28
+              "end": 181.42
             }
           ]
         },
@@ -163669,14 +163097,14 @@
           "original_asr_text": "Ooh,",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 182.0,
-          "end_sec": 182.48,
-          "duration": 0.48,
+          "start_sec": 182.14,
+          "end_sec": 182.64,
+          "duration": 0.5,
           "words": [
             {
               "word": "Ooh,",
-              "start": 182.0,
-              "end": 182.48
+              "start": 182.14,
+              "end": 182.64
             }
           ]
         },
@@ -163688,8 +163116,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 182.64,
-          "end_sec": 185.44,
-          "duration": 2.8,
+          "end_sec": 185.56,
+          "duration": 2.92,
           "words": [
             {
               "word": "I'm",
@@ -163719,7 +163147,7 @@
             {
               "word": "went",
               "start": 185.16,
-              "end": 185.44
+              "end": 185.56
             }
           ]
         },
@@ -163730,13 +163158,13 @@
           "original_asr_text": "You found a date",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 186.02,
-          "end_sec": 187.56,
-          "duration": 1.54,
+          "start_sec": 186.22,
+          "end_sec": 187.74,
+          "duration": 1.52,
           "words": [
             {
               "word": "You",
-              "start": 186.02,
+              "start": 186.22,
               "end": 186.4
             },
             {
@@ -163752,7 +163180,7 @@
             {
               "word": "date",
               "start": 187.16,
-              "end": 187.56
+              "end": 187.74
             }
           ]
         },
@@ -163763,13 +163191,13 @@
           "original_asr_text": "You were born",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 188.48,
-          "end_sec": 189.68,
-          "duration": 1.2,
+          "start_sec": 188.72,
+          "end_sec": 189.82,
+          "duration": 1.1,
           "words": [
             {
               "word": "You",
-              "start": 188.48,
+              "start": 188.72,
               "end": 188.86
             },
             {
@@ -163780,7 +163208,7 @@
             {
               "word": "born",
               "start": 189.22,
-              "end": 189.68
+              "end": 189.82
             }
           ]
         },
@@ -163791,13 +163219,13 @@
           "original_asr_text": "Here in this place",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 190.16,
-          "end_sec": 191.64,
-          "duration": 1.48,
+          "start_sec": 190.4,
+          "end_sec": 192.04,
+          "duration": 1.64,
           "words": [
             {
               "word": "Here",
-              "start": 190.16,
+              "start": 190.4,
               "end": 190.54
             },
             {
@@ -163813,20 +163241,9 @@
             {
               "word": "place",
               "start": 191.3,
-              "end": 191.64
+              "end": 192.04
             }
           ]
-        },
-        {
-          "id": "br_014",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 191.86,
-          "end_sec": 192.04,
-          "duration": 0.18
         },
         {
           "id": "ly_069",
@@ -163836,8 +163253,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 192.56,
-          "end_sec": 193.42,
-          "duration": 0.86,
+          "end_sec": 193.96,
+          "duration": 1.4,
           "words": [
             {
               "word": "You",
@@ -163847,20 +163264,9 @@
             {
               "word": "belong",
               "start": 192.94,
-              "end": 193.42
+              "end": 193.96
             }
           ]
-        },
-        {
-          "id": "br_015",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 193.8,
-          "end_sec": 193.96,
-          "duration": 0.16
         },
         {
           "id": "ly_070",
@@ -163870,8 +163276,8 @@
           "type": "lyric",
           "is_user_edited": false,
           "start_sec": 194.5,
-          "end_sec": 195.82,
-          "duration": 1.32,
+          "end_sec": 196.14,
+          "duration": 1.64,
           "words": [
             {
               "word": "You've",
@@ -163891,7 +163297,7 @@
             {
               "word": "place",
               "start": 195.46,
-              "end": 195.82
+              "end": 196.14
             }
           ]
         },
@@ -163902,32 +163308,21 @@
           "original_asr_text": "All along",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 196.68,
-          "end_sec": 197.6,
-          "duration": 0.92,
+          "start_sec": 196.6,
+          "end_sec": 198.2,
+          "duration": 1.6,
           "words": [
             {
               "word": "All",
-              "start": 196.68,
+              "start": 196.6,
               "end": 197.06
             },
             {
               "word": "along",
               "start": 197.06,
-              "end": 197.6
+              "end": 198.2
             }
           ]
-        },
-        {
-          "id": "br_016",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 197.76,
-          "end_sec": 198.2,
-          "duration": 0.44
         },
         {
           "id": "ly_072",
@@ -163936,13 +163331,13 @@
           "original_asr_text": "What broke you once",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 198.46,
-          "end_sec": 199.98,
-          "duration": 1.52,
+          "start_sec": 198.66,
+          "end_sec": 200.32,
+          "duration": 1.66,
           "words": [
             {
               "word": "What",
-              "start": 198.46,
+              "start": 198.66,
               "end": 198.84
             },
             {
@@ -163958,20 +163353,9 @@
             {
               "word": "once",
               "start": 199.58,
-              "end": 199.98
+              "end": 200.32
             }
           ]
-        },
-        {
-          "id": "br_017",
-          "name": "Breath Inhale",
-          "text": "[breath]",
-          "original_asr_text": "[breath]",
-          "type": "breath",
-          "is_user_edited": false,
-          "start_sec": 200.1,
-          "end_sec": 200.32,
-          "duration": 0.22
         },
         {
           "id": "ly_073",
@@ -163980,13 +163364,13 @@
           "original_asr_text": "Need you strong",
           "type": "lyric",
           "is_user_edited": false,
-          "start_sec": 200.8,
-          "end_sec": 201.94,
-          "duration": 1.14,
+          "start_sec": 200.76,
+          "end_sec": 203.28,
+          "duration": 2.52,
           "words": [
             {
               "word": "Need",
-              "start": 200.8,
+              "start": 200.76,
               "end": 201.18
             },
             {
@@ -163997,7 +163381,7 @@
             {
               "word": "strong",
               "start": 201.56,
-              "end": 201.94
+              "end": 203.28
             }
           ]
         }
