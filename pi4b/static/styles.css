@@ -292,6 +292,18 @@ body {
     border-bottom: 1.5px solid #1e293b;
 }
 
+.bb-vocal-row {
+    height: 40px;
+    background: #0c020d;
+    border-bottom: 1.5px solid #330727;
+}
+
+.bb-lyrics-row {
+    height: 52px;
+    background: #0d0a18;
+    border-bottom: 1.5px solid #2e1065;
+}
+
 .bb-waveform-lane {
     background: #050b18;
     position: relative;
@@ -361,6 +373,29 @@ body {
     border-color: #f472b6;
 }
 
+/* Lyrics & Phrasing Blocks */
+.block-lyric-female {
+    background: linear-gradient(135deg, #ec4899, #be185d);
+    border-color: #f472b6;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+}
+
+.block-lyric-male {
+    background: linear-gradient(135deg, #0284c7, #1d4ed8);
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+}
+
+.block-lyric-breath {
+    background: linear-gradient(135deg, #475569, #334155);
+    border: 1.5px dashed #94a3b8 !important;
+    color: #cbd5e1;
+    font-style: italic;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
 /* 5th Track: Vocal Style / Lyrics Blocks */
 .block-vocal-conversational {
     background: linear-gradient(135deg, #0284c7, #0369a1);
@@ -374,28 +409,6 @@ body {
     border-color: #fb923c;
     color: #ffffff;
     box-shadow: 0 2px 8px rgba(234, 88, 12, 0.5);
-}
-
-.block-gap-slot {
-    position: absolute;
-    top: 6px;
-    bottom: 6px;
-    border-radius: 5px;
-    border: 1px dashed #374151;
-    background: rgba(31, 41, 55, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 700;
-    color: #6b7280;
-    cursor: pointer;
-}
-
-.block-gap-slot:hover {
-    border-color: #60a5fa;
-    color: #93c5fd;
-    background: rgba(37, 99, 235, 0.15);
 }
 
 /* Separated 2-Level Ruler: Top level for time ticks, Bottom level for section pills */

@@ -1108,42 +1108,21 @@ export function renderTimeline() {
         rulerSections.innerHTML = sectionsHtml;
     }
 
-    // 3. Helper to render blocks & detect gap slots
+    // 3. Helper to render blocks
     function renderLaneBlocks(laneEl, blockList, channelKey, blockClass) {
         if (!laneEl) return;
         let html = '';
-        let lastEnd = 0.0;
 
-        (blockList || []).forEach((blk, idx) => {
+        (blockList || []).forEach((blk) => {
             const st = Number(blk.start_sec !== undefined ? blk.start_sec : (blk.time_sec !== undefined ? blk.time_sec : 0));
-            let et = Number(blk.end_sec !== undefined ? blk.end_sec : 0);
-            if (et <= st) {
-                const nextBlk = blockList[idx + 1];
-                if (nextBlk) {
-                    et = Number(nextBlk.start_sec !== undefined ? nextBlk.start_sec : (nextBlk.time_sec !== undefined ? nextBlk.time_sec : st + 4.0));
-                } else {
-                    et = duration || (st + 4.0);
-                }
-            }
-            const dur = Math.max(0.1, et - st);
-            
-            // Check for gap before this block
-            if (st > lastEnd + 1.5) {
-                const gapLeft = labelOffset + (lastEnd * pps);
-                const gapWidth = (st - lastEnd) * pps;
-                html += `
-                    <div class="block-gap-slot" data-channel="${channelKey}" data-start="${lastEnd.toFixed(1)}" data-end="${st.toFixed(1)}"
-                         style="left: ${gapLeft}px; width: ${gapWidth}px;">
-                        + ADD
-                    </div>
-                `;
-            }
+            const et = Number(blk.end_sec !== undefined ? blk.end_sec : st);
+            const dur = Math.max(0.05, et - st);
 
-            const leftPx = labelOffset + (st * pps);
-            const widthPx = Math.max(24, dur * pps);
+            const leftPx = st * pps;
+            const widthPx = Math.max(4, dur * pps);
             const isSel = selectedMoveBlock && selectedMoveBlock.id === blk.id;
 
-            let label = blk.name || blk.pose_name || `${st.toFixed(0)}s-${et.toFixed(0)}s`;
+            let label = blk.text || blk.name || blk.pose_name || `${st.toFixed(0)}s-${et.toFixed(0)}s`;
             let effectiveClass = blockClass;
 
             if (channelKey === 's7_pedestal') {
@@ -1152,11 +1131,19 @@ export function renderTimeline() {
             } else if (channelKey === 's8_gantry') {
                 const tpos = blk.target_pos !== undefined ? blk.target_pos : (blk.position_norm !== undefined ? Math.round(blk.position_norm * 4800) : 2400);
                 label = `${blk.name || 'Gantry'} (${tpos})`;
-            } else if (channelKey === 'vocal_style') {
-                const vStyle = (blk.style && (blk.style.includes('belt') || blk.style.includes('power') || blk.style.includes('shout') || blk.style.includes('soar') || blk.style.includes('climax'))) ? 'belting' : 'conversational';
-                effectiveClass = (vStyle === 'belting') ? 'block-vocal-belting' : 'block-vocal-conversational';
-                const snippet = blk.lyrics ? blk.lyrics.substring(0, 32) + (blk.lyrics.length > 32 ? '...' : '') : (blk.name || (vStyle === 'belting' ? 'Belting Section' : 'Singing Section'));
-                label = `${vStyle === 'belting' ? '🔥 BELT' : '🗣️ SING'}: ${snippet}`;
+            } else if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
+                const sType = blk.singer_type;
+                const isBreath = (blk.type === 'breath' || sType === 'breath');
+                if (isBreath) {
+                    effectiveClass = 'block-lyric-breath';
+                    label = `💨 [breath]`;
+                } else if (sType === 'male') {
+                    effectiveClass = 'block-lyric-male';
+                    label = `🌊 ${blk.text || blk.lyrics || blk.name}`;
+                } else {
+                    effectiveClass = 'block-lyric-female';
+                    label = `🌸 ${blk.text || blk.lyrics || blk.name}`;
+                }
             }
 
             html += `
@@ -1167,25 +1154,13 @@ export function renderTimeline() {
                     ${label}
                 </div>
             `;
-            lastEnd = et;
         });
-
-        // Tail gap
-        if (duration > lastEnd + 1.5) {
-            const gapLeft = labelOffset + (lastEnd * pps);
-            const gapWidth = (duration - lastEnd) * pps;
-            html += `
-                <div class="block-gap-slot" data-channel="${channelKey}" data-start="${lastEnd.toFixed(1)}" data-end="${duration.toFixed(1)}"
-                     style="left: ${gapLeft}px; width: ${gapWidth}px;">
-                    + ADD
-                </div>
-            `;
-        }
 
         laneEl.innerHTML = html;
     }
 
     const tracks = activeChoreoData.tracks || {};
+    renderLaneBlocks(document.getElementById('bbLaneLyrics'), tracks.lyrics || tracks.lyrics_phrasing, 'lyrics', 'block-lyric-female');
     renderLaneBlocks(document.getElementById('bbLaneBody'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-body');
     renderLaneBlocks(document.getElementById('bbLaneS8'), tracks.s8_gantry, 's8_gantry', 'block-s8');
     renderLaneBlocks(document.getElementById('bbLaneS7'), tracks.s7_pedestal, 's7_pedestal', 'block-s7');
@@ -1200,7 +1175,7 @@ export function renderTimeline() {
         const laneH = 46;
         waveCanvas.width = laneW;
         waveCanvas.height = laneH;
-        waveCanvas.style.left = `${labelOffset}px`;
+        waveCanvas.style.left = '0px';
         waveCanvas.style.width = `${laneW}px`;
         waveCanvas.style.height = `${laneH}px`;
 
@@ -1218,7 +1193,7 @@ export function renderTimeline() {
             ctx.lineTo(laneW, laneH / 2);
             ctx.stroke();
 
-            const ampEnv = activeChoreoData.amplitude_envelope || activeChoreoData.mouth_envelope_50hz || [];
+            const ampEnv = activeChoreoData.amplitude_envelope || [];
             const drops = activeChoreoData.drops || [];
             const midY = laneH / 2;
             const maxH = (laneH / 2) - 4;
@@ -1281,6 +1256,65 @@ export function renderTimeline() {
                 ctx.fillStyle = '#ff6b6b';
                 ctx.fillText('⚡DROP', dropX + 4, 9);
             });
+        }
+    }
+
+    // 3.6 Render Vocal Energy Visualizer Lane (Dark Magenta Background, Pink/Rose Ticks)
+    const vocalCanvas = document.getElementById('bbVocalWaveformCanvas');
+    if (vocalCanvas) {
+        const laneW = Math.max(1000, duration * pps);
+        const laneH = 40;
+        vocalCanvas.width = laneW;
+        vocalCanvas.height = laneH;
+        vocalCanvas.style.left = '0px';
+        vocalCanvas.style.width = `${laneW}px`;
+        vocalCanvas.style.height = `${laneH}px`;
+
+        const ctx = vocalCanvas.getContext('2d');
+        if (ctx) {
+            // Dark plum / magenta background
+            ctx.fillStyle = '#0c020d';
+            ctx.fillRect(0, 0, laneW, laneH);
+
+            // Subtle horizontal center baseline
+            ctx.strokeStyle = '#330727';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, laneH / 2);
+            ctx.lineTo(laneW, laneH / 2);
+            ctx.stroke();
+
+            const vocalEnv = activeChoreoData.mouth_envelope_50hz || [];
+            const midY = laneH / 2;
+            const maxH = (laneH / 2) - 3;
+
+            if (vocalEnv && vocalEnv.length > 0) {
+                const fps = 50.0;
+                const totalSamples = vocalEnv.length;
+                const barSpacing = 2.5;
+                const totalBars = Math.floor(laneW / barSpacing);
+
+                for (let b = 0; b < totalBars; b++) {
+                    const x = b * barSpacing;
+                    const timeAtX = x / pps;
+                    const sampleIdx = Math.floor(timeAtX * fps);
+                    if (sampleIdx < totalSamples) {
+                        let rawVal = vocalEnv[sampleIdx];
+                        if (rawVal > 1.0) rawVal = rawVal / 45.0;
+                        const amp = Math.max(0.03, Math.min(1.0, rawVal));
+                        const barHeight = amp * maxH;
+
+                        // Vibrant pink / magenta vertical tick gradient
+                        const grad = ctx.createLinearGradient(0, midY - barHeight, 0, midY + barHeight);
+                        grad.addColorStop(0, '#f472b6');   // Light pink
+                        grad.addColorStop(0.5, '#ec4899'); // Vibrant hot pink
+                        grad.addColorStop(1, '#db2777');   // Deep rose
+
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(x, midY - barHeight, 1.6, barHeight * 2);
+                    }
+                }
+            }
         }
     }
 
@@ -1382,6 +1416,8 @@ export function openMoveInspector(channel, block) {
     const dynamicCtrls = document.getElementById('bbInspectorDynamicControls');
 
     const channelNames = {
+        'lyrics': 'LYRICS',
+        'lyrics_phrasing': 'LYRICS',
         'spine_gaze': 'SPINE (S2-4)',
         'body_pose': 'SPINE (S2-4)',
         's8_gantry': 'GANTRY (S8)',
@@ -1389,8 +1425,7 @@ export function openMoveInspector(channel, block) {
         's1_torso': 'GROOVE (S1)',
         's5_head_tilt': 'HEAD TILT (S5)',
         's6_jaw': 'LIP-SYNC JAW (S6)',
-        'head_jaw': 'LIP-SYNC JAW (S6)',
-        'vocal_style': 'VOCALS / LYRICS'
+        'head_jaw': 'LIP-SYNC JAW (S6)'
     };
 
     if (typeBadge) typeBadge.innerText = channelNames[channel] || channel.toUpperCase();
@@ -1542,6 +1577,25 @@ export function openMoveInspector(channel, block) {
             <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
                 <span style="font-size: 11px; color: #f472b6; font-weight: 700;">50 Hz MMDenseLSTM Neural Lip-Sync Active</span>
                 <span style="font-size: 10px; color: #aaa;">(Automatically opens jaw 0-45% matching vocal power)</span>
+            </div>
+        `;
+    } else if (channel === 'lyrics' || channel === 'lyrics_phrasing') {
+        const lyricText = block.text || block.lyrics || block.name || '';
+        const singerType = block.singer_type || (block.type === 'breath' ? 'breath' : 'female');
+        controlsHtml += `
+            <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">TYPE:</span>
+                    <select id="inspSingerType" style="background: #1a1a26; border: 1px solid #ec4899; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+                        <option value="female" ${singerType === 'female' ? 'selected' : ''}>🌸 Female (Pink)</option>
+                        <option value="male" ${singerType === 'male' ? 'selected' : ''}>🌊 Male (Blue)</option>
+                        <option value="breath" ${singerType === 'breath' || block.type === 'breath' ? 'selected' : ''}>💨 Breath (Grey)</option>
+                    </select>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+                    <span style="font-size: 9px; color: #aaa; font-weight: 700;">LYRIC TEXT:</span>
+                    <input type="text" id="inspLyricTextInput" value="${lyricText.replace(/"/g, '&quot;')}" placeholder="Enter lyric text..." style="background: #1a1a26; border: 1px solid #60a5fa; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; width: 100%; box-sizing: border-box;">
+                </div>
             </div>
         `;
     }

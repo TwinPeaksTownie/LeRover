@@ -411,6 +411,22 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
         }
     ]
 
+    raw_lyrics = analysis.get("lyrics", [])
+    lyrics_moves = [
+        {
+            "id": seg.get("id", f"ly_{l_idx + 1:03d}"),
+            "name": seg.get("text", seg.get("name", "")),
+            "text": seg.get("text", seg.get("name", "")),
+            "type": seg.get("type", "lyric"),
+            "singer_type": seg.get("singer_type", "female" if seg.get("type") != "breath" else "breath"),
+            "start_sec": round(float(seg["start_sec"]), 2),
+            "end_sec": round(float(seg["end_sec"]), 2),
+            "duration": round(float(seg["end_sec"]) - float(seg["start_sec"]), 2),
+            "words": seg.get("words", [])
+        }
+        for l_idx, seg in enumerate(raw_lyrics)
+    ]
+
     return {
         "version": "3.0.0",
         "duration": round(duration, 2),
@@ -419,6 +435,7 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float) -> D
         "poses": choreo_poses,
         "sections": sec_blocks,
         "tracks": {
+            "lyrics": lyrics_moves,
             "spine_gaze": spine_moves,
             "s8_gantry": s8_moves,
             "s7_pedestal": s7_moves,
@@ -503,6 +520,7 @@ class BeatStudioManager:
             "poses": poses,
             "sections": choreo_data.get("sections", []),
             "tracks": choreo_data.get("tracks", {
+                "lyrics": [],
                 "spine_gaze": [],
                 "s8_gantry": [],
                 "s7_pedestal": [],

@@ -209,7 +209,120 @@ def infer_section_labels(segments: list[dict], total_duration: float) -> list[di
         seg["type"] = label
         seg["energy_score"] = round(float(z), 3)
 
-    return segments
+def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: int = 50) -> list:
+    """Extracts word-timestamped ASR lyrics, groups into 2-8 word phrases on >0.65s pauses,
+    and extracts preceding acoustic breath intake blocks from the 50Hz vocal envelope.
+    """
+    logger.info(f"Extracting lyrics and breath landmarks from {vocals_wav_path}...")
+    try:
+        import whisper
+        model = whisper.load_model("base.en")
+        result = model.transcribe(
+            str(vocals_wav_path),
+            word_timestamps=True,
+            condition_on_previous_text=False,
+            verbose=False
+        )
+    except Exception as e:
+        logger.error(f"Whisper transcription failed on {vocals_wav_path}: {e}")
+        return []
+
+    all_words = []
+    for segment in result.get("segments", []):
+        for w in segment.get("words", []):
+            word_str = w.get("word", "").strip()
+            if word_str:
+                all_words.append({
+                    "word": word_str,
+                    "start": round(float(w["start"]), 2),
+                    "end": round(float(w["end"]), 2)
+                })
+
+    if not all_words:
+        logger.warning(f"No spoken words transcribed in {vocals_wav_path}")
+        return []
+
+    lines = []
+    current_words = []
+
+    for w in all_words:
+        if not current_words:
+            current_words.append(w)
+            continue
+
+        prev_w = current_words[-1]
+        gap = w["start"] - prev_w["end"]
+
+        # Split conditions:
+        # 1. Gap > 0.65s (acoustic silence)
+        # 2. Already reached 8 words (hard limit)
+        if gap > 0.65 or len(current_words) >= 8:
+            lines.append(current_words)
+            current_words = [w]
+        else:
+            current_words.append(w)
+
+    if current_words:
+        lines.append(current_words)
+
+    blocks = []
+    lyric_idx = 1
+    breath_idx = 1
+
+    for line_words in lines:
+        line_text = " ".join(w["word"] for w in line_words)
+        st_sec = line_words[0]["start"]
+        en_sec = line_words[-1]["end"]
+        dur = round(en_sec - st_sec, 2)
+
+        phrase_start_frame = int(st_sec * fps)
+        breath_lookback_frames = int(0.7 * fps)
+        breath_end_offset_frames = int(0.15 * fps)
+
+        b_start_frame = max(0, phrase_start_frame - breath_lookback_frames)
+        b_end_frame = max(0, phrase_start_frame - breath_end_offset_frames)
+
+        has_breath = False
+        b_actual_start = None
+        b_actual_end = None
+
+        if b_end_frame > b_start_frame and b_end_frame <= len(mouth_envelope):
+            pre_env = mouth_envelope[b_start_frame:b_end_frame]
+            active_frames = [idx for idx, val in enumerate(pre_env) if val >= 5.0]
+            if len(active_frames) >= int(0.15 * fps):
+                has_breath = True
+                b_actual_start = round((b_start_frame + active_frames[0]) / fps, 2)
+                b_actual_end = round((b_start_frame + active_frames[-1] + 1) / fps, 2)
+
+        if has_breath and b_actual_start is not None and b_actual_end is not None:
+            prev_block_end = blocks[-1]["end_sec"] if blocks else 0.0
+            if b_actual_start >= prev_block_end and b_actual_end <= st_sec:
+                blocks.append({
+                    "id": f"br_{breath_idx:03d}",
+                    "name": "Breath Inhale",
+                    "text": "[breath]",
+                    "type": "breath",
+                    "singer_type": "breath",
+                    "start_sec": b_actual_start,
+                    "end_sec": b_actual_end,
+                    "duration": round(b_actual_end - b_actual_start, 2)
+                })
+                breath_idx += 1
+
+        blocks.append({
+            "id": f"ly_{lyric_idx:03d}",
+            "name": f"Line {lyric_idx}",
+            "text": line_text,
+            "type": "lyric",
+            "singer_type": "female",
+            "start_sec": st_sec,
+            "end_sec": en_sec,
+            "duration": dur,
+            "words": line_words
+        })
+        lyric_idx += 1
+
+    return blocks
 
 def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") -> dict:
     logger.info(f"Starting Essentia dual-engine analysis for {track_id}...")
@@ -443,6 +556,9 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
                     "vacuum_start_sec": max(0.0, round(drop_sec - 1.0, 2))
                 })
 
+    # Extract ASR lyrics and acoustic breath landmarks
+    lyrics_blocks = extract_lyrics_and_breath(vocals_wav_path, mouth_envelope, fps=fps)
+
     manifest = {
         "track_id": track_id,
         "title": title or track_id,
@@ -457,7 +573,8 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         "sections": sections,
         "held_notes": held_notes,
         "mouth_envelope_50hz": mouth_envelope,
-        "amplitude_envelope": amplitude_envelope
+        "amplitude_envelope": amplitude_envelope,
+        "lyrics": lyrics_blocks
     }
 
     manifest_path = CACHE_DIR / f"{track_id}_manifest.json"

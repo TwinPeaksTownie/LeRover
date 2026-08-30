@@ -469,6 +469,20 @@
                                 </div>
                             </div>
 
+                            <!-- Vocal Energy Lane (50 Hz Neural MMDenseLSTM Envelope) -->
+                            <div class="bb-track-row bb-waveform-row bb-vocal-row" id="bbTrackRowVocalWaveform">
+                                <div class="bb-track-label" style="color: #f472b6; font-size: 9.5px; line-height: 1.1;">VOCAL<br>ENERGY</div>
+                                <div class="bb-track-lane bb-waveform-lane" id="bbLaneVocalWaveform">
+                                    <canvas id="bbVocalWaveformCanvas" style="position: absolute; top: 0; left: 0; height: 100%;"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Lyrics Lane (Pink Female / Blue Male / Grey Breath Blocks) -->
+                            <div class="bb-track-row bb-lyrics-row" id="bbTrackRowLyrics">
+                                <div class="bb-track-label" style="color: #f43f5e; font-size: 10px; line-height: 1.1; font-weight: 800;">LYRICS</div>
+                                <div class="bb-track-lane" id="bbLaneLyrics"></div>
+                            </div>
+
                             <!-- Lane 1: Spine & Elevation (Servos 2-4) -->
                             <div class="bb-track-row" id="bbTrackRowBody">
                                 <div class="bb-track-label">SPINE (S2-4)</div>

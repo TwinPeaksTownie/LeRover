@@ -1030,33 +1030,6 @@ function bindEventListeners() {
                 return;
             }
 
-            const gapSlot = e.target.closest('.block-gap-slot');
-            if (gapSlot) {
-                const channel = gapSlot.getAttribute('data-channel');
-                const gapStart = parseFloat(gapSlot.getAttribute('data-start') || '0');
-                const gapEnd = parseFloat(gapSlot.getAttribute('data-end') || '0');
-                if (activeChoreoData && activeChoreoData.tracks) {
-                    const tracks = activeChoreoData.tracks[channel] || [];
-                    const newId = 'fill_' + Date.now();
-                    let newBlock = { id: newId, name: 'Fill Move', start_sec: gapStart, end_sec: gapEnd };
-                    if (channel === 's8_gantry') {
-                        newBlock.target_pos = 3700;
-                        newBlock.speed = 800;
-                        newBlock.name = 'Gantry Glide';
-                    } else if (channel === 's7_pedestal') {
-                        newBlock.target_deg = 25.0;
-                        newBlock.name = 'Sweep Left';
-                    } else {
-                        newBlock.pose_name = 'stand';
-                        newBlock.transition_sec = 0.5;
-                    }
-                    tracks.push(newBlock);
-                    tracks.sort((a, b) => (a.start_sec || 0) - (b.start_sec || 0));
-                    ui.openMoveInspector(channel, newBlock);
-                }
-                return;
-            }
-
             // Clicked empty canvas or ruler: move playhead (offset 100px for label width)
             const rect = timelineContainer.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
@@ -1166,8 +1139,39 @@ function bindEventListeners() {
                 const v = document.getElementById('inspTiltVal');
                 if (v) v.innerText = `${val > 0 ? '+' : ''}${val}°`;
                 ui.renderTimeline();
-            } else if (id === 'inspVocalLyrics') {
+            } else if (id === 'inspLyricTextInput') {
+                selectedMoveBlock.text = val;
+                selectedMoveBlock.name = val;
                 selectedMoveBlock.lyrics = val;
+                ui.renderTimeline();
+            } else if (id === 'inspSingerType') {
+                selectedMoveBlock.singer_type = val;
+                if (val === 'breath') {
+                    selectedMoveBlock.type = 'breath';
+                    selectedMoveBlock.text = '[breath]';
+                    selectedMoveBlock.name = 'Breath Inhale';
+                } else {
+                    selectedMoveBlock.type = 'lyric';
+                }
+                ui.renderTimeline();
+            }
+        });
+
+        inspDynamicCtrls.addEventListener('change', (e) => {
+            if (!selectedMoveBlock) return;
+            const id = e.target.id;
+            const val = e.target.value;
+            if (id === 'inspSingerType') {
+                selectedMoveBlock.singer_type = val;
+                if (val === 'breath') {
+                    selectedMoveBlock.type = 'breath';
+                    selectedMoveBlock.text = '[breath]';
+                    selectedMoveBlock.name = 'Breath Inhale';
+                } else {
+                    selectedMoveBlock.type = 'lyric';
+                }
+                ui.renderTimeline();
+            } else if (id === 'inspBasePose' || id === 'inspHeadPitch' || id === 'inspGantryMode') {
                 ui.renderTimeline();
             }
         });
