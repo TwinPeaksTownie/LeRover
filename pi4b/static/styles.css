@@ -54,8 +54,8 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    font-weight: 800;
+    font-size: 13px;
+    font-weight: 900;
     gap: 2px;
     transition: all 0.1s ease;
 }
@@ -107,8 +107,8 @@ body {
 
 .header-readout {
     font-family: monospace;
-    font-size: 16px;
-    font-weight: bold;
+    font-size: 17px;
+    font-weight: 900;
     letter-spacing: 0.5px;
 }
 
@@ -126,14 +126,15 @@ body {
     border: 2.5px solid #333333;
     color: #ffffff;
     border-radius: 10px;
-    font-size: 17px;
+    font-size: 21px;
     font-weight: 900;
+    line-height: 1.25;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 4px;
+    padding: 6px 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
     user-select: none;
     -webkit-user-select: none;

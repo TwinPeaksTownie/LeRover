@@ -14,22 +14,22 @@
     <!-- Left Navigation Rail -->
     <div class="left-rail">
         <button id="railBtnGantry" class="rail-btn">
-            <span style="font-size: 22px;">⚙️</span>
+            <span style="font-size: 26px;">⚙️</span>
             <span>GANTRY</span>
         </button>
 
         <button id="railBtnControls" class="rail-btn">
-            <span style="font-size: 22px;">🦾</span>
+            <span style="font-size: 26px;">🦾</span>
             <span>CONTROLS</span>
         </button>
 
         <button id="railBtnApps" class="rail-btn active">
-            <span style="font-size: 22px;">📱</span>
+            <span style="font-size: 26px;">📱</span>
             <span>APPS</span>
         </button>
 
         <button id="railBtnPower" class="rail-btn">
-            <span style="font-size: 22px;">⚡</span>
+            <span style="font-size: 26px;">⚡</span>
             <span>BACKEND</span>
         </button>
     </div>
@@ -40,23 +40,37 @@
         <!-- TAB 1: ⚙️ GANTRY & PEDESTAL -->
         <div id="panelGantry" class="tab-panel">
             <div class="telemetry-bar">
-                <div id="sliderValDisplay" class="header-readout"><span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span></div>
+                <div id="sliderValDisplay" class="header-readout" style="font-size: 18px;"><span style="color:#ff9900;">Pedestal: --°</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: --</span></div>
             </div>
 
             <div class="giant-grid" style="grid-template-rows: repeat(3, 1fr);">
                 <!-- Top Row: Orange Buttons for Pedestal Motor 7 (+/- 45 Deg Rotation) -->
-                <button id="pedestalLeftBtn" class="btn-action btn-orange">↺ ROTATE PEDESTAL<br>LEFT (-45°)</button>
-                <button id="pedestalRightBtn" class="btn-action btn-orange">ROTATE PEDESTAL ↻<br>(+45°)</button>
+                <button id="pedestalLeftBtn" class="btn-action btn-orange" style="font-size: 22px; font-weight: 900; line-height: 1.25;">
+                    ↺ ROTATE PEDESTAL<br><span style="font-size: 15px; font-weight: 700;">LEFT (-45°)</span>
+                </button>
+                <button id="pedestalRightBtn" class="btn-action btn-orange" style="font-size: 22px; font-weight: 900; line-height: 1.25;">
+                    ROTATE PEDESTAL ↻<br><span style="font-size: 15px; font-weight: 700;">(+45°)</span>
+                </button>
 
                 <!-- Middle Row: Step Moves for LeSlide Gantry Motor 8 (500 Ticks) -->
-                <button id="gantryStepLeftBtn" class="btn-action btn-cyan">◀ STEP LEFT<br>(-500 TICKS)</button>
-                <button id="gantryStepRightBtn" class="btn-action btn-cyan">STEP RIGHT ▶<br>(+500 TICKS)</button>
+                <button id="gantryStepLeftBtn" class="btn-action btn-cyan" style="font-size: 22px; font-weight: 900; line-height: 1.25;">
+                    ◀ STEP LEFT<br><span style="font-size: 15px; font-weight: 700;">(-500 TICKS)</span>
+                </button>
+                <button id="gantryStepRightBtn" class="btn-action btn-cyan" style="font-size: 22px; font-weight: 900; line-height: 1.25;">
+                    STEP RIGHT ▶<br><span style="font-size: 15px; font-weight: 700;">(+500 TICKS)</span>
+                </button>
 
                 <!-- Bottom Row: Max Bounds & Center for LeSlide Gantry Motor 8 -->
                 <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                    <button id="gantryMaxLeftBtn" class="btn-action btn-cyan">⏪ MAX LEFT<br>(3 TICKS)</button>
-                    <button id="gantryCenterBtn" class="btn-action btn-cyan">⏺ CENTER<br>(2400 TICKS)</button>
-                    <button id="gantryMaxRightBtn" class="btn-action btn-cyan">MAX RIGHT ⏩<br>(4800 TICKS)</button>
+                    <button id="gantryMaxLeftBtn" class="btn-action btn-cyan" style="font-size: 19px; font-weight: 900; line-height: 1.25;">
+                        ⏪ MAX LEFT<br><span style="font-size: 13px; font-weight: 700;">(3 TICKS)</span>
+                    </button>
+                    <button id="gantryCenterBtn" class="btn-action btn-cyan" style="font-size: 19px; font-weight: 900; line-height: 1.25;">
+                        ⏺ CENTER<br><span style="font-size: 13px; font-weight: 700;">(2400 TICKS)</span>
+                    </button>
+                    <button id="gantryMaxRightBtn" class="btn-action btn-cyan" style="font-size: 19px; font-weight: 900; line-height: 1.25;">
+                        MAX RIGHT ⏩<br><span style="font-size: 13px; font-weight: 700;">(4800 TICKS)</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -64,32 +78,32 @@
         <!-- TAB 2: 🦾 TELEOP CONTROLLERS -->
         <div id="panelControls" class="tab-panel">
             <div class="telemetry-bar">
-                <div id="teleopStatus" class="header-readout" style="color: #00ff66;">DAEMON RUNNING</div>
+                <div id="teleopStatus" class="header-readout" style="font-size: 18px; color: #00ff66;">DAEMON RUNNING</div>
             </div>
 
-            <div class="giant-grid" style="grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; height: 110px;">
+            <div class="giant-grid" style="grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr; height: 125px;">
                 <!-- Left: Leader -->
-                <button id="leaderBtn" class="btn-action">
-                    <span id="leaderBtnIcon">🍎</span><br>
-                    <span id="leaderBtnText">START LEADER</span>
+                <button id="leaderBtn" class="btn-action" style="font-size: 20px; font-weight: 900; line-height: 1.25; padding: 10px;">
+                    <span id="leaderBtnIcon" style="font-size: 32px;">🍎</span>
+                    <span id="leaderBtnText" style="margin-top: 4px;">START LEADER</span>
                 </button>
                 <!-- Center: Teleop -->
-                <button id="followerBtn" class="btn-action">
-                    <span id="followerBtnIcon">🦾</span><br>
-                    <span id="followerBtnText">START TELEOP</span>
+                <button id="followerBtn" class="btn-action" style="font-size: 20px; font-weight: 900; line-height: 1.25; padding: 10px;">
+                    <span id="followerBtnIcon" style="font-size: 32px;">🦾</span>
+                    <span id="followerBtnText" style="margin-top: 4px;">START TELEOP</span>
                 </button>
                 <!-- Right: Pokéball -->
-                <button id="pokeballBtn" class="btn-action">
-                    <span id="pokeballBtnIcon">🔴</span><br>
-                    <span id="pokeballBtnTitle">START POKÉBALL</span>
-                    <span id="pokeballBtnSub" style="display:none; font-size:11px; font-weight:normal;"></span>
+                <button id="pokeballBtn" class="btn-action" style="font-size: 20px; font-weight: 900; line-height: 1.25; padding: 10px;">
+                    <span id="pokeballBtnIcon" style="font-size: 32px;">🔴</span>
+                    <span id="pokeballBtnTitle" style="margin-top: 4px;">START POKÉBALL</span>
+                    <span id="pokeballBtnSub" style="display:none; font-size:12px; font-weight:700;"></span>
                 </button>
             </div>
         
             <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
             <div id="pbTelemetryBox" style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 14px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
+                    <span style="font-size: 15px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
                     <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 14px;">
@@ -102,9 +116,9 @@
                 <div style="font-family: monospace; font-size: 12px; background: #000; padding: 6px 10px; border-radius: 6px; border: 1px solid #222;">
                     Raw Packet Hex: <span id="pbRawHex" style="color: #ff00ff; font-weight: 700;">--</span>
                 </div>
-                <div style="display: flex; gap: 12px; align-items: center; font-size: 12px; font-weight: 900;">
-                    <span id="pbBtnA" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button A (Top Red)</span>
-                    <span id="pbBtnB" style="padding: 4px 10px; border-radius: 6px; background: #222; color: #666;">Button B (Stick Click)</span>
+                <div style="display: flex; gap: 12px; align-items: center; font-size: 13px; font-weight: 900;">
+                    <span id="pbBtnA" style="padding: 6px 12px; border-radius: 6px; background: #222; color: #666;">Button A (Top Red)</span>
+                    <span id="pbBtnB" style="padding: 6px 12px; border-radius: 6px; background: #222; color: #666;">Button B (Stick Click)</span>
                 </div>
             </div>
         </div>
@@ -112,32 +126,32 @@
         <!-- TAB 3: 📱 ROBOT APPLICATIONS -->
         <div id="panelApps" class="tab-panel active" style="flex-direction: column; gap: 6px; height: 100%;">
             <div class="telemetry-bar" style="height: 26px; flex-shrink: 0;">
-                <div id="appsStatus" class="header-readout" style="font-size: 15px; color: #00e5ff;">ROBOT APPS IDLE</div>
+                <div id="appsStatus" class="header-readout" style="font-size: 16px; color: #00e5ff;">ROBOT APPS IDLE</div>
             </div>
 
             <!-- VIEW A: Top-Level 3-Button Launcher (Default View) -->
             <div id="appsViewLauncher" style="display: flex; flex-direction: column; gap: 10px; height: calc(100% - 32px); justify-content: center; padding: 6px 16px;">
-                <button id="launchClackerBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 3px solid #00e5ff; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
-                    <span style="font-size: 38px;">🪴</span>
+                <button id="launchClackerBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 3px solid #00e5ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
+                    <span style="font-size: 46px;">🪴</span>
                     <div style="text-align: left;">
-                        <div style="font-size: 21px; color: #00e5ff; font-weight: 900;">PIRANHA POSE</div>
-                        <div style="font-size: 12px; color: #a0c8e0; font-weight: 600;">Multi-Mode Presets, Sequence Engine & Acoustic Clack Control</div>
+                        <div style="font-size: 24px; color: #00e5ff; font-weight: 900;">PIRANHA POSE</div>
+                        <div style="font-size: 14px; color: #a0c8e0; font-weight: 600; margin-top: 3px;">Multi-Mode Presets, Sequence Engine & Acoustic Clack Control</div>
                     </div>
                 </button>
 
-                <button id="launchStudioBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #2d2400, #1a1500); border: 3px solid #ffaa00; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
-                    <span style="font-size: 38px;">🔧</span>
+                <button id="launchStudioBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #2d2400, #1a1500); border: 3px solid #ffaa00; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
+                    <span style="font-size: 46px;">🔧</span>
                     <div style="text-align: left;">
-                        <div style="font-size: 21px; color: #ffaa00; font-weight: 900;">SERVO STUDIO</div>
-                        <div style="font-size: 12px; color: #e0cca0; font-weight: 600;">Live Motor Calibration & Diagnostics (:8086)</div>
+                        <div style="font-size: 24px; color: #ffaa00; font-weight: 900;">SERVO STUDIO</div>
+                        <div style="font-size: 14px; color: #e0cca0; font-weight: 600; margin-top: 3px;">Live Motor Calibration & Diagnostics (:8086)</div>
                     </div>
                 </button>
 
-                <button id="launchBeatBanditBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #380e45, #1d0724); border: 3px solid #a855f7; color: #ffffff; border-radius: 12px; font-size: 20px; font-weight: 900; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 20px; gap: 16px;">
-                    <span style="font-size: 38px;">🎧</span>
+                <button id="launchBeatBanditBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #380e45, #1d0724); border: 3px solid #a855f7; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
+                    <span style="font-size: 46px;">🎧</span>
                     <div style="text-align: left;">
-                        <div style="font-size: 21px; color: #a855f7; font-weight: 900;">BEAT BANDIT</div>
-                        <div style="font-size: 12px; color: #e9cbfd; font-weight: 600;">YouTube Music Audio Analysis & Choreographer</div>
+                        <div style="font-size: 24px; color: #a855f7; font-weight: 900;">BEAT BANDIT</div>
+                        <div style="font-size: 14px; color: #e9cbfd; font-weight: 600; margin-top: 3px;">YouTube Music Audio Analysis & Choreographer</div>
                     </div>
                 </button>
             </div>
@@ -151,12 +165,12 @@
                         
                         <!-- Top Nav / Action Bar inside Piranha Pose: Top-Left Pink Back Button & Engage Button -->
                         <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
-                            <button id="clackerBackBtn" class="btn-action btn-back">
+                            <button id="clackerBackBtn" class="btn-action btn-back" style="font-size: 18px; font-weight: 900;">
                                 ◀ BACK
                             </button>
-                            <button id="clackPoseBtn" class="btn-action" style="font-size: 15px; font-weight: 900; padding: 4px; border-radius: 8px; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff;">
+                            <button id="clackPoseBtn" class="btn-action" style="font-size: 18px; font-weight: 900; padding: 4px; border-radius: 8px; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff;">
                                 <span id="clackPoseBtnText">🪴 START PIRANHA POSE</span>
-                                <span id="clackPoseBtnSub" style="display:block; font-size:10.5px; color:#aaa;">Presets, Sequences & Clacks</span>
+                                <span id="clackPoseBtnSub" style="display:block; font-size:12px; color:#aaa; font-weight: 700;">Presets, Sequences & Clacks</span>
                             </button>
                         </div>
 
@@ -164,35 +178,35 @@
                         <div id="appsModeControls" style="display: flex; flex-direction: column; gap: 6px; height: calc(100% - 50px);">
                             <!-- Middle 4 Action Buttons -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 155px; flex-shrink: 0;">
-                                <button id="armLimpBtn" class="btn-action" style="background:#2b0e10; border:2.5px solid #ff3344; color:#ff4455; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                <button id="armLimpBtn" class="btn-action" style="background:#2b0e10; border:2.5px solid #ff3344; color:#ff4455; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     Cut Torque
                                 </button>
-                                <button id="armSaveBtn" class="btn-action" style="background:#2d2400; border:2.5px solid #ffd700; color:#ffd700; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                <button id="armSaveBtn" class="btn-action" style="background:#2d2400; border:2.5px solid #ffd700; color:#ffd700; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     Hold
                                 </button>
-                                <button id="commitPresetBtn" class="btn-action" style="background:#0a1e36; border:2.5px solid #0099ff; color:#0099ff; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                <button id="commitPresetBtn" class="btn-action" style="background:#0a1e36; border:2.5px solid #0099ff; color:#0099ff; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     Save Preset
                                 </button>
-                                <button id="armResumeBtn" class="btn-action" style="background:#0a2612; border:2.5px solid #00ff66; color:#00ff66; font-size:18px; font-weight:900; border-radius:6px; cursor:pointer;">
+                                <button id="armResumeBtn" class="btn-action" style="background:#0a2612; border:2.5px solid #00ff66; color:#00ff66; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     Go Back
                                 </button>
                             </div>
 
                             <!-- Sensitivity / Thresholds Boxes -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; height: 55px; flex-shrink: 0;">
-                                <button id="sensLowBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                <button id="sensLowBtn" class="btn-action" style="font-size:18px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:8px; cursor:pointer;">
                                     Low
                                 </button>
-                                <button id="sensNormBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #00e5ff; color:#00e5ff; border-radius:6px; cursor:pointer;">
+                                <button id="sensNormBtn" class="btn-action" style="font-size:18px; font-weight:900; background:#181818; border:2px solid #00e5ff; color:#00e5ff; border-radius:8px; cursor:pointer;">
                                     Normal
                                 </button>
-                                <button id="sensHiBtn" class="btn-action" style="font-size:15px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:6px; cursor:pointer;">
+                                <button id="sensHiBtn" class="btn-action" style="font-size:18px; font-weight:900; background:#181818; border:2px solid #555; color:#fff; border-radius:8px; cursor:pointer;">
                                     Hi
                                 </button>
                             </div>
 
                             <!-- Bottom Button to switch to Presets Grid Mode -->
-                            <button id="openPresetsModeBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:17px; font-weight:900; border-radius:8px; cursor:pointer; height:65px; flex-shrink:0;">
+                            <button id="openPresetsModeBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer; height:65px; flex-shrink:0;">
                                 📂 OPEN PRESETS (1-11)
                             </button>
                         </div>
@@ -201,11 +215,11 @@
                         <div id="appsModePresets" style="display: none; flex-direction: column; gap: 5px; height: calc(100% - 50px);">
                             <!-- Top Toolbar: Mode Tabs + Overwrite Toggle -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1.3fr; gap: 4px; height: 38px; flex-shrink: 0;">
-                                <button id="modeTabNormal" class="btn-action" style="font-size:12px; font-weight:900; background:#004488; border:2px solid #00e5ff; color:#fff; border-radius:6px; cursor:pointer;">NORMAL</button>
-                                <button id="modeTabDemo" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DEMO</button>
-                                <button id="modeTabAngry" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">ANGRY</button>
-                                <button id="modeTabDance" class="btn-action" style="font-size:12px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DANCE</button>
-                                <button id="overwriteModeBtn" class="btn-action" style="font-size:12px; font-weight:900; background:#1c1c1c; border:2px solid #777; color:#ddd; border-radius:6px; cursor:pointer;">✏️ OVERWRITE: OFF</button>
+                                <button id="modeTabNormal" class="btn-action" style="font-size:13.5px; font-weight:900; background:#004488; border:2px solid #00e5ff; color:#fff; border-radius:6px; cursor:pointer;">NORMAL</button>
+                                <button id="modeTabDemo" class="btn-action" style="font-size:13.5px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DEMO</button>
+                                <button id="modeTabAngry" class="btn-action" style="font-size:13.5px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">ANGRY</button>
+                                <button id="modeTabDance" class="btn-action" style="font-size:13.5px; font-weight:900; background:#181818; border:2px solid #555; color:#aaa; border-radius:6px; cursor:pointer;">DANCE</button>
+                                <button id="overwriteModeBtn" class="btn-action" style="font-size:13.5px; font-weight:900; background:#1c1c1c; border:2px solid #777; color:#ddd; border-radius:6px; cursor:pointer;">✏️ OVERWRITE: OFF</button>
                             </div>
 
                             <!-- 4x3 Grid (12 cells) -->
@@ -215,10 +229,10 @@
 
                             <!-- Bottom Action Row: Play Sequence / Attack Demo + Return Button -->
                             <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 5px; height: 45px; flex-shrink: 0;">
-                                <button id="seqPlayBtn" class="btn-action" style="background:#0a3a1a; border:2.5px solid #00ff66; color:#00ff66; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                <button id="seqPlayBtn" class="btn-action" style="background:#0a3a1a; border:2.5px solid #00ff66; color:#00ff66; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     ▶️ PLAY SEQUENCE
                                 </button>
-                                <button id="presetsReturnBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:14px; font-weight:900; border-radius:8px; cursor:pointer;">
+                                <button id="presetsReturnBtn" class="btn-action" style="background:#0a2e5c; border:2.5px solid #0099ff; color:#00e5ff; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;">
                                     ◀ CONTROLS
                                 </button>
                             </div>
@@ -260,30 +274,30 @@
             <!-- VIEW C: Dedicated Servo Studio Panel -->
             <div id="appsViewStudio" style="display: none; flex-direction: column; gap: 10px; height: calc(100% - 32px); padding: 6px;">
                 <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
-                    <button id="studioBackBtn" class="btn-action btn-back">
+                    <button id="studioBackBtn" class="btn-action btn-back" style="font-size: 18px; font-weight: 900;">
                         ◀ BACK
                     </button>
-                    <div style="border-radius: 8px; background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffaa00; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                    <div style="border-radius: 8px; background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffaa00; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900;">
                         🔧 SERVO CALIBRATION STUDIO
                     </div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1; justify-content: center;">
-                    <button id="studioBtn" class="btn-action" style="font-size: 20px; font-weight: 900; border-radius: 12px; height: 100px; background: #1a1a1a; border: 3px solid #444;">
-                        <span id="studioBtnIcon" style="font-size: 28px;">🔧</span><br>
+                    <button id="studioBtn" class="btn-action" style="font-size: 24px; font-weight: 900; line-height: 1.25; border-radius: 12px; height: 115px; background: #1a1a1a; border: 3px solid #444; padding: 12px;">
+                        <span id="studioBtnIcon" style="font-size: 38px;">🔧</span><br>
                         <span id="studioBtnText">START SERVO STUDIO</span><br>
-                        <span id="studioBtnSub" style="font-size: 12px; color: #ffcc88;">(CALIBRATION ON PORT 8086)</span>
+                        <span id="studioBtnSub" style="font-size: 14px; font-weight: 700; color: #ffcc88; margin-top: 4px;">(CALIBRATION ON PORT 8086)</span>
                     </button>
 
                     <div style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:14px; font-weight:900; color:#fff;">STUDIO WEB SERVICE:</span>
-                            <span id="studioBadge" style="font-size:13px; font-weight:900; padding:3px 10px; border-radius:6px; background:#222; color:#888;">STOPPED</span>
+                            <span style="font-size:16px; font-weight:900; color:#fff;">STUDIO WEB SERVICE:</span>
+                            <span id="studioBadge" style="font-size:14px; font-weight:900; padding:4px 12px; border-radius:6px; background:#222; color:#888;">STOPPED</span>
                         </div>
-                        <div style="font-family: monospace; font-size: 14px; color: #00e5ff;">
+                        <div style="font-family: monospace; font-size: 15px; color: #00e5ff; font-weight: 700;">
                             URL: http://&lt;PI500_IP&gt;:8086 (Port 8086)
                         </div>
-                        <div style="font-size: 12px; color: #aaa; line-height: 1.4;">
+                        <div style="font-size: 13px; color: #ccc; line-height: 1.4;">
                             * Provides isolated single-servo testing, torque toggles, and EEPROM calibration registers without conflicting with teleop loops.
                         </div>
                     </div>
@@ -295,30 +309,30 @@
                 
                 <!-- Row 1: Top Navigation Bar: Back Button + Start Beat Bandit App Toggle + Track Pill -->
                 <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 8px; height: 44px; flex-shrink: 0; align-items: center;">
-                    <button id="bbBackBtn" class="btn-action btn-back" style="height: 100%; min-height: 0; padding: 0; font-size: 13px; font-weight: 900;">
+                    <button id="bbBackBtn" class="btn-action btn-back" style="height: 100%; min-height: 0; padding: 0; font-size: 16px; font-weight: 900;">
                         ◀ BACK
                     </button>
-                    <button id="bbAppToggleBtn" class="btn-action" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; padding: 2px 8px; border-radius: 8px; background: linear-gradient(135deg, #2e1065, #1d0724); border: 2px solid #a855f7; color: #fff;">
+                    <button id="bbAppToggleBtn" class="btn-action" style="height: 100%; min-height: 0; font-size: 16px; font-weight: 900; padding: 2px 8px; border-radius: 8px; background: linear-gradient(135deg, #2e1065, #1d0724); border: 2px solid #a855f7; color: #fff;">
                         <span id="bbAppToggleBtnText">🎧 START BEAT BANDIT</span>
-                        <span id="bbAppToggleBtnSub" style="display:block; font-size:10px; color:#c084fc; font-weight:600;">Audio Choreography & Timeline Engine</span>
+                        <span id="bbAppToggleBtnSub" style="display:block; font-size:11.5px; color:#c084fc; font-weight:700;">Audio Choreography & Timeline Engine</span>
                     </button>
-                    <div id="bbHeaderTrackPill" style="background: #0e0e14; border: 1.5px solid #7928ca; border-radius: 8px; padding: 0 12px; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #e9d5ff; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                    <div id="bbHeaderTrackPill" style="background: #0e0e14; border: 1.5px solid #7928ca; border-radius: 8px; padding: 0 12px; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #e9d5ff; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
                         🎵 <span id="bbHeaderTrackTitle" style="margin-left: 5px;">Track</span>
                     </div>
                 </div>
 
                 <!-- Row 2: Studio SubTabs Navigation Bar -->
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; height: 36px; flex-shrink: 0; align-items: center;">
-                    <button id="bbNavPlayer" class="btn-action bb-nav-btn active" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #2e1065; border: 1.5px solid #a855f7; color: #fff; border-radius: 6px;">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; height: 38px; flex-shrink: 0; align-items: center;">
+                    <button id="bbNavPlayer" class="btn-action bb-nav-btn active" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; background: #2e1065; border: 1.5px solid #a855f7; color: #fff; border-radius: 6px;">
                         🎧 PLAYER
                     </button>
-                    <button id="bbNavTimeline" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                    <button id="bbNavTimeline" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
                         🎬 TIMELINE
                     </button>
-                    <button id="bbNavPoses" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                    <button id="bbNavPoses" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
                         💃 POSES
                     </button>
-                    <button id="bbNavSettings" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 12.5px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
+                    <button id="bbNavSettings" class="btn-action bb-nav-btn" style="height: 100%; min-height: 0; font-size: 14px; font-weight: 900; background: #14141e; border: 1.5px solid #333348; color: #ccc; border-radius: 6px;">
                         ⚙️ SETTINGS
                     </button>
                 </div>
@@ -326,9 +340,9 @@
                 <!-- SUB-VIEW 1: PLAYER HUD -->
                 <div id="bbSubViewPlayer" style="display: flex; flex-direction: column; flex-grow: 1; height: 100%; min-height: 0; width: 100%; gap: 6px;">
                     <!-- YouTube URL Input & Action Row (36px height) -->
-                    <div style="display: grid; grid-template-columns: 1fr 90px; gap: 8px; height: 36px; flex-shrink: 0;">
-                        <input type="text" id="bbUrlInput" placeholder="Paste YouTube / YouTube Music URL..." value="https://youtu.be/_uu_izpVSEc?si=X62QxvffzOgTJNW9" style="height: 100%; background: #111; border: 1.5px solid #444; border-radius: 8px; color: #fff; padding: 0 12px; font-size: 12px; font-family: monospace; box-sizing: border-box;">
-                        <button id="bbFetchBtn" class="btn-action" style="height: 100%; background: linear-gradient(135deg, #2e1065, #3b0764); border: 1.5px solid #a855f7; color: #f3e8ff; font-weight: 900; font-size: 13px; border-radius: 8px; min-height: 0; padding: 0;">
+                    <div style="display: grid; grid-template-columns: 1fr 90px; gap: 8px; height: 38px; flex-shrink: 0;">
+                        <input type="text" id="bbUrlInput" placeholder="Paste YouTube / YouTube Music URL..." value="https://youtu.be/_uu_izpVSEc?si=X62QxvffzOgTJNW9" style="height: 100%; background: #111; border: 1.5px solid #444; border-radius: 8px; color: #fff; padding: 0 12px; font-size: 13px; font-family: monospace; box-sizing: border-box;">
+                        <button id="bbFetchBtn" class="btn-action" style="height: 100%; background: linear-gradient(135deg, #2e1065, #3b0764); border: 1.5px solid #a855f7; color: #f3e8ff; font-weight: 900; font-size: 15px; border-radius: 8px; min-height: 0; padding: 0;">
                             LOAD
                         </button>
                     </div>
@@ -338,8 +352,8 @@
                         <!-- Left: 2x2 Songs Box -->
                         <div style="display: flex; flex-direction: column; background: #0e0e14; border: 1.5px solid #333348; border-radius: 10px; padding: 5px 8px; min-width: 0; justify-content: space-between; box-sizing: border-box;">
                             <div style="display: flex; justify-content: space-between; align-items: center; height: 22px;">
-                                <span style="font-size: 11px; font-weight: 900; color: #a855f7; letter-spacing: 0.5px;">AUDIO TRACKS</span>
-                                <button id="bbPageBtn" class="btn-action" style="font-size: 10px; font-weight: 900; padding: 1px 8px; height: 20px; border-radius: 4px; min-height: 0; background: #1f1235; border: 1.5px solid #a855f7; color: #f3e8ff;">NEXT ⏭️</button>
+                                <span style="font-size: 12px; font-weight: 900; color: #a855f7; letter-spacing: 0.5px;">AUDIO TRACKS</span>
+                                <button id="bbPageBtn" class="btn-action" style="font-size: 11px; font-weight: 900; padding: 2px 10px; height: 22px; border-radius: 4px; min-height: 0; background: #1f1235; border: 1.5px solid #a855f7; color: #f3e8ff;">NEXT ⏭️</button>
                             </div>
                             <div id="bbTracksList" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5px; height: 118px; min-height: 0;">
                                 <!-- Dynamically loaded -->
@@ -347,8 +361,8 @@
                         </div>
 
                         <!-- Right: Big DANCE / STOP Button -->
-                        <button id="bbMainDanceBtn" class="btn-action" style="background: linear-gradient(135deg, #7928ca, #ff0080); border: 2.5px solid #ff00cc; color: #fff; font-weight: 900; font-size: 18px; border-radius: 10px; height: 100%; min-height: 0; box-shadow: 0 4px 14px rgba(255,0,128,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                            <span id="bbMainDanceIcon" style="font-size: 26px;">⚡</span>
+                        <button id="bbMainDanceBtn" class="btn-action" style="background: linear-gradient(135deg, #7928ca, #ff0080); border: 2.5px solid #ff00cc; color: #fff; font-weight: 900; font-size: 24px; border-radius: 10px; height: 100%; min-height: 0; box-shadow: 0 4px 14px rgba(255,0,128,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+                            <span id="bbMainDanceIcon" style="font-size: 34px;">⚡</span>
                             <span id="bbMainDanceText">DANCE</span>
                         </button>
                     </div>
@@ -619,20 +633,20 @@
             </div>
 
             <!-- VIEW 1: Main 2-Button Backend Launcher -->
-            <div id="backendViewMain" style="display: flex; flex-direction: column; gap: 12px; height: calc(100% - 32px); justify-content: center; padding: 12px 16px;">
-                <button id="backendPowerMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #3a0d10, #1f0406); border: 3px solid #ff3344; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
-                    <span style="font-size: 42px;">⚡</span>
+            <div id="backendViewMain" style="display: flex; flex-direction: column; gap: 14px; height: calc(100% - 32px); justify-content: center; padding: 12px 16px;">
+                <button id="backendPowerMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #3a0d10, #1f0406); border: 3px solid #ff3344; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 22px; gap: 18px;">
+                    <span style="font-size: 48px;">⚡</span>
                     <div style="text-align: left;">
-                        <div style="font-size: 22px; font-weight: 900; color: #ff4455;">POWER MANAGEMENT</div>
-                        <div style="font-size: 12.5px; color: #ffaaaa; font-weight: 600;">Restart Sewer Daemon, Wake Pi 500, Stop All Processes</div>
+                        <div style="font-size: 26px; font-weight: 900; color: #ff4455;">POWER MANAGEMENT</div>
+                        <div style="font-size: 14px; color: #ffaaaa; font-weight: 600; margin-top: 3px;">Restart Sewer Daemon, Wake Pi 500, Stop All Processes</div>
                     </div>
                 </button>
 
-                <button id="backendConfigMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #051833); border: 3px solid #0099ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 20px; gap: 16px;">
-                    <span style="font-size: 42px;">⚙️</span>
+                <button id="backendConfigMenuBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #051833); border: 3px solid #0099ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 16px 22px; gap: 18px;">
+                    <span style="font-size: 48px;">⚙️</span>
                     <div style="text-align: left;">
-                        <div style="font-size: 22px; font-weight: 900; color: #00e5ff;">CONFIG</div>
-                        <div style="font-size: 12.5px; color: #a0c8e0; font-weight: 600;">Volume Overrides, Clack Gate, Throttle Cap & Arm Speed</div>
+                        <div style="font-size: 26px; font-weight: 900; color: #00e5ff;">CONFIG</div>
+                        <div style="font-size: 14px; color: #a0c8e0; font-weight: 600; margin-top: 3px;">Volume Overrides, Clack Gate, Throttle Cap & Arm Speed</div>
                     </div>
                 </button>
             </div>
@@ -675,10 +689,10 @@
             <!-- VIEW 3: Config Sub-View -->
             <div id="backendViewConfig" style="display: none; flex-direction: column; gap: 6px; height: calc(100% - 32px); padding: 2px;">
                 <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; height: 44px; margin-bottom: 6px; flex-shrink: 0;">
-                    <button id="configBackBtn" class="btn-action btn-back">
+                    <button id="configBackBtn" class="btn-action btn-back" style="font-size: 18px; font-weight: 900;">
                         ◀ BACK
                     </button>
-                    <div style="border-radius: 8px; background: #051833; border: 2px solid #0099ff; color: #00e5ff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900;">
+                    <div style="border-radius: 8px; background: #051833; border: 2px solid #0099ff; color: #00e5ff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900;">
                         ⚙️ SYSTEM CONFIGURATION
                     </div>
                 </div>
@@ -687,8 +701,8 @@
                     <!-- Config 1: Sensitivity Threshold -->
                     <div class="cfg-card">
                         <div class="cfg-card-header">
-                            <span style="font-size: 13px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
-                            <span id="cfgSensVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">5200</span>
+                            <span style="font-size: 15px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
+                            <span id="cfgSensVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">5200</span>
                         </div>
                         <div class="cfg-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                             <button id="cfgSensLow" class="btn-action cfg-btn">Low</button>
@@ -700,8 +714,8 @@
                     <!-- Config 2: Volume -->
                     <div class="cfg-card">
                         <div class="cfg-card-header">
-                            <span style="font-size: 13px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
-                            <span id="cfgVolVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">100%</span>
+                            <span style="font-size: 15px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
+                            <span id="cfgVolVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">100%</span>
                         </div>
                         <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
                             <button id="cfgVol50" class="btn-action cfg-btn">50%</button>
@@ -714,8 +728,8 @@
                     <!-- Config 3: Max Speed -->
                     <div class="cfg-card">
                         <div class="cfg-card-header">
-                            <span style="font-size: 13px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
-                            <span id="cfgSpeedVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">35% (175µs)</span>
+                            <span style="font-size: 15px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
+                            <span id="cfgSpeedVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">35% (175µs)</span>
                         </div>
                         <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
                             <button id="cfgSpeed35" class="btn-action cfg-btn">35%</button>
@@ -728,8 +742,8 @@
                     <!-- Config 4: Arm Speed -->
                     <div class="cfg-card">
                         <div class="cfg-card-header">
-                            <span style="font-size: 13px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
-                            <span id="cfgArmVal" style="font-size: 12px; font-weight: 700; font-family: monospace; color: #aaa;">1.0s</span>
+                            <span style="font-size: 15px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
+                            <span id="cfgArmVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">1.0s</span>
                         </div>
                         <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
                             <button id="cfgArm03" class="btn-action cfg-btn">0.3s</button>
