@@ -205,7 +205,7 @@ def poll_status_loop():
         # 2. Poll Pi 500 Master Daemon over HTTP 8085
         try:
             req = urllib.request.Request(f"http://{p500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
-            with urllib.request.urlopen(req, timeout=1.0) as response:
+            with urllib.request.urlopen(req, timeout=0.35) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode())
                     STATUS_CACHE["hardware_telemetry"] = data
@@ -233,7 +233,7 @@ def poll_status_loop():
         # 3. Poll Mac Leader directly over HTTP 8086
         try:
             req_mac = urllib.request.Request(f"http://{mac_ip}:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
-            with urllib.request.urlopen(req_mac, timeout=1.0) as response_mac:
+            with urllib.request.urlopen(req_mac, timeout=0.35) as response_mac:
                 if response_mac.status == 200:
                     mac_data = json.loads(response_mac.read().decode())
                     leader_data = mac_data.get("leader", mac_data) if isinstance(mac_data.get("leader"), dict) else mac_data
