@@ -1132,16 +1132,13 @@ export function renderTimeline() {
                 const tpos = blk.target_pos !== undefined ? blk.target_pos : (blk.position_norm !== undefined ? Math.round(blk.position_norm * 4800) : 2400);
                 label = `${blk.name || 'Gantry'} (${tpos})`;
             } else if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
-                const sType = blk.singer_type;
-                const isBreath = (blk.type === 'breath' || sType === 'breath');
+                const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
                     label = `💨 [breath]`;
-                } else if (sType === 'male') {
-                    effectiveClass = 'block-lyric-male';
-                    label = `🌊 ${blk.text || blk.lyrics || blk.name}`;
                 } else {
-                    effectiveClass = 'block-lyric-female';
+                    effectiveClass = 'block-lyric-vocal';
+                    label = `🎤 ${blk.text || ''}`;
                 }
             }
             const isUserEdited = !!blk.is_user_edited;
@@ -1577,17 +1574,16 @@ export function openMoveInspector(channel, block) {
             </div>
         `;
     } else if (channel === 'lyrics' || channel === 'lyrics_phrasing') {
-        const lyricText = block.text || block.lyrics || block.name || '';
-        const singerType = block.singer_type || (block.type === 'breath' ? 'breath' : 'female');
+        const lyricText = block.text || '';
+        const isBreath = (block.type === 'breath');
         const origText = block.original_asr_text || lyricText;
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
                     <span style="font-size: 9px; color: #aaa; font-weight: 700;">TYPE:</span>
-                    <select id="inspSingerType" style="background: #1a1a26; border: 1px solid #ec4899; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
-                        <option value="female" ${singerType === 'female' ? 'selected' : ''}>🌸 Female (Pink)</option>
-                        <option value="male" ${singerType === 'male' ? 'selected' : ''}>🌊 Male (Blue)</option>
-                        <option value="breath" ${singerType === 'breath' || block.type === 'breath' ? 'selected' : ''}>💨 Breath (Grey)</option>
+                    <select id="inspLyricType" style="background: #1a1a26; border: 1px solid #ec4899; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+                        <option value="lyric" ${!isBreath ? 'selected' : ''}>🎤 Lyric</option>
+                        <option value="breath" ${isBreath ? 'selected' : ''}>💨 Breath (Grey)</option>
                     </select>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">

@@ -1176,18 +1176,14 @@ function bindEventListeners() {
             } else if (id === 'inspLyricTextInput') {
                 selectedMoveBlock.text = val;
                 selectedMoveBlock.name = val;
-                selectedMoveBlock.lyrics = val;
                 selectedMoveBlock.is_user_edited = true;
                 ui.renderTimeline();
-            } else if (id === 'inspSingerType') {
-                selectedMoveBlock.singer_type = val;
+            } else if (id === 'inspLyricType') {
+                selectedMoveBlock.type = val;
                 selectedMoveBlock.is_user_edited = true;
                 if (val === 'breath') {
-                    selectedMoveBlock.type = 'breath';
                     selectedMoveBlock.text = '[breath]';
                     selectedMoveBlock.name = 'Breath Inhale';
-                } else {
-                    selectedMoveBlock.type = 'lyric';
                 }
                 ui.renderTimeline();
             }
@@ -1197,15 +1193,12 @@ function bindEventListeners() {
             if (!selectedMoveBlock) return;
             const id = e.target.id;
             const val = e.target.value;
-            if (id === 'inspSingerType') {
-                selectedMoveBlock.singer_type = val;
+            if (id === 'inspLyricType') {
+                selectedMoveBlock.type = val;
                 selectedMoveBlock.is_user_edited = true;
                 if (val === 'breath') {
-                    selectedMoveBlock.type = 'breath';
                     selectedMoveBlock.text = '[breath]';
                     selectedMoveBlock.name = 'Breath Inhale';
-                } else {
-                    selectedMoveBlock.type = 'lyric';
                 }
                 ui.renderTimeline();
             } else if (id === 'inspBasePose' || id === 'inspHeadPitch' || id === 'inspGantryMode') {
