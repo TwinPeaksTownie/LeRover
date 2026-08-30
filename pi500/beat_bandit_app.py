@@ -584,6 +584,16 @@ class BeatBanditApp(BaseApp):
                                     backend.servos[7]["pos"] = s7_ticks
                                     backend.servos[7]["raw"] = s7_ticks % 4096
                                     backend.servos[7]["torque"] = True
+
+                    with backend.lock:
+                        backend.servos[1]["normalized"] = round(arm_goals["shoulder_pan"], 2)
+                        backend.servos[2]["normalized"] = round(arm_goals["shoulder_lift"], 2)
+                        backend.servos[3]["normalized"] = round(arm_goals["elbow_flex"], 2)
+                        backend.servos[4]["normalized"] = round(arm_goals["wrist_flex"], 2)
+                        backend.servos[5]["normalized"] = round(arm_goals["wrist_roll"], 2)
+                        backend.servos[6]["normalized"] = round(arm_goals["gripper"], 2)
+                        for s_idx in range(1, 7):
+                            backend.servos[s_idx]["torque"] = True
                 except Exception as cmd_err:
                     self.logger.warning(f"Hardware write tick error: {cmd_err}")
 
