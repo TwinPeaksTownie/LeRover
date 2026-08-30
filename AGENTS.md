@@ -30,7 +30,7 @@
 1. **DO query live empirical telemetry first**: Verify physical reality, log streams (`journalctl`), running processes (`ps aux`), or raw serial responses before diagnosing hardware state.
 2. **DO use normalized percentage joint mapping**: Calculate motion using `(pos - min) / (max - min)` aligned around calibrated midpoints across both arms.
 3. **DO maintain serial bus hygiene & isolation**: Verify background processes holding `/dev/ttyACM0` are stopped before running direct serial scripts, clear buffers, and use blocking reads with timeouts.
-4. **DO deploy touchscreen UI changes directly to live target**: Upload modified UI files to `/home/carson/touch_ui/server.py` on Pi 4B (`192.168.0.86`) and restart `touch-ui.service` for live testing.
+4. **DO deploy touchscreen UI changes directly to live target**: Upload modified UI files to `/home/carson/touch_ui/` on Pi 4B (`192.168.0.86`) and restart `backend.service` (or `touchscreen.service` for display reload) for live testing.
 5. **DO explicitly clean up remote SSH processes**: Issue explicit remote kill commands (`ssh user@192.168.0.130 "pkill -9 -f <script>"`) to prevent orphaned background jobs on the Pi 500.
 6. **DO enforce strict loud failure modes**: Raise explicit errors on hardware/telemetry failures without breaking UI resilience or crashing web servers on minor network blips.
 
@@ -48,7 +48,7 @@
 - **I**: The AI assistant taking actions.
 - **You**: The human operator and architect.
 - **Pi 500 (`192.168.0.130`)**: Follower arm driver & teleop host on `/dev/ttyACM0` (external 12V power).
-- **Pi 4B (`192.168.0.86`)**: Touchscreen kiosk UI (`touch-ui.service` on port `8082` at `/home/carson/touch_ui/server.py`) and state router.
+- **Pi 4B (`192.168.0.86`)**: Touchscreen UI backend (`backend.service` on port `8082` at `/home/carson/touch_ui/server.py`) and physical display client (`touchscreen.service`).
 - **Mac Mini (`192.168.0.149` / `mac-mini.local`)**: Leader arm telemetry API host (`8086`) and neural audio analysis server.
 - **Follower Arm / Servos 1–8**: Physical 6-DOF arm and auxiliary actuators.
 

@@ -1,6 +1,6 @@
 """Pi 4B Touchscreen Kiosk UI & Router Server.
 Target Deployment: /home/carson/touch_ui/server.py on Pi 4B (192.168.0.86)
-Executed by: touch-ui.service (Port 8082)
+Executed by: backend.service (Port 8082)
 """
 
 import http.server

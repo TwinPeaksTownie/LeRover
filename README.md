@@ -198,9 +198,9 @@ python3 main.py
 # SSH into Pi 4B
 ssh carson@192.168.0.86
 
-# The kiosk runs automatically via touch-ui.service, or can be started directly:
-cd /home/carson/touch_ui
-python3 server.py
+# The backend runs via backend.service (port 8082), and the display via touchscreen.service:
+sudo systemctl restart backend.service
+systemctl --user restart touchscreen.service
 ```
 
 ### 3. Launching Leader Arm Teleoperation (Mac Mini)
