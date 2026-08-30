@@ -1135,10 +1135,10 @@ export function renderTimeline() {
                 const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
-                    label = `💨 [breath]`;
+                    label = `[breath]`;
                 } else {
                     effectiveClass = 'block-lyric-vocal';
-                    label = `🎤 ${blk.text || ''}`;
+                    label = `${blk.text || ''}`;
                 }
             }
             const isUserEdited = !!blk.is_user_edited;
