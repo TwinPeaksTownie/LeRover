@@ -629,12 +629,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/apps/beat_bandit/auto_generate":
             track_id = body.get("track_id")
             style = body.get("style", "balanced")
+            force_clean = bool(body.get("force_clean", False))
             if not track_id:
                 return self._send_json({"status": "error", "message": "Missing 'track_id'"}, 400)
             from beat_studio import get_global_studio_manager
             studio_mgr = get_global_studio_manager()
             try:
-                choreo = studio_mgr.auto_generate_choreography(track_id, style=style)
+                choreo = studio_mgr.auto_generate_choreography(track_id, style=style, force_clean=force_clean)
                 self._send_json({"status": "ok", "choreography": choreo})
             except Exception as e:
                 self._send_json({"status": "error", "message": str(e)}, 500)

@@ -321,6 +321,16 @@ def identify_climax_blocks(
     # Sort candidates by score descending, then start_beat ascending
     candidates.sort(key=lambda x: (-x[0], x[1]))
 
+    # If no candidates met positive criteria, fallback to post-intro long phrases
+    if not candidates:
+        for blk in timeline_blocks:
+            b_sbeat = int(blk["start_beat"])
+            b_ebeat = int(blk["end_beat"])
+            if b_ebeat <= first_vocal_beat and first_vocal_beat > 0:
+                continue
+            candidates.append((float(b_ebeat - b_sbeat), b_sbeat, str(blk["id"])))
+        candidates.sort(key=lambda x: (-x[0], x[1]))
+
     selected_ids: set[str] = set()
     selected_beats: List[int] = []
 
@@ -336,7 +346,7 @@ def identify_climax_blocks(
     return selected_ids
 
 
-CHOREO_SCHEMA_VERSION = "3.2.0"
+CHOREO_SCHEMA_VERSION = "3.2.1"
 
 
 def compile_choreography_tracks(
@@ -449,7 +459,7 @@ def compile_choreography_tracks(
 
     rng = random.Random(seed)
 
-    for blk in timeline_blocks:
+    for blk_idx, blk in enumerate(timeline_blocks):
         b_st = float(blk["start_sec"])
         b_et = float(blk["end_sec"])
         b_dur = b_et - b_st
@@ -457,6 +467,10 @@ def compile_choreography_tracks(
         blk_id = blk["id"]
         blk_name = blk["name"]
         is_intro = (b_et <= first_vocal_sec)
+        next_is_climax = (
+            blk_idx + 1 < len(timeline_blocks)
+            and timeline_blocks[blk_idx + 1]["id"] in climax_arch_block_ids
+        )
 
         sec = next((s for s in sec_blocks if s["start_sec"] <= b_st < s["end_sec"]), None)
         sec_energy = max(0.0, min(1.0, float(sec["energy_score"]))) if sec else 0.5
@@ -564,13 +578,34 @@ def compile_choreography_tracks(
                 end_pose = "stand"
                 trans_sec = 0.5
             elif is_climax_arch:
-                # Reserved peak climax moment: execute dramatic arch
+                # Reserved peak climax moment: execute dramatic arch from stand
                 spine_pattern = "stand_to_pose"
+                start_pose = "stand"  # Lead-in ensures stand; enforce for clean kinematics
                 mid_pose = "arch"
                 end_pose = "arch"
                 trans_sec = 0.5
+            elif next_is_climax:
+                # Lead-in block immediately preceding a climax arch: guarantee smooth return to stand
+                available_poses = ["squat", "tiptoe"]
+                if start_pose == "stand":
+                    spine_r = rng.random()
+                    if spine_r < 0.60:
+                        spine_pattern = "hold_stand"
+                        mid_pose = "stand"
+                        end_pose = "stand"
+                        trans_sec = 0.5
+                    else:
+                        spine_pattern = "stand_dip_stand"
+                        mid_pose = rng.choice(available_poses)
+                        end_pose = "stand"
+                        trans_sec = 0.4
+                else:
+                    spine_pattern = "return_stand_mid"
+                    mid_pose = start_pose
+                    end_pose = "stand"
+                    trans_sec = 0.45
             elif start_pose == "stand":
-                available_poses = ["squat", "tiptoe"]  # arch is reserved for climax blocks
+                available_poses = ["squat", "tiptoe"]  # arch is reserved exclusively for climax blocks
                 spine_r = rng.random()
                 if spine_r < 0.40:
                     spine_pattern = "hold_stand"

@@ -137,14 +137,14 @@ class BeatStudioManager:
         self.logger.info(f"Successfully saved choreography for '{track_meta.get('title')}' ({track_id}).")
         return {"status": "ok", "track_id": track_id, "updated_at": clean_choreo["updated_at"]}
 
-    def auto_generate_choreography(self, track_id: str, style: str = "balanced") -> Dict[str, Any]:
+    def auto_generate_choreography(self, track_id: str, style: str = "balanced", force_clean: bool = False) -> Dict[str, Any]:
         """Re-compiles choreography from analysis with preservation of manual edits."""
         manifest = self._load_manifest()
         track_meta = manifest.get(track_id)
         if not track_meta:
             raise FileNotFoundError(f"Track '{track_id}' not found.")
 
-        existing_choreo = track_meta.get("choreography")
+        existing_choreo = None if force_clean else track_meta.get("choreography")
         analysis = track_meta.get("analysis", {})
         duration = float(track_meta.get("duration", 0.0) or analysis.get("duration", 0.0))
         choreo = compile_default_choreography(analysis, duration, existing_choreo=existing_choreo)
