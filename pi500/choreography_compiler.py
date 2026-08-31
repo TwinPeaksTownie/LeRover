@@ -87,17 +87,27 @@ def get_choreography_probabilities_path() -> Path:
     raise FileNotFoundError(f"choreography_probabilities.json not found at {p1} or {p2}")
 
 
-def load_choreography_probabilities() -> Dict[str, Any]:
+def load_choreography_probabilities(filepath: Optional[str] = None) -> Dict[str, Any]:
     """Loads master choreography decision probabilities and ROM thresholds strictly from JSON with fail-fast KeyError enforcement."""
-    fpath = get_choreography_probabilities_path()
+    if filepath is None:
+        fpath = str(get_choreography_probabilities_path())
+    else:
+        fpath = filepath
+    if not os.path.exists(fpath):
+        raise FileNotFoundError(f"Choreography probabilities configuration file not found at: {fpath}")
     with open(fpath, "r", encoding="utf-8") as f:
         data = json.load(f)
+    return validate_probabilities_schema(data, source_desc=fpath)
 
-    # Strict contract validation: Fail loud on missing keys
+def validate_probabilities_schema(data: Dict[str, Any], source_desc: str = "probabilities") -> Dict[str, Any]:
+    """Strict fail-fast contract validator for choreography probabilities schema."""
+    if not isinstance(data, dict):
+        raise KeyError(f"Fail-Fast Schema Error: {source_desc} must be a dictionary")
+
     required_sections = ["pedestal_s7", "gantry_s8", "torso_s1", "head_tilt_s5", "neck_pitch_s4", "spine_gaze", "bounce_modifier"]
     for sec in required_sections:
         if sec not in data or not isinstance(data[sec], dict):
-            raise KeyError(f"Mandatory section '{sec}' missing in {fpath}")
+            raise KeyError(f"Fail-Fast Schema Error: Mandatory section '{sec}' missing in {source_desc}")
 
     # Validate Pedestal keys
     ped = data["pedestal_s7"]
@@ -157,9 +167,12 @@ def load_choreography_probabilities() -> Dict[str, Any]:
     bounce = data["bounce_modifier"]
     _ = float(bounce["default_intensity"])
     if "targets" not in bounce or not isinstance(bounce["targets"], list):
-        raise KeyError(f"Mandatory 'targets' list missing in bounce_modifier section of {fpath}")
+        raise KeyError(f"Fail-Fast Schema Error: Mandatory 'targets' list missing in bounce_modifier section of {source_desc}")
 
     return data
+
+
+
 
 
 DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
@@ -471,7 +484,7 @@ def compile_choreography_tracks(
         raise ValueError(f"Invalid non-positive tempo '{tempo}' in audio analysis.")
     bpm = tempo
 
-    probs = probabilities if probabilities is not None else load_choreography_probabilities()
+    probs = validate_probabilities_schema(probabilities, source_desc="custom_probabilities") if probabilities is not None else load_choreography_probabilities()
 
     raw_sections = analysis.get("sections", [])
     drops = analysis.get("drops", [])

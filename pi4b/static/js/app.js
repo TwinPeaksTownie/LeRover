@@ -422,48 +422,58 @@ export function loadBeatBanditProbabilities() {
         });
 }
 
-export function saveAndRecompileSettings() {
+export async function saveAndRecompileSettings() {
     const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id);
     const saveSettingsBtn = document.getElementById('bbSaveSettingsBtn');
     if (saveSettingsBtn) saveSettingsBtn.innerText = '⌛ RECOMPILING...';
 
-    // 1. Save track choreo settings if active
-    if (activeChoreoData && tid) {
-        api.saveBeatBanditChoreo(tid, activeChoreoData)
-            .catch(err => console.error('Track settings save error:', err));
+    if (!activeProbabilitiesData) {
+        console.error('FAIL-FAST: activeProbabilitiesData is missing during save');
+        ui.setHeaderAlert('NO PROBABILITIES');
+        return;
     }
 
-    // 2. Save master probabilities and recompile track atomically
-    if (activeProbabilitiesData) {
-        api.saveBeatBanditProbabilities(activeProbabilitiesData, tid)
-            .then(r => r.json())
-            .then(d => {
-                if (d && d.status === 'ok') {
-                    if (d.probabilities) setActiveProbabilitiesData(d.probabilities);
-                    if (d.choreography) {
-                        setActiveChoreoData(d.choreography);
-                        ui.renderTimeline();
-                    }
-                    api.sendPlaySound({ kind: 'smw_save_menu' })
-                        .catch(err => console.warn('Sound FX error:', err));
-                    if (saveSettingsBtn) {
-                        saveSettingsBtn.innerText = '✅ RECOMPILED!';
-                        setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 1500);
-                    }
-                } else {
-                    if (saveSettingsBtn) {
-                        saveSettingsBtn.innerText = '❌ ERROR';
-                        setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 2000);
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('Save & recompile error:', err);
-                if (saveSettingsBtn) {
-                    saveSettingsBtn.innerText = '❌ ERROR';
-                    setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 2000);
-                }
-            });
+    try {
+        // 1. Save track choreo settings if active
+        if (activeChoreoData && tid) {
+            await api.saveBeatBanditChoreo(tid, activeChoreoData);
+        }
+
+        // 2. Save master probabilities and recompile track atomically
+        const res = await api.saveBeatBanditProbabilities(activeProbabilitiesData, tid);
+        const d = await res.json();
+
+        if (!d || d.status !== 'ok') {
+            throw new Error(d?.message || 'Server returned error status during save');
+        }
+
+        // 3. Bi-Directional Read-Back Verification State
+        const verifyRes = await api.fetchBeatBanditProbabilities();
+        const verifyData = await verifyRes.json();
+        if (!verifyData || verifyData.status !== 'ok' || !verifyData.probabilities) {
+            throw new Error('Bi-directional verification failed: unable to read back saved probabilities');
+        }
+
+        setActiveProbabilitiesData(verifyData.probabilities);
+        if (d.choreography) {
+            setActiveChoreoData(d.choreography);
+            ui.renderTimeline();
+        }
+
+        await api.sendPlaySound({ kind: 'smw_save_menu' })
+            .catch(err => console.warn('Sound FX error:', err));
+
+        if (saveSettingsBtn) {
+            saveSettingsBtn.innerText = '✅ RECOMPILED!';
+            setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 1500);
+        }
+    } catch (err) {
+        console.error('Save & recompile verification failed:', err);
+        ui.setHeaderAlert('RECOMPILE ERROR');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.innerText = '❌ ERROR';
+            setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 2000);
+        }
     }
 }
 
