@@ -16,7 +16,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any
 
-from robot_backend import RobotBackend, SERIAL_LOCK, ticks_to_degrees_s7, degrees_to_ticks_s7
+from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7
 from app_manager import AppManager
 from teleop_control_loop import TeleopControlApp
 from servo_studio_app import ServoStudioApp
@@ -468,9 +468,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 try:
-                    if self.backend.bus and hasattr(self.backend.bus, "disable_torque"):
-                        with SERIAL_LOCK:
-                            self.backend.bus.disable_torque(num_retry=2)
+                    self.backend.set_arm_torque(False)
                 except Exception as e:
                     logging.warning(f"Follower stop torque disarm warning: {e}")
                 self.backend.follower_active = False
@@ -478,9 +476,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"status": "ok", "action": action, "running": False})
             elif action == "start":
                 try:
-                    if self.backend.bus and hasattr(self.backend.bus, "enable_torque"):
-                        with SERIAL_LOCK:
-                            self.backend.bus.enable_torque(num_retry=2)
+                    self.backend.set_arm_torque(True)
                 except Exception as e:
                     logging.warning(f"Follower start torque enable warning: {e}")
                 self.backend.follower_active = True

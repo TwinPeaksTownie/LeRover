@@ -1631,6 +1631,18 @@ class RobotBackend:
             "s8_ticks": s8_ticks,
         }
 
+    def dispatch_teleop_frame(self, norm_pos: Dict[str, float]) -> None:
+        """Dispatches an atomic multi-servo normalized (-100 to 100) teleop frame.
+        Encapsulates SERIAL_LOCK internally.
+        """
+        with SERIAL_LOCK:
+            if self.bus and hasattr(self.bus, "sync_write"):
+                try:
+                    self.bus.sync_write("Goal_Position", norm_pos)
+                except Exception as ex:
+                    import logging
+                    logging.warning("teleop sync_write error: %s", ex)
+
     def close(self) -> None:
         self.stop_sequence()
         if self.rover_ctrl:

@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any, Tuple
 import zmq
 
 from app_manager import BaseApp, AppMetadata
-from robot_backend import RobotBackend, SERIAL_LOCK
+from robot_backend import RobotBackend
 
 PORT_ZMQ_CMD = 5555
 PORT_ZMQ_OBS = 5556
@@ -163,9 +163,11 @@ class TeleopControlApp(BaseApp):
                         # Teleop gate is locked until user taps START or hardware is RE-SYNCHING / DISCONNECTED
                         continue
 
-                    if backend.bus:
-                        with SERIAL_LOCK:
-                            backend.bus.sync_write("Goal_Position", goal_pos)
+                    if hasattr(backend, "dispatch_teleop_frame"):
+                        backend.dispatch_teleop_frame(goal_pos)
+                    else:
+                        with backend.lock:
+                            pass # fallback if missing
 
                     with backend.lock:
                         backend.last_arm_positions = goal_pos

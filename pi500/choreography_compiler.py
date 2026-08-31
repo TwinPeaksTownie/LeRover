@@ -226,12 +226,21 @@ def compile_choreography_tracks(
     held_notes = analysis.get("held_notes", [])
     drop_times = [float(d.get("drop_sec", 0.0)) for d in drops]
 
-    timeline_blocks = partition_timeline_into_blocks(analysis, duration)
-
     # Build lookup of existing user-edited moves across all channels
     existing_tracks = existing_choreography.get("tracks", {}) if existing_choreography else {}
     existing_master_blocks = existing_choreography.get("blocks", []) if existing_choreography else []
     edited_master_by_id = {b["id"]: b for b in existing_master_blocks if b.get("is_user_edited")}
+
+    has_user_edits = bool(edited_master_by_id)
+    for ch_moves in existing_tracks.values():
+        if any(m.get("is_user_edited") for m in ch_moves):
+            has_user_edits = True
+            break
+            
+    if has_user_edits and existing_master_blocks:
+        timeline_blocks = existing_master_blocks
+    else:
+        timeline_blocks = partition_timeline_into_blocks(analysis, duration)
 
     edited_moves_by_channel: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for ch in ["spine_gaze", "s8_gantry", "s7_pedestal", "s1_torso", "s5_head_tilt", "s6_jaw"]:

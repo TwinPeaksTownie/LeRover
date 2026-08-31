@@ -207,25 +207,15 @@ class BeatStudioManager:
 
     def preview_movement_block(self, backend: Any, channel: str, target_val: Any) -> Dict[str, Any]:
         """Physically tests a specific movement block on target servo."""
-        from robot_backend import SERIAL_LOCK, degrees_to_ticks_s7
-
         if channel == "s7_pedestal":
-            deg = float(target_val)
-            aux_calib = getattr(backend, "aux_calibration", {})
-            if "7" not in aux_calib or "center_ticks" not in aux_calib["7"]:
-                raise RuntimeError("Servo 7 calibration missing in calibration_aux.json.")
-            aux_s7_center = aux_calib["7"]["center_ticks"]
-            s7_ticks = degrees_to_ticks_s7(deg, center_ticks=aux_s7_center)
-            with SERIAL_LOCK:
-                if hasattr(backend, "ctrl") and backend.ctrl:
-                    backend.ctrl.set_torque(7, True, max_torque_enable=800)
-                    backend.ctrl.write_goal_raw(7, s7_ticks, speed=1000)
-            return {"status": "ok", "channel": channel, "target_deg": deg, "ticks": s7_ticks}
+            rom = float(target_val)
+            backend.dispatch_dance_frame({}, s7_rom=rom)
+            return {"status": "ok", "channel": channel, "target_rom": rom}
 
         elif channel == "s8_gantry":
-            ticks = int(target_val)
-            backend.move_target(8, ticks, speed=600, max_t=800)
-            return {"status": "ok", "channel": channel, "target_pos": ticks}
+            rom = float(target_val)
+            backend.dispatch_dance_frame({}, s8_goal=rom, s8_is_rom=True, s8_speed=600)
+            return {"status": "ok", "channel": channel, "target_pos": rom}
 
         elif channel in ["spine_gaze", "body_pose"]:
             if isinstance(target_val, str):
@@ -236,14 +226,19 @@ class BeatStudioManager:
                 return self.preview_pose_on_robot(backend, target_val)
 
         elif channel == "s1_torso":
-            deg = float(target_val)
-            norm_pan = float(max(-100.0, min(100.0, deg)))
+            norm_pan = float(max(0.0, min(100.0, float(target_val))))
+            backend.dispatch_dance_frame({"shoulder_pan": norm_pan})
             return {"status": "ok", "channel": channel, "torso_pan": norm_pan}
 
         elif channel == "s5_head_tilt":
-            deg = float(target_val)
-            norm_roll = float(max(-100.0, min(100.0, deg)))
+            norm_roll = float(max(0.0, min(100.0, float(target_val))))
+            backend.dispatch_dance_frame({"wrist_roll": norm_roll})
             return {"status": "ok", "channel": channel, "head_tilt": norm_roll}
+        
+        elif channel == "s6_jaw":
+            norm_jaw = float(max(0.0, min(45.0, float(target_val))))
+            backend.dispatch_dance_frame({"gripper": norm_jaw})
+            return {"status": "ok", "channel": channel, "jaw": norm_jaw}
 
         return {"status": "error", "message": f"Unsupported channel '{channel}'"}
 

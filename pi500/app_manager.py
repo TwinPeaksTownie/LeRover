@@ -9,7 +9,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Type, List
-from robot_backend import RobotBackend, SERIAL_LOCK, dispatch_audio_event
+from robot_backend import RobotBackend, dispatch_audio_event
 
 
 @dataclass
