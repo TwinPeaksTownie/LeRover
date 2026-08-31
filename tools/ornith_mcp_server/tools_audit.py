@@ -125,10 +125,11 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
             ["git", "status", "--porcelain"],
             cwd=repo_path,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True
         )
-        status_output = status_proc.stdout.strip()
+        status_output = (status_proc.stdout or "").strip()
         
         modified_files = []
         untracked_files = []
@@ -150,9 +151,10 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
             ["git", "diff", "HEAD", "--", ".", ":!*manifest.json"],
             cwd=repo_path,
             capture_output=True,
-            text=True
+            encoding="utf-8",
+            errors="replace"
         )
-        diff_text = diff_proc.stdout
+        diff_text = diff_proc.stdout or ""
 
         # If no uncommitted diffs, inspect recent code commits (HEAD~5..HEAD)
         if not diff_text.strip() and not untracked_files:
@@ -160,10 +162,11 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
                 ["git", "diff", "HEAD~5..HEAD", "--", ".", ":!*manifest.json"],
                 cwd=repo_path,
                 capture_output=True,
-                text=True
+                encoding="utf-8",
+                errors="replace"
             )
-            if diff_proc_last.returncode == 0 and diff_proc_last.stdout.strip():
-                diff_text = f"=== RECENT COMMITS DIFF (HEAD~5..HEAD) ===\n\n" + diff_proc_last.stdout
+            if diff_proc_last.returncode == 0 and (diff_proc_last.stdout or "").strip():
+                diff_text = f"=== RECENT COMMITS DIFF (HEAD~5..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
 
         untracked_diffs = []
         for ufile in untracked_files:
@@ -391,15 +394,18 @@ Provide your adversarial audit:"""
 
     spoken_status = "not_spoken"
     if speak_verdict:
+        # Cap task summary at 100 words
+        words = (task_summary or "current task").split()
+        short_summary = " ".join(words[:100])
         try:
             if is_approved:
-                tools_speech.notify_task_verified(f"Task '{task_summary}' approved by Ornith audit.")
+                tools_speech.notify_task_verified(f"Task '{short_summary}' approved by Ornith audit.")
                 spoken_status = "spoken_approval"
             elif is_blocker:
-                tools_speech.notify_user_of_blocker(f"Ornith identified a blocker on '{task_summary}'.")
+                tools_speech.notify_user_of_blocker(f"Ornith identified a blocker on '{short_summary}'.")
                 spoken_status = "spoken_blocker"
             elif is_rejected:
-                tools_speech.speak_laura(f"Ornith supervisor has rejected the changes for '{task_summary}'. Please review the audit feedback.")
+                tools_speech.speak_laura(f"Ornith supervisor rejected the changes for '{short_summary}'.")
                 spoken_status = "spoken_rejection"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")

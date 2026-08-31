@@ -65,7 +65,12 @@ def speak_laura(
     if not text or not text.strip():
         return {"status": "error", "error": "Text argument cannot be empty"}
 
-    _log_debug(f"Synthesizing {len(text)} chars in voice '{voice_url}' on http://{host}:{port}/tts")
+    # Enforce maximum 100 words limit on speech output
+    words = text.strip().split()
+    if len(words) > 100:
+        text = " ".join(words[:100])
+
+    _log_debug(f"Synthesizing {len(text)} chars ({len(words)} words) in voice '{voice_url}' on http://{host}:{port}/tts")
     url = f"http://{host}:{port}/tts"
     
     payload = urllib.parse.urlencode({"text": text.strip(), "voice_url": voice_url}).encode("utf-8")
