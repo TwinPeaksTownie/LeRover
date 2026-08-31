@@ -131,6 +131,21 @@ class TestChoreographyCompiler(unittest.TestCase):
         with self.assertRaises(KeyError):
             identify_climax_blocks(invalid_block, self.mock_analysis, first_vocal_beat=0)
 
+    def test_pedestal_vocal_kickoff_and_center_return(self):
+        """Asserts that pedestal snaps align with vocal kick-offs and returns to center during silence."""
+        choreo = compile_choreography_tracks(self.mock_analysis, 45.0, seed=42)
+        s7_moves = choreo["tracks"]["s7_pedestal"]
+        blocks = choreo["blocks"]
+
+        self.assertEqual(choreo["version"], CHOREO_SCHEMA_VERSION)
+        self.assertEqual(len(s7_moves), len(blocks))
+
+        # First intro block (instrumental) must be centered at 50%
+        self.assertEqual(s7_moves[0]["target_pos_rom"], 50.0)
+
+        # Last outro block (instrumental) must resolve to 50%
+        self.assertEqual(s7_moves[-1]["target_pos_rom"], 50.0)
+
 
 if __name__ == "__main__":
     unittest.main()

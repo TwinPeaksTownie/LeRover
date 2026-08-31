@@ -346,7 +346,7 @@ def identify_climax_blocks(
     return selected_ids
 
 
-CHOREO_SCHEMA_VERSION = "3.2.1"
+CHOREO_SCHEMA_VERSION = "3.2.2"
 
 
 def compile_choreography_tracks(
@@ -668,19 +668,43 @@ def compile_choreography_tracks(
             s7_moves.append(custom_s7)
             prev_state["pedestal_rom"] = float(custom_s7.get("target_pos_rom", prev_state["pedestal_rom"]))
         else:
-            p_r = rng.random()
-            if p_r < 0.50:
+            is_vocal_start = is_vocal and (blk_idx == 0 or not timeline_blocks[blk_idx - 1].get("is_vocal"))
+            cur_p = prev_state["pedestal_rom"]
+
+            if is_vocal_start:
+                # Vocal line kick-off: trigger physical emphasis snap with >= 40% probability
+                snap_r = rng.random()
+                if snap_r < 0.45:
+                    # Choose a contrasting target angle
+                    if cur_p == 50.0:
+                        target_p_rom = 25.0 if rng.random() < 0.5 else 75.0
+                        p_mode = "snap_left" if target_p_rom == 25.0 else "snap_right"
+                    elif cur_p < 50.0:
+                        target_p_rom = 75.0 if rng.random() < 0.65 else 50.0
+                        p_mode = "snap_right" if target_p_rom == 75.0 else "snap_center"
+                    else:
+                        target_p_rom = 25.0 if rng.random() < 0.65 else 50.0
+                        p_mode = "snap_left" if target_p_rom == 25.0 else "snap_center"
+                    p_trans = 0.25
+                else:
+                    p_mode = "hold"
+                    target_p_rom = cur_p
+                    p_trans = 0.5
+            elif is_vocal:
+                # Continuing vocal line: hold pedestal steady for singing presence
                 p_mode = "hold"
-                target_p_rom = prev_state["pedestal_rom"]
+                target_p_rom = cur_p
                 p_trans = 0.5
-            elif p_r < 0.75:
-                p_mode = "snap_left"
-                target_p_rom = 25.0
-                p_trans = 0.25
             else:
-                p_mode = "snap_right"
-                target_p_rom = 75.0
-                p_trans = 0.25
+                # Instrumental break / pause / intro / outro: smoothly return to center stage
+                if cur_p != 50.0:
+                    p_mode = "return_center"
+                    target_p_rom = 50.0
+                    p_trans = 0.6
+                else:
+                    p_mode = "center_hold"
+                    target_p_rom = 50.0
+                    p_trans = 0.5
 
             prev_state["pedestal_rom"] = target_p_rom
 

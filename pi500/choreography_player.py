@@ -132,12 +132,23 @@ class ChoreographyPlayer:
             current_s7_rom = 50.0
             last_s8_block_id: Optional[str] = None
 
-            # Pre-roll: Enable torque and center stage
+            # Pre-roll: Enable torque on arm and pedestal, and center stage
             if hasattr(self.backend, "set_arm_torque"):
                 try:
                     self.backend.set_arm_torque(True)
                 except Exception as ex:
-                    logger.debug(f"Torque enable warning: {ex}")
+                    logger.debug(f"Arm torque enable warning: {ex}")
+
+            if hasattr(self.backend, "set_aux_torque"):
+                try:
+                    self.backend.set_aux_torque(7, True)
+                except Exception as ex:
+                    logger.debug(f"Aux 7 torque enable warning: {ex}")
+            elif hasattr(self.backend, "ctrl") and self.backend.ctrl:
+                try:
+                    self.backend.ctrl.set_torque(7, True)
+                except Exception as ex:
+                    logger.debug(f"Ctrl 7 torque enable warning: {ex}")
 
             if hasattr(self.backend, "dispatch_dance_frame"):
                 self.backend.dispatch_dance_frame(base_home_rom, s7_rom=50.0, s8_goal=50.0, s8_is_rom=True)

@@ -733,6 +733,23 @@ class RobotBackend:
                 logging.info("Arm torque disarmed on Servos 1-6 (limp mode).")
             return True
 
+    def set_aux_torque(self, servo_id: int, enable: bool) -> bool:
+        """Enables or disables torque on Aux Servo 7 or 8."""
+        if not self.ctrl:
+            return False
+        try:
+            with SERIAL_LOCK:
+                self.ctrl.set_torque(servo_id, enable)
+            with self.lock:
+                if servo_id in self.servos:
+                    self.servos[servo_id]["torque"] = enable
+                self.torque_state[servo_id] = enable
+            logging.info("Aux Servo %d torque %s.", servo_id, "enabled" if enable else "disabled")
+            return True
+        except Exception as e:
+            logging.warning("Error setting aux servo %d torque to %s: %s", servo_id, enable, e)
+            return False
+
     def disable_all_torque(self) -> bool:
         """Immediately disarms torque on Arm Servos 1-6 and Aux Servos 7-8."""
         logging.info("Disarming torque across all servos (1-8)...")
