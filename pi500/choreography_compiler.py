@@ -85,9 +85,27 @@ DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = {
 }
 
 
+def sec_to_beat_index(sec: float, beat_times: List[float]) -> int:
+    """Resolves a continuous second timestamp to the closest discrete musical beat index."""
+    if not beat_times:
+        return 0
+    import bisect
+    pos = bisect.bisect_left(beat_times, sec)
+    if pos == 0:
+        return 0
+    if pos >= len(beat_times):
+        return len(beat_times) - 1
+    before = beat_times[pos - 1]
+    after = beat_times[pos]
+    if (after - sec) < (sec - before):
+        return pos
+    return pos - 1
+
+
 def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) -> List[Dict[str, Any]]:
     """Partitions the song into continuous discrete blocks spanning vocal segments
-    and instrumental gaps (subdividing long instrumental gaps into chunks of >= 8 beats).
+    and instrumental gaps (subdividing long instrumental gaps into musical chunks of >= 8 beats / 2 bars).
+    All blocks track both physical timestamps and discrete musical beats/measures.
     """
     beat_times = [float(b) for b in analysis.get("beat_times", [])]
     raw_lyrics = analysis.get("lyrics", [])
@@ -99,6 +117,8 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
         st = max(0.0, float(seg["start_sec"]))
         et = min(duration, float(seg["end_sec"]))
         if et > st:
+            s_beat = sec_to_beat_index(st, beat_times)
+            e_beat = max(s_beat + 1, sec_to_beat_index(et, beat_times))
             sorted_lyrics.append({
                 "id": str(seg.get("id", f"ly_{l_idx + 1:03d}")),
                 "name": str(seg.get("name", seg.get("text", f"Line {l_idx + 1}"))),
@@ -109,6 +129,10 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
                 "start_sec": round(st, 2),
                 "end_sec": round(et, 2),
                 "duration": round(et - st, 2),
+                "start_beat": s_beat,
+                "end_beat": e_beat,
+                "duration_beats": e_beat - s_beat,
+                "measure": s_beat // 4,
                 "is_vocal": True,
             })
     sorted_lyrics.sort(key=lambda x: x["start_sec"])
@@ -120,6 +144,8 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
 
         beats_in_gap = [b for b in beat_times if gap_start <= b <= gap_end]
         if len(beats_in_gap) <= 12 or gap_dur < 6.0:
+            s_beat = sec_to_beat_index(gap_start, beat_times)
+            e_beat = max(s_beat + 1, sec_to_beat_index(gap_end, beat_times))
             return [{
                 "id": f"inst_{abs(hash((gap_start, gap_end))) % 1000000:06x}",
                 "name": base_name,
@@ -129,17 +155,23 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
                 "start_sec": round(gap_start, 2),
                 "end_sec": round(gap_end, 2),
                 "duration": round(gap_dur, 2),
+                "start_beat": s_beat,
+                "end_beat": e_beat,
+                "duration_beats": e_beat - s_beat,
+                "measure": s_beat // 4,
                 "is_vocal": False,
             }]
 
         chunks = []
         c_st = gap_start
-        step = 8
+        step = 8  # Subdivide instrumental gaps into 8-beat (2-measure) musical phrases
         for i in range(step, len(beats_in_gap), step):
             c_et = beats_in_gap[i]
             if (gap_end - c_et) < 3.0:
                 break
             if c_et > c_st + 0.5:
+                s_beat = sec_to_beat_index(c_st, beat_times)
+                e_beat = max(s_beat + 1, sec_to_beat_index(c_et, beat_times))
                 chunks.append({
                     "id": f"inst_{abs(hash((c_st, c_et))) % 1000000:06x}",
                     "name": f"{base_name} Pt {len(chunks) + 1}",
@@ -149,11 +181,17 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
                     "start_sec": round(c_st, 2),
                     "end_sec": round(c_et, 2),
                     "duration": round(c_et - c_st, 2),
+                    "start_beat": s_beat,
+                    "end_beat": e_beat,
+                    "duration_beats": e_beat - s_beat,
+                    "measure": s_beat // 4,
                     "is_vocal": False,
                 })
                 c_st = c_et
 
         if gap_end > c_st + 0.2:
+            s_beat = sec_to_beat_index(c_st, beat_times)
+            e_beat = max(s_beat + 1, sec_to_beat_index(gap_end, beat_times))
             chunks.append({
                 "id": f"inst_{abs(hash((c_st, gap_end))) % 1000000:06x}",
                 "name": f"{base_name} Pt {len(chunks) + 1}" if chunks else base_name,
@@ -163,6 +201,10 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
                 "start_sec": round(c_st, 2),
                 "end_sec": round(gap_end, 2),
                 "duration": round(gap_end - c_st, 2),
+                "start_beat": s_beat,
+                "end_beat": e_beat,
+                "duration_beats": e_beat - s_beat,
+                "measure": s_beat // 4,
                 "is_vocal": False,
             })
         return chunks
@@ -194,6 +236,104 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
         b["block_index"] = idx
         cleaned_blocks.append(b)
     return cleaned_blocks
+
+
+def identify_climax_blocks(
+    timeline_blocks: List[Dict[str, Any]],
+    analysis: Dict[str, Any],
+    first_vocal_beat: int,
+    max_arches: int = 2,
+    min_separation_bars: int = 4,
+) -> set[str]:
+    """Identifies up to max_arches peak climax blocks across the song (e.g. audio drops,
+    highest section energy, held vocal notes) to reserve the dramatic 'arch' posture for.
+    Calculates candidate alignment strictly in musical beats, measures, and 4-bar / 8-bar phrases.
+    """
+    if max_arches <= 0 or not timeline_blocks:
+        return set()
+
+    beat_times = [float(b) for b in analysis.get("beat_times", [])]
+    min_separation_beats = min_separation_bars * 4  # Standard 4/4 musical measure phrasing
+
+    drops = analysis.get("drops", [])
+    drop_beats = [
+        sec_to_beat_index(float(d["drop_sec"]), beat_times)
+        for d in drops
+        if "drop_sec" in d
+    ]
+    held_notes = analysis.get("held_notes", [])
+    held_spans = [
+        (
+            sec_to_beat_index(float(h["start_sec"]), beat_times),
+            sec_to_beat_index(float(h["end_sec"]), beat_times)
+        )
+        for h in held_notes
+        if "start_sec" in h and "end_sec" in h
+    ]
+    raw_sections = analysis.get("sections", [])
+    section_spans = [
+        (
+            sec_to_beat_index(float(s["start_sec"]), beat_times),
+            sec_to_beat_index(float(s["end_sec"]), beat_times),
+            max(0.0, min(1.0, float(s.get("energy_score", 0.5)))),
+            str(s.get("type", "")).lower()
+        )
+        for s in raw_sections
+        if "start_sec" in s and "end_sec" in s
+    ]
+
+    candidates: List[Tuple[float, int, str]] = []  # (score, start_beat, block_id)
+
+    for blk in timeline_blocks:
+        if "start_beat" not in blk or "end_beat" not in blk:
+            raise KeyError(f"Block '{blk.get('id', 'unknown')}' missing mandatory 'start_beat' / 'end_beat' fields")
+        b_sbeat = int(blk["start_beat"])
+        b_ebeat = int(blk["end_beat"])
+        blk_id = str(blk["id"])
+
+        # Exclude intro blocks prior to first vocal beat
+        if b_ebeat <= first_vocal_beat and first_vocal_beat > 0:
+            continue
+
+        score = 0.0
+
+        # 1. Drop Match (Highest Priority)
+        is_drop_hit = any(b_sbeat <= db <= b_ebeat for db in drop_beats)
+        if is_drop_hit:
+            score += 100.0
+
+        # 2. Section Energy Score
+        sec_match = next((s for s in section_spans if s[0] <= b_sbeat < s[1]), None)
+        if sec_match:
+            sec_energy, stype = sec_match[2], sec_match[3]
+            score += sec_energy * 20.0
+            if stype in ["chorus", "drop", "climax", "solo"]:
+                score += 10.0
+
+        # 3. Held Notes (Vocal Sustain)
+        has_held = any(h_st <= b_sbeat < h_et for h_st, h_et in held_spans)
+        if has_held:
+            score += 15.0
+
+        if score > 0.0:
+            candidates.append((score, b_sbeat, blk_id))
+
+    # Sort candidates by score descending, then start_beat ascending
+    candidates.sort(key=lambda x: (-x[0], x[1]))
+
+    selected_ids: set[str] = set()
+    selected_beats: List[int] = []
+
+    for score, b_sbeat, blk_id in candidates:
+        if len(selected_ids) >= max_arches:
+            break
+        # Ensure 4-bar (16-beat) musical phrasing separation between climax arches
+        if any(abs(b_sbeat - s_beat) < min_separation_beats for s_beat in selected_beats):
+            continue
+        selected_ids.add(blk_id)
+        selected_beats.append(b_sbeat)
+
+    return selected_ids
 
 
 CHOREO_SCHEMA_VERSION = "3.2.0"
@@ -239,6 +379,14 @@ def compile_choreography_tracks(
             
     if has_user_edits and existing_master_blocks:
         timeline_blocks = existing_master_blocks
+        for b in timeline_blocks:
+            if "start_beat" not in b or "end_beat" not in b:
+                s_beat = sec_to_beat_index(float(b["start_sec"]), beat_times)
+                e_beat = max(s_beat + 1, sec_to_beat_index(float(b["end_sec"]), beat_times))
+                b["start_beat"] = s_beat
+                b["end_beat"] = e_beat
+                b["duration_beats"] = e_beat - s_beat
+                b["measure"] = s_beat // 4
     else:
         timeline_blocks = partition_timeline_into_blocks(analysis, duration)
 
@@ -251,11 +399,24 @@ def compile_choreography_tracks(
                 if blk_key:
                     edited_moves_by_channel[ch][blk_key] = m
 
+    first_vocal_beat = len(beat_times)
     first_vocal_sec = duration
     for b in timeline_blocks:
         if b.get("is_vocal"):
+            if "start_beat" not in b:
+                raise KeyError(f"Vocal block '{b.get('id')}' missing mandatory 'start_beat' field")
+            first_vocal_beat = int(b["start_beat"])
             first_vocal_sec = float(b["start_sec"])
             break
+
+    # Tag at most 2 peak climax blocks to receive the dramatic 'arch' posture (separated by at least 4 bars)
+    climax_arch_block_ids = identify_climax_blocks(
+        timeline_blocks,
+        analysis,
+        first_vocal_beat,
+        max_arches=2,
+        min_separation_bars=4,
+    )
 
     sec_blocks = []
     for idx, s in enumerate(raw_sections):
@@ -395,14 +556,21 @@ def compile_choreography_tracks(
             prev_state["spine_pose"] = custom_spine.get("end_pose", custom_spine.get("pose_name", prev_state["spine_pose"]))
         else:
             start_pose = prev_state["spine_pose"]
-            available_poses = ["squat", "tiptoe", "arch"]
+            is_climax_arch = (blk_id in climax_arch_block_ids)
 
             if is_intro:
                 spine_pattern = "hold_stand"
                 mid_pose = "stand"
                 end_pose = "stand"
                 trans_sec = 0.5
+            elif is_climax_arch:
+                # Reserved peak climax moment: execute dramatic arch
+                spine_pattern = "stand_to_pose"
+                mid_pose = "arch"
+                end_pose = "arch"
+                trans_sec = 0.5
             elif start_pose == "stand":
+                available_poses = ["squat", "tiptoe"]  # arch is reserved for climax blocks
                 spine_r = rng.random()
                 if spine_r < 0.40:
                     spine_pattern = "hold_stand"

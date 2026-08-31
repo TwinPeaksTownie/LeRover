@@ -85,7 +85,55 @@ class TestChoreographyCompiler(unittest.TestCase):
             self.assertGreaterEqual(p_rom, 0.0)
             self.assertLessEqual(p_rom, 100.0)
 
+    def test_arch_pose_budget_and_climax_alignment(self):
+        """Asserts that arch is initiated at most 2 times across the entire song and only at climax moments."""
+        choreo = compile_choreography_tracks(self.mock_analysis, 45.0, seed=42)
+        spine_moves = choreo["tracks"]["spine_gaze"]
+
+        # Find all moves where arch was initiated / entered as the target posture
+        initiated_arches = [m for m in spine_moves if m.get("end_pose") == "arch" and m.get("pattern") in ["stand_to_pose", "stand_dip_stand"]]
+
+        # Must not exceed 2 arches initiated
+        self.assertLessEqual(len(initiated_arches), 2, f"Too many arch poses initiated: {len(initiated_arches)}")
+        self.assertGreater(len(initiated_arches), 0, "Expected at least one climax arch to be selected")
+
+        # Initiated arch moves must have head_pitch == 'up' and neck_pitch_rom == 50.0
+        for am in initiated_arches:
+            self.assertEqual(am["head_pitch"], "up")
+            self.assertEqual(am["neck_pitch_rom"], 50.0)
+
+        # For any block that ended in arch, the immediately subsequent block must recover to stand
+        for idx, m in enumerate(spine_moves[:-1]):
+            if m.get("end_pose") == "arch":
+                next_m = spine_moves[idx + 1]
+                self.assertEqual(next_m.get("start_pose"), "arch")
+                self.assertEqual(next_m.get("end_pose"), "stand")
+                self.assertIn(next_m.get("pattern"), ["return_stand_early", "return_stand_mid", "return_stand_late"])
+
+    def test_musical_unit_timing_and_schema_validation(self):
+        """Asserts that all timeline blocks contain discrete musical unit parameters
+        and fail-fast KeyError is raised when mandatory timing keys are missing.
+        """
+        from choreography_compiler import identify_climax_blocks
+        blocks = partition_timeline_into_blocks(self.mock_analysis, 45.0)
+
+        for b in blocks:
+            self.assertIn("start_beat", b)
+            self.assertIn("end_beat", b)
+            self.assertIn("duration_beats", b)
+            self.assertIn("measure", b)
+            self.assertGreaterEqual(b["end_beat"], b["start_beat"])
+            self.assertEqual(b["duration_beats"], b["end_beat"] - b["start_beat"])
+            self.assertEqual(b["measure"], b["start_beat"] // 4)
+
+        # Fail-fast schema test: passing block without start_beat must raise KeyError
+        invalid_block = [{"id": "bad_blk", "start_sec": 10.0, "end_sec": 20.0}]
+        with self.assertRaises(KeyError):
+            identify_climax_blocks(invalid_block, self.mock_analysis, first_vocal_beat=0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
 

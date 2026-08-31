@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "ornith-verifier": {
+      "command": "C:\\Python311\\python.exe",
+      "args": [
+        "i:\\aux_servo_interface\\tools\\ornith_mcp_server\\server.py"
+      ]
+    }
+  }
+}

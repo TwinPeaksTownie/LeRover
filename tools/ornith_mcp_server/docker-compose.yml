@@ -1,0 +1,21 @@
+services:
+  ornith-daemon:
+    image: ornith-daemon:latest
+    container_name: ornith-daemon
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - "i:\\aux_servo_interface:/workspace"
+      - "C:\\Users\\carso\\.gemini\\antigravity\\brain:/brain"
+      - "C:\\Users\\carso\\.ssh:/root/.ssh:ro"
+    environment:
+      - REPO_PATH=/workspace
+      - BRAIN_DIR=/brain
+      - LM_STUDIO_URL=http://host.docker.internal:1234/v1/chat/completions
+      - POCKET_TTS_HOST=host.docker.internal
+      - POCKET_TTS_PORT=8057
+      - HOST_BRIDGE_URL=http://host.docker.internal:8059/inject
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

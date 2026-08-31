@@ -1,0 +1,213 @@
+"""
+server.py - Ornith MCP Server for Antigravity & LM Studio
+Exposes tools for Antigravity to invoke the Ornith 1.0 35B model in LM Studio for adversarial review,
+run code contract scans, verify hardware state on the Pi 500, and speak via Laura Pocket TTS (port 8057).
+"""
+
+import asyncio
+import importlib
+import json
+import logging
+import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+# Configure logging strictly to sys.stderr and logfile
+log_file = os.path.join(BASE_DIR, "mcp_server.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stderr),
+        logging.FileHandler(log_file, encoding="utf-8")
+    ]
+)
+logger = logging.getLogger("ornith_mcp")
+
+from mcp.server.mcpserver import MCPServer
+import tools_speech
+import tools_audit
+import tools_hardware
+import tools_computer_use
+
+app = MCPServer(
+    name="ornith-supervisor",
+    description="Ornith 1.0 35B Adversarial Verification & Voice Supervision Suite"
+)
+
+def _reload_modules():
+    global tools_speech, tools_audit, tools_hardware, tools_computer_use
+    tools_speech = importlib.reload(tools_speech)
+    tools_audit = importlib.reload(tools_audit)
+    tools_hardware = importlib.reload(tools_hardware)
+    tools_computer_use = importlib.reload(tools_computer_use)
+
+# -----------------------------------------------------------------------------
+# 1. Adversarial Review & Perception Tools
+# -----------------------------------------------------------------------------
+
+@app.tool()
+def invoke_ornith_adversarial_review(
+    task_summary: str,
+    repo_path: str = r"i:\aux_servo_interface",
+    speak_verdict: bool = True
+) -> str:
+    """
+    Invokes the Ornith 1.0 35B model in LM Studio to perform a rigorous adversarial audit
+    of the current codebase changes and git diffs against project rules.
+    If approved or blocked, announces the result to the user in Laura's voice via Pocket TTS.
+    """
+    _reload_modules()
+    res = tools_audit.query_ornith_for_review(
+        task_summary=task_summary,
+        repo_path=repo_path,
+        speak_verdict=speak_verdict
+    )
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def get_git_diff(repo_path: str = r"i:\aux_servo_interface") -> str:
+    """
+    Captures complete git diff including untracked and modified files.
+    """
+    _reload_modules()
+    res = tools_audit.get_git_diff(repo_path=repo_path)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def scan_code_contracts(diff_text: str = "", repo_path: str = r"i:\aux_servo_interface") -> str:
+    """
+    Scans code diffs for anti-patterns:
+    - .get(key, default) in hardware/calibration paths (violates fail-fast schema)
+    - Hardcoded 2048 / 0x800 neutral ticks (must load from follower.json or calibration_aux.json)
+    - Swallowed exceptions (except: pass)
+    - Direct unverified /dev/ttyACM0 open statements
+    """
+    _reload_modules()
+    res = tools_audit.scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def get_active_conversation_transcript(
+    brain_dir: str = r"C:\Users\carso\.gemini\antigravity\brain",
+    max_turns: int = 3
+) -> str:
+    """
+    Reads the active Antigravity conversation transcript directly from disk.
+    """
+    _reload_modules()
+    res = tools_audit.get_active_conversation_transcript(brain_dir=brain_dir, max_turns=max_turns)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def read_workspace_file(file_path: str, start_line: int = 1, max_lines: int = 500) -> str:
+    """
+    Reads specific lines from a file in the workspace on disk for inspection.
+    """
+    _reload_modules()
+    res = tools_audit.read_workspace_file(file_path=file_path, start_line=start_line, max_lines=max_lines)
+    return json.dumps(res, indent=2)
+
+# -----------------------------------------------------------------------------
+# 2. Remote Hardware & System Verification Tools
+# -----------------------------------------------------------------------------
+
+@app.tool()
+def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> str:
+    """
+    Executes a non-interactive shell command over SSH on a system node (pi500, pi4b, mac_mini).
+    """
+    _reload_modules()
+    res = tools_hardware.ssh_run_command(node=node, command=command, timeout_sec=timeout_sec)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi500") -> str:
+    """
+    Verifies State 1 of the Verification State Machine: compares local and remote MD5 checksums.
+    """
+    _reload_modules()
+    res = tools_hardware.verify_file_deployment(local_file=local_file, remote_path=remote_path, node=node)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def sample_motor_telemetry(
+    node: str = "pi500",
+    endpoint_url: str = "http://192.168.0.130:8082/api/telemetry"
+) -> str:
+    """
+    Queries live motor encoder telemetry via HTTP REST without colliding on /dev/ttyACM0 (States 2 & 3).
+    """
+    _reload_modules()
+    res = tools_hardware.sample_motor_telemetry(node=node, endpoint_url=endpoint_url)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def query_daemon_logs(node: str = "pi500", service_name: str = "backend.service", lines: int = 50) -> str:
+    """
+    Verifies State 4: Scans systemd daemon logs on the target node for serial timeouts or exceptions.
+    """
+    _reload_modules()
+    res = tools_hardware.query_daemon_logs(node=node, service_name=service_name, lines=lines)
+    return json.dumps(res, indent=2)
+
+# -----------------------------------------------------------------------------
+# 3. Speech & Voice Notification Tools
+# -----------------------------------------------------------------------------
+
+@app.tool()
+def speak_laura(text: str, voice_url: str = "hf://laura") -> str:
+    """
+    Synthesizes and speaks text aloud through local speakers in Laura's voice using Pocket TTS (port 8057).
+    """
+    _reload_modules()
+    res = tools_speech.speak_laura(text=text, voice_url=voice_url)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def notify_user_of_blocker(reason: str) -> str:
+    """
+    Speaks a high-priority spoken alert to Carson via Laura TTS when human input is required.
+    """
+    _reload_modules()
+    res = tools_speech.notify_user_of_blocker(reason=reason)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def notify_task_verified(summary: str, telemetry_delta: str = "") -> str:
+    """
+    Speaks an official verification completion notice in Laura's voice after all 4 verification states pass.
+    """
+    _reload_modules()
+    res = tools_speech.notify_task_verified(summary=summary, telemetry_delta=telemetry_delta)
+    return json.dumps(res, indent=2)
+
+# -----------------------------------------------------------------------------
+# 4. Computer Use & Desktop Tools
+# -----------------------------------------------------------------------------
+
+@app.tool()
+def send_feedback_to_antigravity(feedback_text: str, click_send: bool = True) -> str:
+    """
+    Focuses the Antigravity IDE, clicks the chat input textarea using relative window coordinates,
+    and pastes the feedback text.
+    """
+    _reload_modules()
+    res = tools_computer_use.send_feedback_to_antigravity(feedback_text=feedback_text, click_send=click_send)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def get_active_window() -> str:
+    """
+    Returns the title, handle (HWND), and process name of the currently active window on the desktop.
+    """
+    _reload_modules()
+    res = tools_computer_use.get_active_window()
+    return json.dumps(res, indent=2)
+
+if __name__ == "__main__":
+    logger.info("Starting Ornith MCP Server (stdio transport)...")
+    app.run("stdio")
