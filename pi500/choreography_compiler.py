@@ -371,6 +371,7 @@ def compile_choreography_tracks(
         raise ValueError("Cannot compile choreography: 'beat_times' missing in audio analysis.")
 
     tempo = float(analysis.get("bpm") or analysis.get("tempo", 120.0))
+    bpm = tempo
     raw_sections = analysis.get("sections", [])
     drops = analysis.get("drops", [])
     held_notes = analysis.get("held_notes", [])
@@ -666,7 +667,7 @@ def compile_choreography_tracks(
         if blk_id in edited_moves_by_channel.get("s7_pedestal", {}):
             custom_s7 = dict(edited_moves_by_channel["s7_pedestal"][blk_id])
             s7_moves.append(custom_s7)
-            prev_state["pedestal_rom"] = float(custom_s7.get("target_pos_rom", prev_state["pedestal_rom"]))
+            prev_state["pedestal_rom"] = float(custom_s7["target_pos_rom"])
         else:
             is_vocal_start = is_vocal and (blk_idx == 0 or not timeline_blocks[blk_idx - 1].get("is_vocal"))
             cur_p = prev_state["pedestal_rom"]
@@ -685,38 +686,45 @@ def compile_choreography_tracks(
                     else:
                         target_p_rom = 25.0 if rng.random() < 0.65 else 50.0
                         p_mode = "snap_left" if target_p_rom == 25.0 else "snap_center"
-                    p_trans = 0.25
+                    trans_beats = 0.5
                 else:
                     p_mode = "hold"
                     target_p_rom = cur_p
-                    p_trans = 0.5
+                    trans_beats = 1.0
             elif is_vocal:
                 # Continuing vocal line: hold pedestal steady for singing presence
                 p_mode = "hold"
                 target_p_rom = cur_p
-                p_trans = 0.5
+                trans_beats = 1.0
             else:
                 # Instrumental break / pause / intro / outro: smoothly return to center stage
                 if cur_p != 50.0:
                     p_mode = "return_center"
                     target_p_rom = 50.0
-                    p_trans = 0.6
+                    trans_beats = 1.5
                 else:
                     p_mode = "center_hold"
                     target_p_rom = 50.0
-                    p_trans = 0.5
+                    trans_beats = 1.0
 
             prev_state["pedestal_rom"] = target_p_rom
+            sec_per_beat = (60.0 / bpm) if bpm > 0 else 0.5
+            p_trans = float(trans_beats * sec_per_beat)
 
             s7_moves.append({
                 "id": f"s7_{blk_id}",
                 "block_id": blk_id,
                 "name": f"{blk_name} Pedestal ({p_mode.replace('_', ' ').title()})",
                 "mode": p_mode,
+                "start_beat": b["start_beat"],
+                "end_beat": b["end_beat"],
+                "duration_beats": b["duration_beats"],
+                "measure": b["measure"],
                 "start_sec": b_st,
                 "end_sec": b_et,
                 "target_pos_rom": float(target_p_rom),
                 "transition_sec": p_trans,
+                "transition_beats": trans_beats,
             })
 
         # 6. Track 1: Hips / Torso Pan (S1)
@@ -729,6 +737,10 @@ def compile_choreography_tracks(
                 "block_id": blk_id,
                 "name": f"{blk_name} Hips ({facing_mode.replace('_', ' ').title()})",
                 "facing_mode": facing_mode,
+                "start_beat": b["start_beat"],
+                "end_beat": b["end_beat"],
+                "duration_beats": b["duration_beats"],
+                "measure": b["measure"],
                 "start_sec": b_st,
                 "end_sec": b_et,
             })
@@ -754,6 +766,10 @@ def compile_choreography_tracks(
                 "name": f"{blk_name} Tilt ({tilt_mode.replace('_', ' ').title()})",
                 "tilt_mode": tilt_mode,
                 "tilt_rom": float(tilt_rom),
+                "start_beat": b["start_beat"],
+                "end_beat": b["end_beat"],
+                "duration_beats": b["duration_beats"],
+                "measure": b["measure"],
                 "start_sec": b_st,
                 "end_sec": b_et,
             })
