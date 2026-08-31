@@ -777,7 +777,7 @@ export function updateTelemetryUI(data) {
     const telemLeader = ht.leader;
     
     setIsStudioRunning(currentApp === 'servo_studio_app');
-    setIsClackPoseRunning(currentApp === 'clack_pose_app');
+    setIsClackPoseRunning(currentApp === 'clack_pose_app' || currentApp === 'piranha_pose_app');
     setIsFollowerRunning(currentApp === 'teleop_app');
     setIsLeaderRunning(!!((data.leader && data.leader.running) || (telemLeader && telemLeader.running)));
     

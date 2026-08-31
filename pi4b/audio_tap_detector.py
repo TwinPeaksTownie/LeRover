@@ -192,14 +192,13 @@ class AudioTapDetector:
 
     def _get_api_url(self) -> str:
         try:
-            try:
-                from network_resolver import get_current_pi500_ip
-            except ImportError:
-                from pi4b.network_resolver import get_current_pi500_ip
-            ip = get_current_pi500_ip(port=8085)
-            return f"http://{ip}:8085"
-        except Exception:
-            return self.pi500_url
+            from network_resolver import get_pi500_ip
+        except ImportError:
+            from pi4b.network_resolver import get_pi500_ip
+        ip = get_pi500_ip(prefer_port=8085)
+        if not ip:
+            raise KeyError("Failed to resolve Pi 500 IP address from network_resolver")
+        return f"http://{ip}:8085"
 
     def _dispatch_action(self, count: int, intervals: List[int], max_amp: int) -> None:
         """Dispatches verified clack/tap actions based on count."""

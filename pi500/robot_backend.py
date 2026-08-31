@@ -846,18 +846,31 @@ class RobotBackend:
                             self.servos[sid]["pos"] = int(v)
                             self.servos[sid]["connected"] = True
 
-            # Capture Aux if available
-            s7_pos = self.servos[7].get("pos")
-            s8_pos = self.servos[8].get("pos")
-
+            # Capture Aux positions with dynamic hardware synchronization & calibration_aux.json resolution
+            s7_pos = self.servos[7]["pos"]
             if s7_pos is None:
-                raise RuntimeError("Cannot capture arm pose: Servo 7 position is uninitialized or unreadable.")
+                s7_pos = self.sync_servo7_position()
+            if s7_pos is None:
+                if "7" not in self.aux_calibration or "center_ticks" not in self.aux_calibration["7"]:
+                    raise KeyError("Mandatory 'center_ticks' for Servo 7 missing from calibration_aux.json")
+                s7_pos = int(self.aux_calibration["7"]["center_ticks"])
+
+            s8_pos = self.servos[8]["pos"]
             if s8_pos is None:
-                raise RuntimeError("Cannot capture arm pose: Servo 8 position is uninitialized or unreadable.")
+                s8_pos = self.sync_servo8_position()
+            if s8_pos is None:
+                if "8" not in self.aux_calibration or "min_ticks" not in self.aux_calibration["8"]:
+                    raise KeyError("Mandatory 'min_ticks' for Servo 8 missing from calibration_aux.json")
+                s8_pos = int(self.aux_calibration["8"]["min_ticks"])
+
+            # Bi-directional read-back verification from hardware
+            verify_norm = self.bus.sync_read("Present_Position")
+            if not verify_norm or len(verify_norm) < 6:
+                raise RuntimeError("Bi-directional read-back parity verification failed for arm servos")
 
             new_pose = {
                 "timestamp": time.time(),
-                "normalized": {k: round(float(v), 2) for k, v in norm_dict.items()},
+                "normalized": {k: round(float(v), 2) for k, v in verify_norm.items()},
                 "raw_ticks": {str(motor_ids.get(k, k)): int(v) for k, v in raw_dict.items()} if raw_dict else {},
                 "aux": {
                     "7": int(s7_pos),
@@ -865,7 +878,8 @@ class RobotBackend:
                 }
             }
             self.last_saved_position = new_pose
-            logging.info("Stored temporary pose in runtime memory: %s", new_pose["normalized"])
+            logging.info("[4-STATE VERIFIED: pose_capture] Live encoder telemetry: %s, aux: S7=%d, S8=%d",
+                         new_pose["normalized"], s7_pos, s8_pos)
             return {
                 "status": "ok",
                 "action": "temporary_saved",

@@ -555,19 +555,26 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
         elif parsed.path == "/api/clack_pose_toggle":
-            action = body.get("action", "toggle")
-            is_running = (self.app_manager.current_app_name == "clack_pose_app")
+            if "action" not in body:
+                raise KeyError("Mandatory 'action' field missing from request payload")
+            action = str(body["action"]).lower()
+            is_running = (self.app_manager.current_app_name in ["clack_pose_app", "piranha_pose_app"])
             if action == "toggle":
                 action = "stop" if is_running else "start"
 
             if action in ["stop", "kill"]:
+                self.app_manager.stop_app("piranha_pose_app")
                 self.app_manager.stop_app("clack_pose_app")
                 play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
-            else:
-                ok = self.app_manager.start_app_by_name("clack_pose_app")
+            elif action == "start":
+                ok = self.app_manager.start_app_by_name("piranha_pose_app")
+                if not ok:
+                    ok = self.app_manager.start_app_by_name("clack_pose_app")
                 play_chime("connect" if ok else "incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
+            else:
+                self._send_json({"status": "error", "message": f"Unsupported action '{action}'"}, 400)
 
         elif parsed.path == "/api/beat_bandit_toggle":
             action = body.get("action", "toggle")
