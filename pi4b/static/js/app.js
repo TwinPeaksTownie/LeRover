@@ -444,7 +444,8 @@ export function saveAndRecompileSettings() {
                         setActiveChoreoData(d.choreography);
                         ui.renderTimeline();
                     }
-                    api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+                    api.sendPlaySound({ kind: 'smw_save_menu' })
+                        .catch(err => console.warn('Sound FX error:', err));
                     if (saveSettingsBtn) {
                         saveSettingsBtn.innerText = '✅ RECOMPILED!';
                         setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 1500);
@@ -1458,12 +1459,24 @@ function bindEventListeners() {
         if (!activeChoreoData) return;
         if (!activeChoreoData.settings) activeChoreoData.settings = {};
 
-        const gate = parseFloat(document.getElementById('bbSliderJawGate')?.value || '0.18');
-        const maxO = parseFloat(document.getElementById('bbSliderJawMax')?.value || '45');
-        const nod = parseFloat(document.getElementById('bbSliderNodDepth')?.value || '6.0');
-        const vib = parseFloat(document.getElementById('bbSliderVibrato')?.value || '20');
-        const spd = parseInt(document.getElementById('bbSliderGantrySpeed')?.value || '800', 10);
-        const agil = parseFloat(document.getElementById('bbSliderAgility')?.value || '0.35');
+        const elGate = document.getElementById('bbSliderJawGate');
+        const elMaxO = document.getElementById('bbSliderJawMax');
+        const elNod = document.getElementById('bbSliderNodDepth');
+        const elVib = document.getElementById('bbSliderVibrato');
+        const elSpd = document.getElementById('bbSliderGantrySpeed');
+        const elAgil = document.getElementById('bbSliderAgility');
+
+        if (!elGate || !elMaxO || !elNod || !elVib || !elSpd || !elAgil) {
+            console.error('Missing Section 4 slider element in DOM');
+            return;
+        }
+
+        const gate = parseFloat(elGate.value);
+        const maxO = parseFloat(elMaxO.value);
+        const nod = parseFloat(elNod.value);
+        const vib = parseFloat(elVib.value);
+        const spd = parseInt(elSpd.value, 10);
+        const agil = parseFloat(elAgil.value);
 
         activeChoreoData.settings.jaw_gate_threshold = gate;
         activeChoreoData.settings.jaw_max_open = maxO;

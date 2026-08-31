@@ -253,6 +253,14 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             else:
                 tracks = bb_app.list_tracks()
             self._send_json({"status": "ok", "tracks": tracks})
+        elif parsed.path == "/api/apps/beat_bandit/probabilities":
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                probs = studio_mgr.get_probabilities()
+                self._send_json({"status": "ok", "probabilities": probs})
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
         elif parsed.path in ["/api/apps/beat_bandit/choreo", "/api/apps/beat_bandit/choreography"]:
             query = urllib.parse.parse_qs(parsed.query)
             track_id = query.get("track_id", [None])[0]
@@ -623,6 +631,25 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 if bb_app and bb_app.active_track and bb_app.active_track.get("track_id") == track_id:
                     bb_app.active_track["choreography"] = choreo
                 self._send_json(res)
+            except Exception as e:
+                self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/probabilities":
+            if "probabilities" not in body or not isinstance(body["probabilities"], dict):
+                raise KeyError("Mandatory 'probabilities' dictionary object missing from request payload")
+            probs = body["probabilities"]
+            track_id = body.get("track_id")
+            from beat_studio import get_global_studio_manager
+            studio_mgr = get_global_studio_manager()
+            try:
+                studio_mgr.save_probabilities(probs)
+                updated_choreo = None
+                if track_id:
+                    updated_choreo = studio_mgr.auto_generate_choreography(track_id)
+                    bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
+                    if bb_app and bb_app.active_track and bb_app.active_track.get("track_id") == track_id:
+                        bb_app.active_track["choreography"] = updated_choreo
+                self._send_json({"status": "ok", "probabilities": probs, "choreography": updated_choreo})
             except Exception as e:
                 self._send_json({"status": "error", "message": str(e)}, 500)
 
