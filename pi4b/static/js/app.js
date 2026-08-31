@@ -473,14 +473,18 @@ export function saveCurrentChoreography() {
     api.saveBeatBanditChoreo(tid, activeChoreoData)
         .then(r => r.json())
         .then(d => {
-            api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+            api.sendPlaySound({ kind: 'smw_save_menu' })
+                .catch(err => console.warn('Sound FX error:', err));
             const saveBtn = document.getElementById('bbSaveChoreoBtn');
             if (saveBtn) {
                 saveBtn.innerText = '✅ SAVED!';
                 setTimeout(() => { saveBtn.innerText = '💾 SAVE'; }, 1500);
             }
         })
-        .catch(() => {});
+        .catch(err => {
+            console.error('Failed to save choreography:', err);
+            ui.setHeaderAlert('CHOREO SAVE ERROR');
+        });
 }
 
 export function openAIDirectorModalFlow() {
@@ -1491,15 +1495,9 @@ function bindEventListeners() {
 
     function handleProbabilitiesSliderInput() {
         if (!activeProbabilitiesData) {
-            setActiveProbabilitiesData({
-                pedestal_s7: { vocal_start_shift_probability: 0.30, target_rom: { shift_left: 42.0, shift_right: 58.0, center: 50.0 }, transition_beats: { vocal_shift: 1.0, return_center: 2.0, hold: 1.0 } },
-                gantry_s8: { non_drop_move_probability: 0.65, move_type_probabilities: { full_glide: 0.40, early_step: 0.30, late_step: 0.30 }, drop_targets_rom: [85.0, 15.0], normal_targets_rom_left: [15.0, 40.0], normal_targets_rom_right: [60.0, 85.0], speeds: { drop_glide: 700, drop_hold: 600, hold: 250, min_glide: 350, max_glide: 700 } },
-                torso_s1: { audience_counter_probability: 0.80 },
-                head_tilt_s5: { center_probability: 0.70, snap_pulse_probability: 0.20, continuous_roll_probability: 0.10, snap_pulse_left_rom: 42.0, snap_pulse_right_rom: 58.0, snap_pulse_duration_sec: 0.8, continuous_roll_amplitude_rom: 8.0, continuous_roll_freq_hz: 1.0, center_rom: 50.0 },
-                neck_pitch_s4: { up_probability: 0.15, down_probability: 0.05, level_probability: 0.80, pitch_up_rom: 50.0, pitch_down_rom: 85.0, pitch_level_rom: 70.0 },
-                spine_gaze: { max_climax_arches: 2, min_separation_bars: 4 },
-                bounce_modifier: { default_intensity: 0.12, targets: ["hip_sway", "body_bounce", "head_bob"] }
-            });
+            console.error('FAIL-FAST: activeProbabilitiesData is not loaded from backend');
+            ui.setHeaderAlert('PROBABILITIES NOT LOADED');
+            return;
         }
         const p = activeProbabilitiesData;
 
