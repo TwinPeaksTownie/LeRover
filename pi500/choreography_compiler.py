@@ -346,7 +346,7 @@ def identify_climax_blocks(
     return selected_ids
 
 
-CHOREO_SCHEMA_VERSION = "3.2.2"
+CHOREO_SCHEMA_VERSION = "3.2.3"
 
 
 def compile_choreography_tracks(
@@ -370,7 +370,14 @@ def compile_choreography_tracks(
     if not beat_times:
         raise ValueError("Cannot compile choreography: 'beat_times' missing in audio analysis.")
 
-    tempo = float(analysis.get("bpm") or analysis.get("tempo", 120.0))
+    if "bpm" in analysis:
+        tempo = float(analysis["bpm"])
+    elif "tempo" in analysis:
+        tempo = float(analysis["tempo"])
+    else:
+        raise KeyError("Audio analysis payload missing mandatory 'bpm' or 'tempo' field")
+    if tempo <= 0.0:
+        raise ValueError(f"Invalid non-positive tempo '{tempo}' in audio analysis.")
     bpm = tempo
     raw_sections = analysis.get("sections", [])
     drops = analysis.get("drops", [])
@@ -673,20 +680,20 @@ def compile_choreography_tracks(
             cur_p = prev_state["pedestal_rom"]
 
             if is_vocal_start:
-                # Vocal line kick-off: trigger physical emphasis snap with >= 40% probability
+                # Vocal line kick-off: trigger gentle physical shift with 30% probability
                 snap_r = rng.random()
-                if snap_r < 0.45:
-                    # Choose a contrasting target angle
+                if snap_r < 0.30:
+                    # Choose a subtle contrasting target angle (+/-21.6 deg)
                     if cur_p == 50.0:
-                        target_p_rom = 25.0 if rng.random() < 0.5 else 75.0
-                        p_mode = "snap_left" if target_p_rom == 25.0 else "snap_right"
+                        target_p_rom = 42.0 if rng.random() < 0.5 else 58.0
+                        p_mode = "shift_left" if target_p_rom == 42.0 else "shift_right"
                     elif cur_p < 50.0:
-                        target_p_rom = 75.0 if rng.random() < 0.65 else 50.0
-                        p_mode = "snap_right" if target_p_rom == 75.0 else "snap_center"
+                        target_p_rom = 58.0 if rng.random() < 0.65 else 50.0
+                        p_mode = "shift_right" if target_p_rom == 58.0 else "center"
                     else:
-                        target_p_rom = 25.0 if rng.random() < 0.65 else 50.0
-                        p_mode = "snap_left" if target_p_rom == 25.0 else "snap_center"
-                    trans_beats = 0.5
+                        target_p_rom = 42.0 if rng.random() < 0.65 else 50.0
+                        p_mode = "shift_left" if target_p_rom == 42.0 else "center"
+                    trans_beats = 1.0
                 else:
                     p_mode = "hold"
                     target_p_rom = cur_p
@@ -701,14 +708,14 @@ def compile_choreography_tracks(
                 if cur_p != 50.0:
                     p_mode = "return_center"
                     target_p_rom = 50.0
-                    trans_beats = 1.5
+                    trans_beats = 2.0
                 else:
                     p_mode = "center_hold"
                     target_p_rom = 50.0
                     trans_beats = 1.0
 
             prev_state["pedestal_rom"] = target_p_rom
-            sec_per_beat = (60.0 / bpm) if bpm > 0 else 0.5
+            sec_per_beat = (60.0 / bpm)
             p_trans = float(trans_beats * sec_per_beat)
 
             s7_moves.append({

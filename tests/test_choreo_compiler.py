@@ -132,7 +132,7 @@ class TestChoreographyCompiler(unittest.TestCase):
             identify_climax_blocks(invalid_block, self.mock_analysis, first_vocal_beat=0)
 
     def test_pedestal_vocal_kickoff_and_center_return(self):
-        """Asserts that pedestal snaps align with vocal kick-offs and returns to center during silence."""
+        """Asserts that pedestal snaps align with vocal kick-offs, stay within subtle bounds, and return to center."""
         choreo = compile_choreography_tracks(self.mock_analysis, 45.0, seed=42)
         s7_moves = choreo["tracks"]["s7_pedestal"]
         blocks = choreo["blocks"]
@@ -145,6 +145,18 @@ class TestChoreographyCompiler(unittest.TestCase):
 
         # Last outro block (instrumental) must resolve to 50%
         self.assertEqual(s7_moves[-1]["target_pos_rom"], 50.0)
+
+        # All pedestal targets must remain within subtle bounds [42.0%, 58.0%]
+        for m in s7_moves:
+            self.assertGreaterEqual(m["target_pos_rom"], 42.0)
+            self.assertLessEqual(m["target_pos_rom"], 58.0)
+
+        # Fail-fast test: missing tempo/bpm must raise KeyError
+        bad_analysis = dict(self.mock_analysis)
+        bad_analysis.pop("tempo", None)
+        bad_analysis.pop("bpm", None)
+        with self.assertRaises(KeyError):
+            compile_choreography_tracks(bad_analysis, 45.0)
 
 
 if __name__ == "__main__":
