@@ -158,6 +158,59 @@ class TestChoreographyCompiler(unittest.TestCase):
         with self.assertRaises(KeyError):
             compile_choreography_tracks(bad_analysis, 45.0)
 
+    def test_probabilities_decoupling_and_fail_fast(self):
+        """Verifies load_choreography_probabilities fails fast and custom probabilities take effect."""
+        from choreography_compiler import load_choreography_probabilities, DEFAULT_CHOREO_PROBABILITIES
+        probs = load_choreography_probabilities()
+        self.assertIn("pedestal_s7", probs)
+        self.assertIn("gantry_s8", probs)
+        self.assertIn("torso_s1", probs)
+        self.assertIn("head_tilt_s5", probs)
+        self.assertIn("neck_pitch_s4", probs)
+        self.assertIn("spine_gaze", probs)
+        self.assertIn("bounce_modifier", probs)
+
+        # Test custom override with 100% vocal start shift and 100% counter pan
+        custom_probs = dict(DEFAULT_CHOREO_PROBABILITIES)
+        custom_probs["pedestal_s7"] = {
+            "vocal_start_shift_probability": 1.0,
+            "target_rom": {"shift_left": 40.0, "shift_right": 60.0, "center": 50.0},
+            "transition_beats": {"vocal_shift": 1.0, "return_center": 2.0, "hold": 1.0}
+        }
+        custom_probs["torso_s1"] = {"audience_counter_probability": 1.0}
+        custom_probs["spine_gaze"] = {"max_climax_arches": 1, "min_separation_bars": 8}
+
+        choreo = compile_choreography_tracks(self.mock_analysis, 45.0, seed=42, probabilities=custom_probs)
+        torso_moves = choreo["tracks"]["s1_torso"]
+        for tm in torso_moves:
+            self.assertEqual(tm["facing_mode"], "audience_counter")
+
+        spine_moves = choreo["tracks"]["spine_gaze"]
+        arches = [m for m in spine_moves if m.get("end_pose") == "arch" and m.get("pattern") in ["stand_to_pose", "stand_dip_stand"]]
+        self.assertLessEqual(len(arches), 1)
+
+    def test_three_mode_head_tilt_synthesis_and_auto_return(self):
+        """Verifies compiler correctly outputs snap_pulse, continuous_roll, and center modes with valid timing fields."""
+        choreo = compile_choreography_tracks(self.mock_analysis, 45.0, seed=42)
+        s5_moves = choreo["tracks"]["s5_head_tilt"]
+        self.assertGreater(len(s5_moves), 0)
+
+        for m in s5_moves:
+            self.assertIn("tilt_mode", m)
+            self.assertIn("tilt_rom", m)
+            self.assertIn("pulse_duration_sec", m)
+            self.assertIn("roll_amplitude", m)
+            self.assertIn("roll_freq_hz", m)
+            self.assertIn(m["tilt_mode"], ["center", "snap_pulse_left", "snap_pulse_right", "continuous_roll"])
+            if m["tilt_mode"].startswith("snap_pulse"):
+                self.assertGreater(m["pulse_duration_sec"], 0.0)
+                self.assertIn(m["tilt_rom"], [42.0, 58.0])
+            elif m["tilt_mode"] == "continuous_roll":
+                self.assertEqual(m["tilt_rom"], 50.0)
+                self.assertEqual(m["roll_amplitude"], 8.0)
+            elif m["tilt_mode"] == "center":
+                self.assertEqual(m["tilt_rom"], 50.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -604,34 +604,117 @@
                         <span style="font-size: 12px; font-weight: 900; color: #00e5ff;">⚙️ CHOREOGRAPHY & KINEMATICS SETTINGS</span>
                         <div style="display: flex; gap: 6px;">
                             <button id="bbResetSettingsBtn" class="btn-action" style="padding: 2px 10px; font-size: 11px; height: 26px; min-height: 0; background: #1f1f2e; border: 1px solid #555; color: #ccc; border-radius: 4px;">🔄 DEFAULTS</button>
-                            <button id="bbSaveSettingsBtn" class="btn-action" style="padding: 2px 14px; font-size: 11px; font-weight: 900; height: 26px; min-height: 0; background: #059669; border: 1.5px solid #34d399; color: #fff; border-radius: 4px;">💾 SAVE SETTINGS</button>
+                            <button id="bbSaveSettingsBtn" class="btn-action" style="padding: 2px 14px; font-size: 11px; font-weight: 900; height: 26px; min-height: 0; background: #059669; border: 1.5px solid #34d399; color: #fff; border-radius: 4px;">💾 SAVE & RECOMPILE</button>
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-grow: 1; min-height: 0; overflow-y: auto;">
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#ff00cc;">🎤 JAW NOISE GATE</span><span id="bbValJawGate">0.18</span></div>
-                            <input type="range" id="bbSliderJawGate" min="0.05" max="0.50" step="0.01" value="0.18" style="width:100%;">
+                    <div style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1; min-height: 0; overflow-y: auto; padding-right: 4px;">
+                        <!-- Section 1: Pedestal & Spatial Staging (S7 & S1) -->
+                        <div style="background: #0d0d16; border: 1px solid #262638; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 11px; font-weight: 900; color: #00e5ff; letter-spacing: 0.5px; border-bottom: 1px solid #1a1a2e; padding-bottom: 3px;">
+                                🎡 PEDESTAL (S7) & TORSO (S1) STAGING
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00e5ff;">VOCAL SHIFT CHANCE</span><span id="bbValPedShiftProb">30%</span></div>
+                                    <input type="range" id="bbSliderPedShiftProb" min="0" max="100" step="5" value="30" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00e5ff;">AUDIENCE COUNTER-PAN</span><span id="bbValTorsoCounterProb">80%</span></div>
+                                    <input type="range" id="bbSliderTorsoCounterProb" min="0" max="100" step="5" value="80" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00e5ff;">SHIFT LEFT ROM</span><span id="bbValPedLeftRom">42.0%</span></div>
+                                    <input type="range" id="bbSliderPedLeftRom" min="20" max="48" step="1" value="42" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00e5ff;">SHIFT RIGHT ROM</span><span id="bbValPedRightRom">58.0%</span></div>
+                                    <input type="range" id="bbSliderPedRightRom" min="52" max="80" step="1" value="58" style="width:100%;">
+                                </div>
+                            </div>
                         </div>
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#ff00cc;">🗣️ MAX JAW OPENING %</span><span id="bbValJawMax">45%</span></div>
-                            <input type="range" id="bbSliderJawMax" min="10" max="60" step="1" value="45" style="width:100%;">
+
+                        <!-- Section 2: Gantry & Head Tilt (S8 & S5) -->
+                        <div style="background: #0d0d16; border: 1px solid #262638; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 11px; font-weight: 900; color: #00ff66; letter-spacing: 0.5px; border-bottom: 1px solid #1a1a2e; padding-bottom: 3px;">
+                                🛤️ GANTRY (S8) & HEAD TILT (S5)
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00ff66;">GANTRY MOVE FREQUENCY</span><span id="bbValGantryProb">65%</span></div>
+                                    <input type="range" id="bbSliderGantryProb" min="10" max="100" step="5" value="65" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00ff66;">GANTRY DROP SPEED</span><span id="bbValGantryDropSpd">700</span></div>
+                                    <input type="range" id="bbSliderGantryDropSpd" min="300" max="1000" step="50" value="700" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#a855f7;">HEAD TILT CENTER CHANCE</span><span id="bbValHeadTiltCenterProb">70%</span></div>
+                                    <input type="range" id="bbSliderHeadTiltCenterProb" min="0" max="100" step="5" value="70" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#a855f7;">HEAD TILT SNAP CHANCE</span><span id="bbValHeadTiltSnapProb">20%</span></div>
+                                    <input type="range" id="bbSliderHeadTiltSnapProb" min="0" max="100" step="5" value="20" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#a855f7;">HEAD TILT SNAP ROM</span><span id="bbValHeadTiltRom">42% / 58%</span></div>
+                                    <input type="range" id="bbSliderHeadTiltRom" min="4" max="20" step="1" value="8" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#a855f7;">CONTINUOUS ROLL SWEEP</span><span id="bbValHeadRollSweep">8.0%</span></div>
+                                    <input type="range" id="bbSliderHeadRollSweep" min="0" max="15" step="0.5" value="8.0" style="width:100%;">
+                                </div>
+                            </div>
                         </div>
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#00e5ff;">🎵 HEAD NOD DEPTH</span><span id="bbValNodDepth">6.0°</span></div>
-                            <input type="range" id="bbSliderNodDepth" min="0" max="20" step="0.5" value="6.0" style="width:100%;">
+
+                        <!-- Section 3: Climax Posture & Phrasing -->
+                        <div style="background: #0d0d16; border: 1px solid #262638; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 11px; font-weight: 900; color: #ffaa00; letter-spacing: 0.5px; border-bottom: 1px solid #1a1a2e; padding-bottom: 3px;">
+                                🎭 POSTURE PHRASING & CLIMAX BUDGET
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#ffaa00;">MAX CLIMAX ARCHES</span><span id="bbValMaxArches">2</span></div>
+                                    <input type="range" id="bbSliderMaxArches" min="0" max="4" step="1" value="2" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#ffaa00;">MIN BAR SEPARATION</span><span id="bbValMinSeparation">4 Bars</span></div>
+                                    <input type="range" id="bbSliderMinSeparation" min="2" max="8" step="1" value="4" style="width:100%;">
+                                </div>
+                            </div>
                         </div>
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#a855f7;">〰️ VIBRATO ROLL SWEEP</span><span id="bbValVibrato">20.0°</span></div>
-                            <input type="range" id="bbSliderVibrato" min="0" max="40" step="1" value="20" style="width:100%;">
-                        </div>
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#00ff66;">🛤️ GANTRY DEFAULT SPEED</span><span id="bbValGantrySpeed">800</span></div>
-                            <input type="range" id="bbSliderGantrySpeed" min="100" max="1200" step="50" value="800" style="width:100%;">
-                        </div>
-                        <div class="cfg-card">
-                            <div class="cfg-card-header"><span style="color:#ffaa00;">🦾 UPPER BODY AGILITY ALPHA</span><span id="bbValAgility">0.35</span></div>
-                            <input type="range" id="bbSliderAgility" min="0.10" max="0.80" step="0.05" value="0.35" style="width:100%;">
+
+                        <!-- Section 4: Audio Kinematics & Reactivity -->
+                        <div style="background: #0d0d16; border: 1px solid #262638; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 11px; font-weight: 900; color: #ff00cc; letter-spacing: 0.5px; border-bottom: 1px solid #1a1a2e; padding-bottom: 3px;">
+                                🗣️ AUDIO KINEMATICS & REACTIVITY
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#ff00cc;">🎤 JAW NOISE GATE</span><span id="bbValJawGate">0.18</span></div>
+                                    <input type="range" id="bbSliderJawGate" min="0.05" max="0.50" step="0.01" value="0.18" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#ff00cc;">🗣️ MAX JAW OPENING %</span><span id="bbValJawMax">45%</span></div>
+                                    <input type="range" id="bbSliderJawMax" min="10" max="60" step="1" value="45" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00e5ff;">🎵 HEAD NOD DEPTH</span><span id="bbValNodDepth">6.0°</span></div>
+                                    <input type="range" id="bbSliderNodDepth" min="0" max="20" step="0.5" value="6.0" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#a855f7;">〰️ VIBRATO ROLL SWEEP</span><span id="bbValVibrato">20.0°</span></div>
+                                    <input type="range" id="bbSliderVibrato" min="0" max="40" step="1" value="20" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#00ff66;">🛤️ GANTRY DEFAULT SPEED</span><span id="bbValGantrySpeed">800</span></div>
+                                    <input type="range" id="bbSliderGantrySpeed" min="100" max="1200" step="50" value="800" style="width:100%;">
+                                </div>
+                                <div class="cfg-card">
+                                    <div class="cfg-card-header"><span style="color:#ffaa00;">🦾 UPPER BODY AGILITY ALPHA</span><span id="bbValAgility">0.35</span></div>
+                                    <input type="range" id="bbSliderAgility" min="0.10" max="0.80" step="0.05" value="0.35" style="width:100%;">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

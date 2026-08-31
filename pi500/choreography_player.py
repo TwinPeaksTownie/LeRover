@@ -270,7 +270,44 @@ class ChoreographyPlayer:
 
                 # 4. Track 5: Head Tilt (Servo 5)
                 s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                target_roll = float(s5_block["tilt_rom"]) if s5_block else 50.0
+                if s5_block:
+                    mode = s5_block.get("tilt_mode", "center")
+                    b_st = s5_block["start_sec"]
+                    b_dur = max(0.001, s5_block["end_sec"] - b_st)
+                    t_in_block = elapsed - b_st
+
+                    if mode == "center":
+                        target_roll = 50.0
+                    elif mode.startswith("snap_pulse"):
+                        pulse_dur = float(s5_block.get("pulse_duration_sec", 0.8))
+                        peak_rom = float(s5_block.get("target_rom", s5_block.get("tilt_rom", 50.0)))
+                        if t_in_block < pulse_dur:
+                            attack = 0.25 * pulse_dur
+                            hold = 0.40 * pulse_dur
+                            if t_in_block < attack:
+                                progress = t_in_block / max(0.001, attack)
+                                target_roll = 50.0 + progress * (peak_rom - 50.0)
+                            elif t_in_block < hold:
+                                target_roll = peak_rom
+                            else:
+                                progress = (t_in_block - hold) / max(0.001, (pulse_dur - hold))
+                                target_roll = peak_rom + progress * (50.0 - peak_rom)
+                        else:
+                            target_roll = 50.0
+                    elif mode == "continuous_roll":
+                        amp = float(s5_block.get("roll_amplitude", 8.0))
+                        freq = float(s5_block.get("roll_freq_hz", 1.0))
+                        env = 1.0
+                        fade_time = min(0.4, b_dur * 0.2)
+                        if t_in_block < fade_time:
+                            env = t_in_block / max(0.001, fade_time)
+                        elif (b_dur - t_in_block) < fade_time:
+                            env = max(0.0, (b_dur - t_in_block) / max(0.001, fade_time))
+                        target_roll = 50.0 + env * amp * math.sin(2.0 * math.pi * freq * t_in_block)
+                    else:
+                        target_roll = float(s5_block.get("tilt_rom", 50.0))
+                else:
+                    target_roll = 50.0
                 smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll - smooth_posture_rom["wrist_roll"])
 
                 # 5. Track 8: Gantry (Servo 8)

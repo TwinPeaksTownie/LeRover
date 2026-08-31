@@ -74,6 +74,96 @@ def load_dance_presets() -> Dict[str, Dict[str, float]]:
 
 ROM_POSES = load_dance_presets()
 
+
+def get_choreography_probabilities_path() -> Path:
+    """Resolves the empirical choreography_probabilities.json file path."""
+    base_dir = Path(__file__).resolve().parent.parent
+    p1 = base_dir / "library" / "beat_bandit" / "choreography_probabilities.json"
+    if p1.exists():
+        return p1
+    p2 = Path.home() / "so101" / "library" / "beat_bandit" / "choreography_probabilities.json"
+    if p2.exists():
+        return p2
+    raise FileNotFoundError(f"choreography_probabilities.json not found at {p1} or {p2}")
+
+
+def load_choreography_probabilities() -> Dict[str, Any]:
+    """Loads master choreography decision probabilities and ROM thresholds strictly from JSON with fail-fast KeyError enforcement."""
+    fpath = get_choreography_probabilities_path()
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Strict contract validation: Fail loud on missing keys
+    required_sections = ["pedestal_s7", "gantry_s8", "torso_s1", "head_tilt_s5", "neck_pitch_s4", "spine_gaze", "bounce_modifier"]
+    for sec in required_sections:
+        if sec not in data or not isinstance(data[sec], dict):
+            raise KeyError(f"Mandatory section '{sec}' missing in {fpath}")
+
+    # Validate Pedestal keys
+    ped = data["pedestal_s7"]
+    _ = float(ped["vocal_start_shift_probability"])
+    _ = float(ped["target_rom"]["shift_left"])
+    _ = float(ped["target_rom"]["shift_right"])
+    _ = float(ped["target_rom"]["center"])
+    _ = float(ped["transition_beats"]["vocal_shift"])
+    _ = float(ped["transition_beats"]["return_center"])
+    _ = float(ped["transition_beats"]["hold"])
+
+    # Validate Gantry keys
+    gan = data["gantry_s8"]
+    _ = float(gan["non_drop_move_probability"])
+    _ = float(gan["move_type_probabilities"]["full_glide"])
+    _ = float(gan["move_type_probabilities"]["early_step"])
+    _ = float(gan["move_type_probabilities"]["late_step"])
+    _ = [float(x) for x in gan["drop_targets_rom"]]
+    _ = [float(x) for x in gan["normal_targets_rom_left"]]
+    _ = [float(x) for x in gan["normal_targets_rom_right"]]
+    _ = int(gan["speeds"]["drop_glide"])
+    _ = int(gan["speeds"]["drop_hold"])
+    _ = int(gan["speeds"]["hold"])
+    _ = int(gan["speeds"]["min_glide"])
+    _ = int(gan["speeds"]["max_glide"])
+
+    # Validate Torso keys
+    _ = float(data["torso_s1"]["audience_counter_probability"])
+
+    # Validate Head Tilt keys
+    tilt = data["head_tilt_s5"]
+    _ = float(tilt["center_probability"])
+    _ = float(tilt["snap_pulse_probability"])
+    _ = float(tilt["continuous_roll_probability"])
+    _ = float(tilt["snap_pulse_left_rom"])
+    _ = float(tilt["snap_pulse_right_rom"])
+    _ = float(tilt["snap_pulse_duration_sec"])
+    _ = float(tilt["continuous_roll_amplitude_rom"])
+    _ = float(tilt["continuous_roll_freq_hz"])
+    _ = float(tilt["center_rom"])
+
+    # Validate Neck Pitch keys
+    pitch = data["neck_pitch_s4"]
+    _ = float(pitch["up_probability"])
+    _ = float(pitch["down_probability"])
+    _ = float(pitch["level_probability"])
+    _ = float(pitch["pitch_up_rom"])
+    _ = float(pitch["pitch_down_rom"])
+    _ = float(pitch["pitch_level_rom"])
+
+    # Validate Spine Gaze keys
+    spine = data["spine_gaze"]
+    _ = int(spine["max_climax_arches"])
+    _ = int(spine["min_separation_bars"])
+
+    # Validate Bounce Modifier keys
+    bounce = data["bounce_modifier"]
+    _ = float(bounce["default_intensity"])
+    if "targets" not in bounce or not isinstance(bounce["targets"], list):
+        raise KeyError(f"Mandatory 'targets' list missing in bounce_modifier section of {fpath}")
+
+    return data
+
+
+DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
+
 DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = {
     "jaw_gate_threshold": 0.18,
     "jaw_max_open_rom": 45.0,
@@ -354,6 +444,7 @@ def compile_choreography_tracks(
     duration: float,
     seed: int = 42,
     existing_choreography: Optional[Dict[str, Any]] = None,
+    probabilities: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compiles audio analysis into discrete 0-100% ROM movement tracks using
     exact decision trees and probability distributions, while preserving any
@@ -379,6 +470,9 @@ def compile_choreography_tracks(
     if tempo <= 0.0:
         raise ValueError(f"Invalid non-positive tempo '{tempo}' in audio analysis.")
     bpm = tempo
+
+    probs = probabilities if probabilities is not None else load_choreography_probabilities()
+
     raw_sections = analysis.get("sections", [])
     drops = analysis.get("drops", [])
     held_notes = analysis.get("held_notes", [])
@@ -427,13 +521,13 @@ def compile_choreography_tracks(
             first_vocal_sec = float(b["start_sec"])
             break
 
-    # Tag at most 2 peak climax blocks to receive the dramatic 'arch' posture (separated by at least 4 bars)
+    # Tag peak climax blocks to receive the dramatic 'arch' posture (configured via spine_gaze)
     climax_arch_block_ids = identify_climax_blocks(
         timeline_blocks,
         analysis,
         first_vocal_beat,
-        max_arches=2,
-        min_separation_bars=4,
+        max_arches=int(probs["spine_gaze"]["max_climax_arches"]),
+        min_separation_bars=int(probs["spine_gaze"]["min_separation_bars"]),
     )
 
     sec_blocks = []
@@ -491,27 +585,30 @@ def compile_choreography_tracks(
             s8_moves.append(dict(edited_moves_by_channel["s8_gantry"][blk_id]))
             prev_state["gantry_pos_rom"] = float(edited_moves_by_channel["s8_gantry"][blk_id].get("target_pos_rom", prev_state["gantry_pos_rom"]))
         else:
+            gan_cfg = probs["gantry_s8"]
             if is_drop_hit:
                 if prev_state["gantry_moving"]:
                     g_mode = "glide_to_drop_hold"
-                    target_rom = 80.0 if prev_state["gantry_pos_rom"] < 50.0 else 20.0
-                    g_spd = 600
+                    target_rom = float(gan_cfg["drop_targets_rom"][0] if prev_state["gantry_pos_rom"] < 50.0 else gan_cfg["drop_targets_rom"][1])
+                    g_spd = int(gan_cfg["speeds"]["drop_hold"])
                     prev_state["gantry_moving"] = False
                     prev_state["gantry_pos_rom"] = target_rom
                 else:
                     g_mode = "hold_to_drop_glide"
-                    target_rom = 85.0 if prev_state["gantry_pos_rom"] < 50.0 else 15.0
-                    g_spd = 700
+                    target_rom = float(gan_cfg["drop_targets_rom"][0] if prev_state["gantry_pos_rom"] < 50.0 else gan_cfg["drop_targets_rom"][1])
+                    g_spd = int(gan_cfg["speeds"]["drop_glide"])
                     prev_state["gantry_moving"] = True
                     prev_state["gantry_pos_rom"] = target_rom
             else:
-                move_prob = 0.65
+                move_prob = float(gan_cfg["non_drop_move_probability"])
+                full_glide_p = float(gan_cfg["move_type_probabilities"]["full_glide"])
+                early_step_p = float(gan_cfg["move_type_probabilities"]["early_step"])
                 if rng.random() < move_prob:
                     sub_r = rng.random()
-                    if sub_r < 0.40:
+                    if sub_r < full_glide_p:
                         g_mode = "full_glide"
                         prev_state["gantry_moving"] = True
-                    elif sub_r < 0.70:
+                    elif sub_r < (full_glide_p + early_step_p):
                         g_mode = "early_step"
                         prev_state["gantry_moving"] = False
                     else:
@@ -519,15 +616,17 @@ def compile_choreography_tracks(
                         prev_state["gantry_moving"] = True
 
                     if prev_state["gantry_pos_rom"] <= 50.0:
-                        target_rom = round(rng.uniform(60.0, 85.0), 1)
+                        target_rom = round(rng.uniform(float(gan_cfg["normal_targets_rom_right"][0]), float(gan_cfg["normal_targets_rom_right"][1])), 1)
                     else:
-                        target_rom = round(rng.uniform(15.0, 40.0), 1)
-                    g_spd = int(350 + 350 * sec_energy)
+                        target_rom = round(rng.uniform(float(gan_cfg["normal_targets_rom_left"][0]), float(gan_cfg["normal_targets_rom_left"][1])), 1)
+                    min_spd = int(gan_cfg["speeds"]["min_glide"])
+                    max_spd = int(gan_cfg["speeds"]["max_glide"])
+                    g_spd = int(min_spd + (max_spd - min_spd) * sec_energy)
                     prev_state["gantry_pos_rom"] = target_rom
                 else:
                     g_mode = "hold"
                     target_rom = prev_state["gantry_pos_rom"]
-                    g_spd = 250
+                    g_spd = int(gan_cfg["speeds"]["hold"])
                     prev_state["gantry_moving"] = False
 
                 s8_moves.append({
@@ -558,18 +657,22 @@ def compile_choreography_tracks(
             })
 
         # 3. Track 4: Neck Pitch (S4)
+        pitch_cfg = probs["neck_pitch_s4"]
         pitch_r = rng.random()
         has_held_note = any(h.get("start_sec", 0.0) <= b_st < h.get("end_sec", 0.0) for h in held_notes)
 
-        if has_held_note or pitch_r < 0.15:
+        up_prob = float(pitch_cfg["up_probability"])
+        down_prob = float(pitch_cfg["down_probability"])
+
+        if has_held_note or pitch_r < up_prob:
             head_pitch_mode = "up"
-            neck_pitch_rom = 50.0
-        elif pitch_r < 0.20:
+            neck_pitch_rom = float(pitch_cfg["pitch_up_rom"])
+        elif pitch_r < (up_prob + down_prob):
             head_pitch_mode = "down"
-            neck_pitch_rom = 85.0
+            neck_pitch_rom = float(pitch_cfg["pitch_down_rom"])
         else:
             head_pitch_mode = "level"
-            neck_pitch_rom = 70.0
+            neck_pitch_rom = float(pitch_cfg["pitch_level_rom"])
 
         # 4. Tracks 2-3: Spine Elevation Group (S2 Lift & S3 Elbow)
         if blk_id in edited_moves_by_channel.get("spine_gaze", {}):
@@ -676,43 +779,48 @@ def compile_choreography_tracks(
             s7_moves.append(custom_s7)
             prev_state["pedestal_rom"] = float(custom_s7["target_pos_rom"])
         else:
+            ped_cfg = probs["pedestal_s7"]
             is_vocal_start = is_vocal and (blk_idx == 0 or not timeline_blocks[blk_idx - 1].get("is_vocal"))
             cur_p = prev_state["pedestal_rom"]
+            vocal_shift_p = float(ped_cfg["vocal_start_shift_probability"])
+            left_rom = float(ped_cfg["target_rom"]["shift_left"])
+            right_rom = float(ped_cfg["target_rom"]["shift_right"])
+            center_rom = float(ped_cfg["target_rom"]["center"])
 
             if is_vocal_start:
-                # Vocal line kick-off: trigger gentle physical shift with 30% probability
+                # Vocal line kick-off: trigger gentle physical shift with configured probability
                 snap_r = rng.random()
-                if snap_r < 0.30:
+                if snap_r < vocal_shift_p:
                     # Choose a subtle contrasting target angle (+/-21.6 deg)
-                    if cur_p == 50.0:
-                        target_p_rom = 42.0 if rng.random() < 0.5 else 58.0
-                        p_mode = "shift_left" if target_p_rom == 42.0 else "shift_right"
-                    elif cur_p < 50.0:
-                        target_p_rom = 58.0 if rng.random() < 0.65 else 50.0
-                        p_mode = "shift_right" if target_p_rom == 58.0 else "center"
+                    if cur_p == center_rom:
+                        target_p_rom = left_rom if rng.random() < 0.5 else right_rom
+                        p_mode = "shift_left" if target_p_rom == left_rom else "shift_right"
+                    elif cur_p < center_rom:
+                        target_p_rom = right_rom if rng.random() < 0.65 else center_rom
+                        p_mode = "shift_right" if target_p_rom == right_rom else "center"
                     else:
-                        target_p_rom = 42.0 if rng.random() < 0.65 else 50.0
-                        p_mode = "shift_left" if target_p_rom == 42.0 else "center"
-                    trans_beats = 1.0
+                        target_p_rom = left_rom if rng.random() < 0.65 else center_rom
+                        p_mode = "shift_left" if target_p_rom == left_rom else "center"
+                    trans_beats = float(ped_cfg["transition_beats"]["vocal_shift"])
                 else:
                     p_mode = "hold"
                     target_p_rom = cur_p
-                    trans_beats = 1.0
+                    trans_beats = float(ped_cfg["transition_beats"]["hold"])
             elif is_vocal:
                 # Continuing vocal line: hold pedestal steady for singing presence
                 p_mode = "hold"
                 target_p_rom = cur_p
-                trans_beats = 1.0
+                trans_beats = float(ped_cfg["transition_beats"]["hold"])
             else:
                 # Instrumental break / pause / intro / outro: smoothly return to center stage
-                if cur_p != 50.0:
+                if cur_p != center_rom:
                     p_mode = "return_center"
-                    target_p_rom = 50.0
-                    trans_beats = 2.0
+                    target_p_rom = center_rom
+                    trans_beats = float(ped_cfg["transition_beats"]["return_center"])
                 else:
                     p_mode = "center_hold"
-                    target_p_rom = 50.0
-                    trans_beats = 1.0
+                    target_p_rom = center_rom
+                    trans_beats = float(ped_cfg["transition_beats"]["hold"])
 
             prev_state["pedestal_rom"] = target_p_rom
             sec_per_beat = (60.0 / bpm)
@@ -738,7 +846,9 @@ def compile_choreography_tracks(
         if blk_id in edited_moves_by_channel.get("s1_torso", {}):
             s1_moves.append(dict(edited_moves_by_channel["s1_torso"][blk_id]))
         else:
-            facing_mode = "audience_counter" if rng.random() < 0.80 else "base_aligned"
+            torso_cfg = probs["torso_s1"]
+            counter_p = float(torso_cfg["audience_counter_probability"])
+            facing_mode = "audience_counter" if rng.random() < counter_p else "base_aligned"
             s1_moves.append({
                 "id": f"s1_{blk_id}",
                 "block_id": blk_id,
@@ -756,16 +866,30 @@ def compile_choreography_tracks(
         if blk_id in edited_moves_by_channel.get("s5_head_tilt", {}):
             s5_moves.append(dict(edited_moves_by_channel["s5_head_tilt"][blk_id]))
         else:
+            tilt_cfg = probs["head_tilt_s5"]
             tilt_r = rng.random()
-            if tilt_r < 0.50:
+            c_prob = float(tilt_cfg["center_probability"])
+            p_prob = float(tilt_cfg["snap_pulse_probability"])
+            
+            if tilt_r < c_prob:
                 tilt_mode = "center"
-                tilt_rom = 50.0
-            elif tilt_r < 0.75:
-                tilt_mode = "snap_left"
-                tilt_rom = 35.0
+                tilt_rom = float(tilt_cfg["center_rom"])
+                pulse_dur = 0.0
+                roll_amp = 0.0
+                roll_freq = 0.0
+            elif tilt_r < (c_prob + p_prob):
+                tilt_dir = "left" if rng.random() < 0.5 else "right"
+                tilt_mode = f"snap_pulse_{tilt_dir}"
+                tilt_rom = float(tilt_cfg["snap_pulse_left_rom"] if tilt_dir == "left" else tilt_cfg["snap_pulse_right_rom"])
+                pulse_dur = min(b_et - b_st, float(tilt_cfg["snap_pulse_duration_sec"]))
+                roll_amp = 0.0
+                roll_freq = 0.0
             else:
-                tilt_mode = "snap_right"
-                tilt_rom = 65.0
+                tilt_mode = "continuous_roll"
+                tilt_rom = float(tilt_cfg["center_rom"])
+                pulse_dur = 0.0
+                roll_amp = float(tilt_cfg["continuous_roll_amplitude_rom"])
+                roll_freq = float(tilt_cfg["continuous_roll_freq_hz"])
 
             s5_moves.append({
                 "id": f"s5_{blk_id}",
@@ -773,6 +897,9 @@ def compile_choreography_tracks(
                 "name": f"{blk_name} Tilt ({tilt_mode.replace('_', ' ').title()})",
                 "tilt_mode": tilt_mode,
                 "tilt_rom": float(tilt_rom),
+                "pulse_duration_sec": float(pulse_dur),
+                "roll_amplitude": float(roll_amp),
+                "roll_freq_hz": float(roll_freq),
                 "start_beat": b["start_beat"],
                 "end_beat": b["end_beat"],
                 "duration_beats": b["duration_beats"],
@@ -785,11 +912,12 @@ def compile_choreography_tracks(
         if blk_id in edited_master_by_id and "bounce_modifier" in edited_master_by_id[blk_id]:
             blk_with_accent = dict(edited_master_by_id[blk_id])
         else:
-            bounce_target = rng.choice(["hip_sway", "body_bounce", "head_bob"])
+            bounce_cfg = probs["bounce_modifier"]
+            bounce_target = rng.choice(bounce_cfg["targets"])
             blk_with_accent = dict(blk)
             blk_with_accent["bounce_modifier"] = {
                 "enabled": True,
-                "intensity": 0.12,
+                "intensity": float(bounce_cfg["default_intensity"]),
                 "target": bounce_target,
             }
         compiled_master_blocks.append(blk_with_accent)

@@ -26,6 +26,7 @@ import {
     currentBackendSubView,
     bbStudioTab,
     activeChoreoData,
+    activeProbabilitiesData,
     selectedMoveBlock,
     selectedMoveChannel,
     timelinePlayheadTime,
@@ -1693,43 +1694,127 @@ export function updatePoseSliders(poseDict) {
 }
 
 export function renderSettingsView() {
-    if (!activeChoreoData) return;
-    const s = activeChoreoData.settings || {};
+    // 1. Audio Kinematics & Reactivity
+    if (activeChoreoData) {
+        const s = activeChoreoData.settings || {};
+        const jawGate = s.jaw_gate_threshold !== undefined ? s.jaw_gate_threshold : 0.18;
+        const jawMax = s.jaw_max_open !== undefined ? s.jaw_max_open : 45.0;
+        const nodDepth = s.head_nod_depth !== undefined ? s.head_nod_depth : 6.0;
+        const vibrato = s.vibrato_amplitude !== undefined ? s.vibrato_amplitude : 20.0;
+        const gantrySpd = s.gantry_default_speed !== undefined ? s.gantry_default_speed : 800;
+        const agility = (s.joint_alphas && s.joint_alphas.wrist_flex) ? s.joint_alphas.wrist_flex : 0.35;
 
-    const jawGate = s.jaw_gate_threshold !== undefined ? s.jaw_gate_threshold : 0.18;
-    const jawMax = s.jaw_max_open !== undefined ? s.jaw_max_open : 45.0;
-    const nodDepth = s.head_nod_depth !== undefined ? s.head_nod_depth : 6.0;
-    const vibrato = s.vibrato_amplitude !== undefined ? s.vibrato_amplitude : 20.0;
-    const gantrySpd = s.gantry_default_speed !== undefined ? s.gantry_default_speed : 800;
-    const agility = (s.joint_alphas && s.joint_alphas.wrist_flex) ? s.joint_alphas.wrist_flex : 0.35;
+        const elGate = document.getElementById('bbSliderJawGate');
+        const elMax = document.getElementById('bbSliderJawMax');
+        const elNod = document.getElementById('bbSliderNodDepth');
+        const elVib = document.getElementById('bbSliderVibrato');
+        const elGSpd = document.getElementById('bbSliderGantrySpeed');
+        const elAgil = document.getElementById('bbSliderAgility');
 
-    const elGate = document.getElementById('bbSliderJawGate');
-    const elMax = document.getElementById('bbSliderJawMax');
-    const elNod = document.getElementById('bbSliderNodDepth');
-    const elVib = document.getElementById('bbSliderVibrato');
-    const elGSpd = document.getElementById('bbSliderGantrySpeed');
-    const elAgil = document.getElementById('bbSliderAgility');
+        if (elGate) elGate.value = jawGate;
+        if (elMax) elMax.value = jawMax;
+        if (elNod) elNod.value = nodDepth;
+        if (elVib) elVib.value = vibrato;
+        if (elGSpd) elGSpd.value = gantrySpd;
+        if (elAgil) elAgil.value = agility;
 
-    if (elGate) elGate.value = jawGate;
-    if (elMax) elMax.value = jawMax;
-    if (elNod) elNod.value = nodDepth;
-    if (elVib) elVib.value = vibrato;
-    if (elGSpd) elGSpd.value = gantrySpd;
-    if (elAgil) elAgil.value = agility;
+        const vGate = document.getElementById('bbValJawGate');
+        const vMax = document.getElementById('bbValJawMax');
+        const vNod = document.getElementById('bbValNodDepth');
+        const vVib = document.getElementById('bbValVibrato');
+        const vGSpd = document.getElementById('bbValGantrySpeed');
+        const vAgil = document.getElementById('bbValAgility');
 
-    const vGate = document.getElementById('bbValJawGate');
-    const vMax = document.getElementById('bbValJawMax');
-    const vNod = document.getElementById('bbValNodDepth');
-    const vVib = document.getElementById('bbValVibrato');
-    const vGSpd = document.getElementById('bbValGantrySpeed');
-    const vAgil = document.getElementById('bbValAgility');
+        if (vGate) vGate.innerText = Number(jawGate).toFixed(2);
+        if (vMax) vMax.innerText = `${Math.round(jawMax)}%`;
+        if (vNod) vNod.innerText = `${Number(nodDepth).toFixed(1)}°`;
+        if (vVib) vVib.innerText = `${Number(vibrato).toFixed(1)}°`;
+        if (vGSpd) vGSpd.innerText = `${gantrySpd}`;
+        if (vAgil) vAgil.innerText = `${Number(agility).toFixed(2)}`;
+    }
 
-    if (vGate) vGate.innerText = Number(jawGate).toFixed(2);
-    if (vMax) vMax.innerText = `${Math.round(jawMax)}%`;
-    if (vNod) vNod.innerText = `${Number(nodDepth).toFixed(1)}°`;
-    if (vVib) vVib.innerText = `${Number(vibrato).toFixed(1)}°`;
-    if (vGSpd) vGSpd.innerText = `${gantrySpd}`;
-    if (vAgil) vAgil.innerText = `${Number(agility).toFixed(2)}`;
+    // 2. Compiler Probabilities & Kinematic Bounds
+    const p = activeProbabilitiesData;
+    if (p) {
+        // Section 1: Pedestal & Torso
+        const pedShiftP = (p.pedestal_s7 && p.pedestal_s7.vocal_start_shift_probability !== undefined) ? Math.round(p.pedestal_s7.vocal_start_shift_probability * 100) : 30;
+        const torsoCounterP = (p.torso_s1 && p.torso_s1.audience_counter_probability !== undefined) ? Math.round(p.torso_s1.audience_counter_probability * 100) : 80;
+        const pedLeftRom = (p.pedestal_s7 && p.pedestal_s7.target_rom && p.pedestal_s7.target_rom.shift_left !== undefined) ? p.pedestal_s7.target_rom.shift_left : 42.0;
+        const pedRightRom = (p.pedestal_s7 && p.pedestal_s7.target_rom && p.pedestal_s7.target_rom.shift_right !== undefined) ? p.pedestal_s7.target_rom.shift_right : 58.0;
+
+        const elPedShift = document.getElementById('bbSliderPedShiftProb');
+        const elTorso = document.getElementById('bbSliderTorsoCounterProb');
+        const elPedLeft = document.getElementById('bbSliderPedLeftRom');
+        const elPedRight = document.getElementById('bbSliderPedRightRom');
+
+        if (elPedShift) elPedShift.value = pedShiftP;
+        if (elTorso) elTorso.value = torsoCounterP;
+        if (elPedLeft) elPedLeft.value = pedLeftRom;
+        if (elPedRight) elPedRight.value = pedRightRom;
+
+        const vPedShift = document.getElementById('bbValPedShiftProb');
+        const vTorso = document.getElementById('bbValTorsoCounterProb');
+        const vPedLeft = document.getElementById('bbValPedLeftRom');
+        const vPedRight = document.getElementById('bbValPedRightRom');
+
+        if (vPedShift) vPedShift.innerText = `${pedShiftP}%`;
+        if (vTorso) vTorso.innerText = `${torsoCounterP}%`;
+        if (vPedLeft) vPedLeft.innerText = `${Number(pedLeftRom).toFixed(1)}%`;
+        if (vPedRight) vPedRight.innerText = `${Number(pedRightRom).toFixed(1)}%`;
+
+        // Section 2: Gantry & Head Tilt
+        const ganP = (p.gantry_s8 && p.gantry_s8.non_drop_move_probability !== undefined) ? Math.round(p.gantry_s8.non_drop_move_probability * 100) : 65;
+        const ganDropSpd = (p.gantry_s8 && p.gantry_s8.speeds && p.gantry_s8.speeds.drop_glide !== undefined) ? p.gantry_s8.speeds.drop_glide : 700;
+        const tiltCenterP = (p.head_tilt_s5 && p.head_tilt_s5.center_probability !== undefined) ? Math.round(p.head_tilt_s5.center_probability * 100) : 70;
+        const tiltSnapP = (p.head_tilt_s5 && p.head_tilt_s5.snap_pulse_probability !== undefined) ? Math.round(p.head_tilt_s5.snap_pulse_probability * 100) : 20;
+        const tiltLeftRom = (p.head_tilt_s5 && p.head_tilt_s5.snap_pulse_left_rom !== undefined) ? p.head_tilt_s5.snap_pulse_left_rom : (p.head_tilt_s5 && p.head_tilt_s5.tilt_left_rom !== undefined ? p.head_tilt_s5.tilt_left_rom : 42.0);
+        const tiltDelta = Math.round(50 - tiltLeftRom);
+        const rollSweep = (p.head_tilt_s5 && p.head_tilt_s5.continuous_roll_amplitude_rom !== undefined) ? p.head_tilt_s5.continuous_roll_amplitude_rom : 8.0;
+
+        const elGanP = document.getElementById('bbSliderGantryProb');
+        const elGanDropSpd = document.getElementById('bbSliderGantryDropSpd');
+        const elTiltCenter = document.getElementById('bbSliderHeadTiltCenterProb');
+        const elTiltSnap = document.getElementById('bbSliderHeadTiltSnapProb');
+        const elTiltRom = document.getElementById('bbSliderHeadTiltRom');
+        const elRollSweep = document.getElementById('bbSliderHeadRollSweep');
+
+        if (elGanP) elGanP.value = ganP;
+        if (elGanDropSpd) elGanDropSpd.value = ganDropSpd;
+        if (elTiltCenter) elTiltCenter.value = tiltCenterP;
+        if (elTiltSnap) elTiltSnap.value = tiltSnapP;
+        if (elTiltRom) elTiltRom.value = tiltDelta;
+        if (elRollSweep) elRollSweep.value = rollSweep;
+
+        const vGanP = document.getElementById('bbValGantryProb');
+        const vGanDropSpd = document.getElementById('bbValGantryDropSpd');
+        const vTiltCenter = document.getElementById('bbValHeadTiltCenterProb');
+        const vTiltSnap = document.getElementById('bbValHeadTiltSnapProb');
+        const vTiltRom = document.getElementById('bbValHeadTiltRom');
+        const vRollSweep = document.getElementById('bbValHeadRollSweep');
+
+        if (vGanP) vGanP.innerText = `${ganP}%`;
+        if (vGanDropSpd) vGanDropSpd.innerText = `${ganDropSpd}`;
+        if (vTiltCenter) vTiltCenter.innerText = `${tiltCenterP}%`;
+        if (vTiltSnap) vTiltSnap.innerText = `${tiltSnapP}%`;
+        if (vTiltRom) vTiltRom.innerText = `${50 - tiltDelta}% / ${50 + tiltDelta}%`;
+        if (vRollSweep) vRollSweep.innerText = `${Number(rollSweep).toFixed(1)}%`;
+
+        // Section 3: Climax Posture & Phrasing
+        const maxArches = (p.spine_gaze && p.spine_gaze.max_climax_arches !== undefined) ? p.spine_gaze.max_climax_arches : 2;
+        const minSep = (p.spine_gaze && p.spine_gaze.min_separation_bars !== undefined) ? p.spine_gaze.min_separation_bars : 4;
+
+        const elMaxArches = document.getElementById('bbSliderMaxArches');
+        const elMinSep = document.getElementById('bbSliderMinSeparation');
+
+        if (elMaxArches) elMaxArches.value = maxArches;
+        if (elMinSep) elMinSep.value = minSep;
+
+        const vMaxArches = document.getElementById('bbValMaxArches');
+        const vMinSep = document.getElementById('bbValMinSeparation');
+
+        if (vMaxArches) vMaxArches.innerText = `${maxArches}`;
+        if (vMinSep) vMinSep.innerText = `${minSep} Bars`;
+    }
 }
 
 export function openDirectorModal() {

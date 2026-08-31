@@ -25,6 +25,7 @@ import {
     currentBackendSubView,
     bbStudioTab,
     activeChoreoData,
+    activeProbabilitiesData,
     selectedMoveBlock,
     selectedMoveChannel,
     timelinePlayheadTime,
@@ -58,6 +59,7 @@ import {
     setLastPresetsJsonStr,
     setBbStudioTab,
     setActiveChoreoData,
+    setActiveProbabilitiesData,
     setSelectedMoveBlock,
     setSelectedMoveChannel,
     setTimelinePlayheadTime,
@@ -373,6 +375,7 @@ export function fetchBeatBanditTracks() {
             const tracks = d.tracks || [];
             setCachedBeatBanditTracks(tracks);
             ui.renderBeatBanditTracksList(tracks);
+            loadBeatBanditProbabilities();
             if ((!selectedBeatBanditTrackId || !activeChoreoData) && tracks.length > 0) {
                 const selId = selectedBeatBanditTrackId || tracks[0].track_id;
                 const trk = tracks.find(t => t.track_id === selId) || tracks[0];
@@ -398,7 +401,69 @@ export function loadChoreographyForTrack(trackId) {
                 else if (bbStudioTab === 'settings') ui.renderSettingsView();
             }
         })
-        .catch(() => {});
+        .catch(err => {
+            console.error('Failed to load track choreography:', err);
+            ui.setHeaderAlert('CHOREO LOAD ERROR');
+        });
+}
+
+export function loadBeatBanditProbabilities() {
+    api.fetchBeatBanditProbabilities()
+        .then(r => r.json())
+        .then(d => {
+            if (d && d.status === 'ok' && d.probabilities) {
+                setActiveProbabilitiesData(d.probabilities);
+                if (bbStudioTab === 'settings') ui.renderSettingsView();
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load probabilities:', err);
+            ui.setHeaderAlert('PROBABILITIES LOAD ERROR');
+        });
+}
+
+export function saveAndRecompileSettings() {
+    const tid = selectedBeatBanditTrackId || (activeChoreoData && activeChoreoData.track_id);
+    const saveSettingsBtn = document.getElementById('bbSaveSettingsBtn');
+    if (saveSettingsBtn) saveSettingsBtn.innerText = '⌛ RECOMPILING...';
+
+    // 1. Save track choreo settings if active
+    if (activeChoreoData && tid) {
+        api.saveBeatBanditChoreo(tid, activeChoreoData)
+            .catch(err => console.error('Track settings save error:', err));
+    }
+
+    // 2. Save master probabilities and recompile track atomically
+    if (activeProbabilitiesData) {
+        api.saveBeatBanditProbabilities(activeProbabilitiesData, tid)
+            .then(r => r.json())
+            .then(d => {
+                if (d && d.status === 'ok') {
+                    if (d.probabilities) setActiveProbabilitiesData(d.probabilities);
+                    if (d.choreography) {
+                        setActiveChoreoData(d.choreography);
+                        ui.renderTimeline();
+                    }
+                    api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+                    if (saveSettingsBtn) {
+                        saveSettingsBtn.innerText = '✅ RECOMPILED!';
+                        setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 1500);
+                    }
+                } else {
+                    if (saveSettingsBtn) {
+                        saveSettingsBtn.innerText = '❌ ERROR';
+                        setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 2000);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Save & recompile error:', err);
+                if (saveSettingsBtn) {
+                    saveSettingsBtn.innerText = '❌ ERROR';
+                    setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE & RECOMPILE'; }, 2000);
+                }
+            });
+    }
 }
 
 export function saveCurrentChoreography() {
@@ -409,14 +474,9 @@ export function saveCurrentChoreography() {
         .then(d => {
             api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
             const saveBtn = document.getElementById('bbSaveChoreoBtn');
-            const saveSettingsBtn = document.getElementById('bbSaveSettingsBtn');
             if (saveBtn) {
                 saveBtn.innerText = '✅ SAVED!';
                 setTimeout(() => { saveBtn.innerText = '💾 SAVE'; }, 1500);
-            }
-            if (saveSettingsBtn) {
-                saveSettingsBtn.innerText = '✅ SAVED!';
-                setTimeout(() => { saveSettingsBtn.innerText = '💾 SAVE SETTINGS'; }, 1500);
             }
         })
         .catch(() => {});
@@ -1416,22 +1476,131 @@ function bindEventListeners() {
         ui.renderSettingsView();
     }
 
+    function handleProbabilitiesSliderInput() {
+        if (!activeProbabilitiesData) {
+            setActiveProbabilitiesData({
+                pedestal_s7: { vocal_start_shift_probability: 0.30, target_rom: { shift_left: 42.0, shift_right: 58.0, center: 50.0 }, transition_beats: { vocal_shift: 1.0, return_center: 2.0, hold: 1.0 } },
+                gantry_s8: { non_drop_move_probability: 0.65, move_type_probabilities: { full_glide: 0.40, early_step: 0.30, late_step: 0.30 }, drop_targets_rom: [85.0, 15.0], normal_targets_rom_left: [15.0, 40.0], normal_targets_rom_right: [60.0, 85.0], speeds: { drop_glide: 700, drop_hold: 600, hold: 250, min_glide: 350, max_glide: 700 } },
+                torso_s1: { audience_counter_probability: 0.80 },
+                head_tilt_s5: { center_probability: 0.70, snap_pulse_probability: 0.20, continuous_roll_probability: 0.10, snap_pulse_left_rom: 42.0, snap_pulse_right_rom: 58.0, snap_pulse_duration_sec: 0.8, continuous_roll_amplitude_rom: 8.0, continuous_roll_freq_hz: 1.0, center_rom: 50.0 },
+                neck_pitch_s4: { up_probability: 0.15, down_probability: 0.05, level_probability: 0.80, pitch_up_rom: 50.0, pitch_down_rom: 85.0, pitch_level_rom: 70.0 },
+                spine_gaze: { max_climax_arches: 2, min_separation_bars: 4 },
+                bounce_modifier: { default_intensity: 0.12, targets: ["hip_sway", "body_bounce", "head_bob"] }
+            });
+        }
+        const p = activeProbabilitiesData;
+
+        // Section 1: Pedestal & Torso
+        const elPedShift = document.getElementById('bbSliderPedShiftProb');
+        const elTorso = document.getElementById('bbSliderTorsoCounterProb');
+        const elPedLeft = document.getElementById('bbSliderPedLeftRom');
+        const elPedRight = document.getElementById('bbSliderPedRightRom');
+
+        if (!elPedShift || !elTorso || !elPedLeft || !elPedRight) {
+            console.error('Missing Section 1 slider element in DOM');
+            return;
+        }
+
+        const pedShiftVal = parseFloat(elPedShift.value);
+        const torsoCounterVal = parseFloat(elTorso.value);
+        const pedLeftVal = parseFloat(elPedLeft.value);
+        const pedRightVal = parseFloat(elPedRight.value);
+
+        if (!p.pedestal_s7) p.pedestal_s7 = {};
+        p.pedestal_s7.vocal_start_shift_probability = pedShiftVal / 100.0;
+        if (!p.pedestal_s7.target_rom) p.pedestal_s7.target_rom = {};
+        p.pedestal_s7.target_rom.shift_left = pedLeftVal;
+        p.pedestal_s7.target_rom.shift_right = pedRightVal;
+
+        if (!p.torso_s1) p.torso_s1 = {};
+        p.torso_s1.audience_counter_probability = torsoCounterVal / 100.0;
+
+        // Section 2: Gantry & Head Tilt
+        const elGanProb = document.getElementById('bbSliderGantryProb');
+        const elGanDropSpd = document.getElementById('bbSliderGantryDropSpd');
+        const elTiltCenter = document.getElementById('bbSliderHeadTiltCenterProb');
+        const elTiltSnap = document.getElementById('bbSliderHeadTiltSnapProb');
+        const elTiltRom = document.getElementById('bbSliderHeadTiltRom');
+        const elRollSweep = document.getElementById('bbSliderHeadRollSweep');
+
+        if (!elGanProb || !elGanDropSpd || !elTiltCenter || !elTiltSnap || !elTiltRom || !elRollSweep) {
+            console.error('Missing Section 2 slider element in DOM');
+            return;
+        }
+
+        const ganProbVal = parseFloat(elGanProb.value);
+        const ganDropSpdVal = parseInt(elGanDropSpd.value, 10);
+        const tiltCenterVal = parseFloat(elTiltCenter.value);
+        const tiltSnapVal = parseFloat(elTiltSnap.value);
+        const tiltDeltaVal = parseFloat(elTiltRom.value);
+        const rollSweepVal = parseFloat(elRollSweep.value);
+
+        if (!p.gantry_s8) p.gantry_s8 = {};
+        p.gantry_s8.non_drop_move_probability = ganProbVal / 100.0;
+        if (!p.gantry_s8.speeds) p.gantry_s8.speeds = {};
+        p.gantry_s8.speeds.drop_glide = ganDropSpdVal;
+
+        if (!p.head_tilt_s5) p.head_tilt_s5 = {};
+        p.head_tilt_s5.center_probability = tiltCenterVal / 100.0;
+        p.head_tilt_s5.snap_pulse_probability = tiltSnapVal / 100.0;
+        p.head_tilt_s5.continuous_roll_probability = Math.max(0.0, 1.0 - (p.head_tilt_s5.center_probability + p.head_tilt_s5.snap_pulse_probability));
+        p.head_tilt_s5.snap_pulse_left_rom = 50.0 - tiltDeltaVal;
+        p.head_tilt_s5.snap_pulse_right_rom = 50.0 + tiltDeltaVal;
+        p.head_tilt_s5.snap_pulse_duration_sec = 0.8;
+        p.head_tilt_s5.continuous_roll_amplitude_rom = rollSweepVal;
+        p.head_tilt_s5.continuous_roll_freq_hz = 1.0;
+        p.head_tilt_s5.center_rom = 50.0;
+
+        // Section 3: Climax Posture
+        const elMaxArches = document.getElementById('bbSliderMaxArches');
+        const elMinSep = document.getElementById('bbSliderMinSeparation');
+
+        if (!elMaxArches || !elMinSep) {
+            console.error('Missing Section 3 slider element in DOM');
+            return;
+        }
+
+        const maxArchesVal = parseInt(elMaxArches.value, 10);
+        const minSepVal = parseInt(elMinSep.value, 10);
+
+        if (!p.spine_gaze) p.spine_gaze = {};
+        p.spine_gaze.max_climax_arches = maxArchesVal;
+        p.spine_gaze.min_separation_bars = minSepVal;
+
+        ui.renderSettingsView();
+    }
+
     ['bbSliderJawGate', 'bbSliderJawMax', 'bbSliderNodDepth', 'bbSliderVibrato', 'bbSliderGantrySpeed', 'bbSliderAgility'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', handleSettingsSliderInput);
     });
 
-    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', () => saveCurrentChoreography());
+    ['bbSliderPedShiftProb', 'bbSliderTorsoCounterProb', 'bbSliderPedLeftRom', 'bbSliderPedRightRom', 'bbSliderGantryProb', 'bbSliderGantryDropSpd', 'bbSliderHeadTiltCenterProb', 'bbSliderHeadTiltSnapProb', 'bbSliderHeadTiltRom', 'bbSliderHeadRollSweep', 'bbSliderMaxArches', 'bbSliderMinSeparation'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', handleProbabilitiesSliderInput);
+    });
+
+    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', () => saveAndRecompileSettings());
     if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', () => {
-        if (!activeChoreoData) return;
-        activeChoreoData.settings = {
-            jaw_gate_threshold: 0.18,
-            jaw_max_open: 45.0,
-            head_nod_depth: 6.0,
-            vibrato_amplitude: 20.0,
-            gantry_default_speed: 800,
-            joint_alphas: { shoulder_pan: 0.20, shoulder_lift: 0.18, elbow_flex: 0.22, wrist_flex: 0.35, wrist_roll: 0.28 }
-        };
+        if (activeChoreoData) {
+            activeChoreoData.settings = {
+                jaw_gate_threshold: 0.18,
+                jaw_max_open: 45.0,
+                head_nod_depth: 6.0,
+                vibrato_amplitude: 20.0,
+                gantry_default_speed: 800,
+                joint_alphas: { shoulder_pan: 0.20, shoulder_lift: 0.18, elbow_flex: 0.22, wrist_flex: 0.35, wrist_roll: 0.28 }
+            };
+        }
+        setActiveProbabilitiesData({
+            pedestal_s7: { vocal_start_shift_probability: 0.30, target_rom: { shift_left: 42.0, shift_right: 58.0, center: 50.0 }, transition_beats: { vocal_shift: 1.0, return_center: 2.0, hold: 1.0 } },
+            gantry_s8: { non_drop_move_probability: 0.65, move_type_probabilities: { full_glide: 0.40, early_step: 0.30, late_step: 0.30 }, drop_targets_rom: [85.0, 15.0], normal_targets_rom_left: [15.0, 40.0], normal_targets_rom_right: [60.0, 85.0], speeds: { drop_glide: 700, drop_hold: 600, hold: 250, min_glide: 350, max_glide: 700 } },
+            torso_s1: { audience_counter_probability: 0.80 },
+            head_tilt_s5: { center_probability: 0.70, snap_pulse_probability: 0.20, continuous_roll_probability: 0.10, snap_pulse_left_rom: 42.0, snap_pulse_right_rom: 58.0, snap_pulse_duration_sec: 0.8, continuous_roll_amplitude_rom: 8.0, continuous_roll_freq_hz: 1.0, center_rom: 50.0 },
+            neck_pitch_s4: { up_probability: 0.15, down_probability: 0.05, level_probability: 0.80, pitch_up_rom: 50.0, pitch_down_rom: 85.0, pitch_level_rom: 70.0 },
+            spine_gaze: { max_climax_arches: 2, min_separation_bars: 4 },
+            bounce_modifier: { default_intensity: 0.12, targets: ["hip_sway", "body_bounce", "head_bob"] }
+        });
         ui.renderSettingsView();
     });
 
