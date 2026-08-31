@@ -147,7 +147,7 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
                 modified_files.append(filename)
 
         diff_proc = subprocess.run(
-            ["git", "diff", "HEAD"],
+            ["git", "diff", "HEAD", "--", ".", ":!*manifest.json"],
             cwd=repo_path,
             capture_output=True,
             text=True
@@ -157,7 +157,7 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
         # If no uncommitted diffs, inspect the latest commit (HEAD~1..HEAD)
         if not diff_text.strip() and not untracked_files:
             diff_proc_last = subprocess.run(
-                ["git", "diff", "HEAD~1..HEAD"],
+                ["git", "diff", "HEAD~1..HEAD", "--", ".", ":!*manifest.json"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True
