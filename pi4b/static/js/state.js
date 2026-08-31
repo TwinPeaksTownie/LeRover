@@ -37,6 +37,7 @@ export let currentBackendSubView = 'main';
 // Beat Bandit Choreography Studio State
 export let bbStudioTab = 'player'; // 'player' | 'timeline' | 'poses' | 'settings'
 export let activeChoreoData = null;
+export let activeProbabilitiesData = null;
 export let selectedMoveBlock = null;
 export let selectedMoveChannel = 'body_pose';
 export let timelinePlayheadTime = 0.0;
@@ -98,6 +99,7 @@ export function setCurrentAppsSubView(val) { currentAppsSubView = val; }
 export function setCurrentBackendSubView(val) { currentBackendSubView = val; }
 export function setBbStudioTab(val) { bbStudioTab = val; }
 export function setActiveChoreoData(val) { activeChoreoData = val; }
+export function setActiveProbabilitiesData(val) { activeProbabilitiesData = val; }
 export function setSelectedMoveBlock(val) { selectedMoveBlock = val; }
 export function setSelectedMoveChannel(val) { selectedMoveChannel = val; }
 export function setTimelinePlayheadTime(val) { timelinePlayheadTime = val; }

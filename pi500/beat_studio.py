@@ -20,9 +20,12 @@ try:
     from choreography_compiler import (
         compile_choreography_tracks,
         load_dance_presets,
+        load_choreography_probabilities,
+        get_choreography_probabilities_path,
         ROM_POSES,
         CHOREO_SCHEMA_VERSION,
         DEFAULT_CHOREO_SETTINGS,
+        DEFAULT_CHOREO_PROBABILITIES,
     )
 except ImportError:
     import sys
@@ -30,9 +33,12 @@ except ImportError:
     from choreography_compiler import (
         compile_choreography_tracks,
         load_dance_presets,
+        load_choreography_probabilities,
+        get_choreography_probabilities_path,
         ROM_POSES,
         CHOREO_SCHEMA_VERSION,
         DEFAULT_CHOREO_SETTINGS,
+        DEFAULT_CHOREO_PROBABILITIES,
     )
 
 logger = logging.getLogger("so101.beat_studio")
@@ -153,6 +159,26 @@ class BeatStudioManager:
         manifest[track_id] = track_meta
         self._save_manifest(manifest)
         return choreo
+
+    def get_probabilities(self) -> Dict[str, Any]:
+        """Loads master probabilities configuration."""
+        return load_choreography_probabilities()
+
+    def save_probabilities(self, probs_data: Dict[str, Any]) -> bool:
+        """Validates and persists updated master probabilities configuration to disk."""
+        if not isinstance(probs_data, dict):
+            raise ValueError("Probabilities payload must be a JSON dictionary.")
+
+        required_sections = ["pedestal_s7", "gantry_s8", "torso_s1", "head_tilt_s5", "neck_pitch_s4", "spine_gaze", "bounce_modifier"]
+        for sec in required_sections:
+            if sec not in probs_data or not isinstance(probs_data[sec], dict):
+                raise KeyError(f"Mandatory section '{sec}' missing from probabilities payload")
+
+        fpath = get_choreography_probabilities_path()
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(probs_data, f, indent=2)
+        self.logger.info(f"Saved master probabilities to {fpath}")
+        return True
 
     def preview_pose_on_robot(self, backend: Any, pose_dict: Dict[str, float]) -> Dict[str, Any]:
         """Drives follower arm to target normalized pose for physical verification."""

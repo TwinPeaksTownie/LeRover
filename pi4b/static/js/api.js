@@ -157,6 +157,18 @@ export function autoGenerateBeatBanditChoreo(trackId, style = 'balanced') {
     }, 4000);
 }
 
+export function fetchBeatBanditProbabilities() {
+    return safeFetch('/api/apps/beat_bandit/probabilities', {}, 2000);
+}
+
+export function saveBeatBanditProbabilities(probabilities, trackId = null) {
+    return safeFetch('/api/apps/beat_bandit/probabilities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ probabilities, track_id: trackId })
+    }, 4500);
+}
+
 export function previewBeatBanditPose(pose) {
     return safeFetch('/api/apps/beat_bandit/preview_pose', {
         method: 'POST',
