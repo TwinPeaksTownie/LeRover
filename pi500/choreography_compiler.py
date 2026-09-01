@@ -944,10 +944,27 @@ def compile_choreography_tracks(
             }
         compiled_master_blocks.append(blk_with_accent)
 
-    amp_env = analysis.get("amplitude_envelope") or analysis.get("amplitude_envelope_50hz") or []
-    mouth_env = analysis.get("mouth_envelope_50hz") or analysis.get("vocal_envelope_50hz") or []
-    drops_list = analysis.get("drops", [])
-    downbeats_list = analysis.get("downbeats", [])
+    if "amplitude_envelope" in analysis:
+        amp_env = analysis["amplitude_envelope"]
+    elif "amplitude_envelope_50hz" in analysis:
+        amp_env = analysis["amplitude_envelope_50hz"]
+    else:
+        raise KeyError("Fail-Fast Error: 'amplitude_envelope' missing in audio analysis")
+
+    if "mouth_envelope_50hz" in analysis:
+        mouth_env = analysis["mouth_envelope_50hz"]
+    elif "vocal_envelope_50hz" in analysis:
+        mouth_env = analysis["vocal_envelope_50hz"]
+    else:
+        raise KeyError("Fail-Fast Error: 'mouth_envelope_50hz' missing in audio analysis")
+
+    if "drops" not in analysis:
+        raise KeyError("Fail-Fast Error: 'drops' missing in audio analysis")
+    drops_list = analysis["drops"]
+
+    if "downbeats" not in analysis:
+        raise KeyError("Fail-Fast Error: 'downbeats' missing in audio analysis")
+    downbeats_list = analysis["downbeats"]
 
     return {
         "version": CHOREO_SCHEMA_VERSION,

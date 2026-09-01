@@ -1171,7 +1171,7 @@ export function renderTimeline() {
                     if (pos !== null && pPos !== null && pos < pPos) return `Glide Left (${pos})`;
                     return pos !== null ? `Glide (${pos})` : 'Glide';
                 }
-                if (mode === 'hold_to_drop_glide' || (pos !== null && pos === 4350)) return pos !== null ? `Drop Peak (${pos})` : 'Drop Peak';
+                if (mode === 'hold_to_drop_glide' || mode.includes('drop')) return pos !== null ? `Drop Peak (${pos})` : 'Drop Peak';
                 if (mode === 'late_move') return pos !== null ? `Late Settle (${pos})` : 'Late Settle';
                 if (mode === 'early_settle') return pos !== null ? `Early Settle (${pos})` : 'Early Settle';
                 if (mode === 'hold') return pos !== null ? `Hold (${pos})` : 'Hold';
