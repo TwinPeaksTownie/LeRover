@@ -1328,7 +1328,7 @@ export function renderTimeline() {
     renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-head');
 
     // 3.5 Render Amplitude Visualizer Lane (Dark Blue Background, Cyan / Light Blue Ticks)
-    const ampCanvas = document.getElementById('bbAmpWaveformCanvas');
+    const ampCanvas = document.getElementById('bbWaveformCanvas') || document.getElementById('bbAmpWaveformCanvas');
     if (ampCanvas) {
         const laneW = totalWidth - labelOffset;
         const laneH = 40;
@@ -1349,7 +1349,7 @@ export function renderTimeline() {
             ctx.fillStyle = '#0f2744';
             ctx.fillRect(0, midY - 0.5, laneW, 1);
 
-            const ampEnv = activeChoreoData.amplitude_envelope_50hz || [];
+            const ampEnv = activeChoreoData.amplitude_envelope_50hz || activeChoreoData.amplitude_envelope || [];
             const drops = activeChoreoData.drops || [];
 
             if (ampEnv && ampEnv.length > 0) {
@@ -1410,7 +1410,7 @@ export function renderTimeline() {
             ctx.fillStyle = '#380e45';
             ctx.fillRect(0, midY - 0.5, laneW, 1);
 
-            const vocalEnv = activeChoreoData.mouth_envelope_50hz || [];
+            const vocalEnv = activeChoreoData.mouth_envelope_50hz || activeChoreoData.vocal_envelope_50hz || [];
 
             if (vocalEnv && vocalEnv.length > 0) {
                 const totalSamples = vocalEnv.length;

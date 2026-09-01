@@ -944,6 +944,11 @@ def compile_choreography_tracks(
             }
         compiled_master_blocks.append(blk_with_accent)
 
+    amp_env = analysis.get("amplitude_envelope") or analysis.get("amplitude_envelope_50hz") or []
+    mouth_env = analysis.get("mouth_envelope_50hz") or analysis.get("vocal_envelope_50hz") or []
+    drops_list = analysis.get("drops", [])
+    downbeats_list = analysis.get("downbeats", [])
+
     return {
         "version": CHOREO_SCHEMA_VERSION,
         "title": analysis.get("title", "Compiled Choreography"),
@@ -953,6 +958,11 @@ def compile_choreography_tracks(
         "poses": ROM_POSES,
         "sections": sec_blocks,
         "blocks": compiled_master_blocks,
+        "beat_times": beat_times,
+        "downbeats": downbeats_list,
+        "drops": drops_list,
+        "amplitude_envelope_50hz": amp_env,
+        "mouth_envelope_50hz": mouth_env,
         "tracks": {
             "lyrics": [b for b in timeline_blocks if b.get("is_vocal")],
             "spine_gaze": spine_moves,
