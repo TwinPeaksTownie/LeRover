@@ -304,6 +304,45 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
         "audit_summary": summary
     }
 
+def extract_spoken_summary(verdict_text: str, verdict: str, contract_res: dict = None, task_summary: str = "") -> str:
+    """
+    Extracts the inferred SPOKEN_SUMMARY section from Ornith's response.
+    Falls back to a clean rule violation summary if the section is missing.
+    """
+    if not verdict_text:
+        return ""
+
+    # 1. Match ### SPOKEN_SUMMARY block
+    match = re.search(r'###\s*SPOKEN_SUMMARY\s*\n(.*?)(?=\n###|\Z)', verdict_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        spoken = match.group(1).strip()
+        spoken = re.sub(r'[*_`#\[\]]', '', spoken).strip()
+        if spoken:
+            return spoken
+
+    # 2. Match inline SPOKEN_SUMMARY: block
+    match2 = re.search(r'SPOKEN_SUMMARY:\s*(.*?)(?=\n\n|\n[A-Z_]+:|\Z)', verdict_text, re.DOTALL | re.IGNORECASE)
+    if match2:
+        spoken = match2.group(1).strip()
+        spoken = re.sub(r'[*_`#\[\]]', '', spoken).strip()
+        if spoken:
+            return spoken
+
+    # 3. Fallback synthesis if Ornith omitted the section
+    if verdict == "APPROVED":
+        return "I have approved Antigravity's implementation. All changes comply with project rules and verification requirements."
+    elif verdict == "BLOCKER":
+        return "Attention Carson. I encountered a blocker requiring your intervention on the current implementation."
+    elif verdict == "REJECTED":
+        if contract_res and contract_res.get("violations"):
+            first_v = contract_res["violations"][0]
+            rule = first_v.get("rule", "project rules")
+            f_name = os.path.basename(first_v.get("file", "unknown"))
+            return f"I am rejecting Antigravity's implementation for violating rule {rule} in {f_name}. I will not provide approval on the build until the implementation complies with project rules."
+        return "I am rejecting Antigravity's implementation for violating project rules. I will not provide approval on the build until the implementation complies."
+
+    return "Ornith audit complete."
+
 def query_ornith_for_review(
     task_summary: str,
     diff_text: str = "",
@@ -327,14 +366,27 @@ def query_ornith_for_review(
     system_prompt = """You are Ornith, the adversarial code reviewer and hardware supervisor for the SO-101 robotic arm and touch UI system.
 Your job is to strictly enforce the following rules:
 1. FAIL-FAST SCHEMA: No .get(key, default) or 'or <default>' fallbacks for hardware/calibration parameters. Raise KeyError immediately.
-2. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load from follower.json (servos 1-6) or calibration_aux.json (servos 7-8).
+2. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load dynamically from follower.json (servos 1-6), calibration_aux.json (servos 7-8), or manifest.json.
 3. NO SWALLOWED EXCEPTIONS: No 'except: pass' or unhandled generic catches.
 4. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
 5. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
 
 Evaluate the git diff against the task summary and these strict rules.
-State your verdict clearly at the top as: [APPROVED], [REJECTED], or [BLOCKER].
-Then explain the exact reasons, line-by-line violations, and recommended corrections."""
+
+You MUST structure your response strictly using these exact markdown headers:
+
+### VERDICT
+State your verdict on a single line: [APPROVED], [REJECTED], or [BLOCKER].
+
+### SPOKEN_SUMMARY
+Provide a concise, 2-to-3 sentence spoken voice summary written in active first-person voice as Ornith addressing Carson:
+- If REJECTED: State clearly that you are rejecting Antigravity's implementation for violating rule [Rule Name/Number]. State what Antigravity was required to do (e.g. utilize manifest.json or dynamic calibration) instead of what was coded (e.g. hardcoding values, adding default fallbacks). State that you will not provide approval on the build until the implementation complies with that rule.
+- If BLOCKER: State clearly that you encountered a blocker requiring Carson's intervention, explaining the specific missing dependency or hardware state.
+- If APPROVED: State clearly that you have approved Antigravity's implementation, confirming that all changes comply with project rules and verification requirements.
+Keep the SPOKEN_SUMMARY strictly under 60 words, natural for text-to-speech, with zero markdown symbols, bullet points, or code formatting.
+
+### DETAILED_AUDIT
+Explain the exact technical reasons, line-by-line violations in the diff, and recommended corrections for Antigravity."""
 
     user_prompt = f"""Task Summary: {task_summary}
 
@@ -392,28 +444,22 @@ Provide your adversarial audit:"""
     is_rejected = "[REJECTED]" in verdict_text.upper()
     is_blocker = "[BLOCKER]" in verdict_text.upper()
 
+    verdict_str = "APPROVED" if is_approved else ("REJECTED" if is_rejected else ("BLOCKER" if is_blocker else "REVIEW_COMPLETED"))
+    spoken_text = extract_spoken_summary(verdict_text, verdict_str, contract_res, task_summary)
+
     spoken_status = "not_spoken"
-    if speak_verdict:
-        # Cap task summary at 100 words
-        words = (task_summary or "current task").split()
-        short_summary = " ".join(words[:100])
+    if speak_verdict and spoken_text:
         try:
-            if is_approved:
-                tools_speech.notify_task_verified(f"Task '{short_summary}' approved by Ornith audit.")
-                spoken_status = "spoken_approval"
-            elif is_blocker:
-                tools_speech.notify_user_of_blocker(f"Ornith identified a blocker on '{short_summary}'.")
-                spoken_status = "spoken_blocker"
-            elif is_rejected:
-                tools_speech.speak_laura(f"Ornith supervisor rejected the changes for '{short_summary}'.")
-                spoken_status = "spoken_rejection"
+            tools_speech.speak_laura(spoken_text)
+            spoken_status = f"spoken_{verdict_str.lower()}"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")
 
     return {
         "status": "success",
         "task_summary": task_summary,
-        "verdict": "APPROVED" if is_approved else ("REJECTED" if is_rejected else ("BLOCKER" if is_blocker else "REVIEW_COMPLETED")),
+        "verdict": verdict_str,
+        "spoken_summary": spoken_text,
         "verdict_text": verdict_text,
         "reasoning_summary": reasoning[:400],
         "spoken_status": spoken_status,

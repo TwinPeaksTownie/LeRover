@@ -107,19 +107,20 @@ class OrnithSupervisorDaemon:
 
         verdict = audit_res.get("verdict", "UNKNOWN")
         verdict_text = audit_res.get("verdict_text", "")
+        spoken_summary = audit_res.get("spoken_summary", "")
         logger.info(f"Ornith Verdict for Step {last_step_idx}: [{verdict}]")
 
         # 4. Actuate based on verdict
         if verdict == "APPROVED":
             self.retry_count = 0
             logger.info("Changes approved by Ornith. Announcing completion.")
-            tools_speech.notify_task_verified(f"Task '{task_summary[:60]}' has been verified and approved by Ornith.")
-            return {"status": "approved", "verdict_text": verdict_text}
+            tools_speech.speak_laura(spoken_summary or "I have verified and approved Antigravity's implementation.")
+            return {"status": "approved", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
 
         elif verdict == "BLOCKER":
             logger.warning("Blocker detected by Ornith. Escalating to Carson.")
-            tools_speech.notify_user_of_blocker(f"Ornith encountered a blocker on '{task_summary[:60]}'.")
-            return {"status": "blocker", "verdict_text": verdict_text}
+            tools_speech.speak_laura(spoken_summary or "Attention Carson. I encountered a blocker requiring your input.")
+            return {"status": "blocker", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
 
         elif verdict == "REJECTED":
             self.retry_count += 1
@@ -127,14 +128,17 @@ class OrnithSupervisorDaemon:
 
             if self.retry_count >= self.max_retries:
                 logger.error(f"Maximum retries ({self.max_retries}) reached. Alerting Carson.")
-                tools_speech.notify_user_of_blocker(
-                    f"Ornith supervisor reached the maximum retry limit of {self.max_retries} attempts on task '{task_summary[:50]}'."
-                )
-                return {"status": "max_retries_exceeded", "verdict_text": verdict_text}
-            else:
                 tools_speech.speak_laura(
-                    f"Ornith supervisor rejected the changes. Dispatching correction prompt {self.retry_count} of {self.max_retries} to Antigravity."
+                    spoken_summary or f"I reached the maximum retry limit of {self.max_retries} attempts on task '{task_summary[:50]}'."
                 )
+                return {"status": "max_retries_exceeded", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
+            else:
+                if spoken_summary:
+                    tools_speech.speak_laura(spoken_summary)
+                else:
+                    tools_speech.speak_laura(
+                        f"I am rejecting Antigravity's implementation. Dispatching correction prompt {self.retry_count} of {self.max_retries} to Antigravity."
+                    )
                 feedback_prompt = (
                     f"Ornith Adversarial Review (Attempt {self.retry_count}/{self.max_retries}):\n\n"
                     f"{verdict_text}\n\n"
@@ -145,9 +149,9 @@ class OrnithSupervisorDaemon:
                     click_send=True
                 )
                 logger.info(f"Injected rejection prompt into Antigravity chat: {inject_res.get('status')}")
-                return {"status": "rejected_and_injected", "attempt": self.retry_count, "inject_res": inject_res}
+                return {"status": "rejected_and_injected", "attempt": self.retry_count, "inject_res": inject_res, "spoken_summary": spoken_summary}
 
-        return {"status": "completed", "verdict": verdict}
+        return {"status": "completed", "verdict": verdict, "spoken_summary": spoken_summary}
 
     def start(self):
         """Starts the continuous polling daemon loop."""

@@ -59,7 +59,25 @@ def test_audit():
     assert len(scan_res.get("violations")) == 3, f"Expected 3 violations, got {len(scan_res.get('violations'))}"
     print("  [PASS] Contract scanner successfully flagged all 3 violations.")
 
-    # Test 1.4: Read Workspace File
+    # Test 1.4: Spoken Summary Extraction
+    print("Testing extract_spoken_summary()...")
+    mock_ornith_rejection = """### VERDICT
+[REJECTED]
+
+### SPOKEN_SUMMARY
+I am rejecting Antigravity's implementation for violating Rule 9: Fail-Fast Schemas. Gemini was supposed to utilize manifest.json and not hardcode the values into the compiler. I will not provide approval on the build until the piping complies with the dynamic calibration contract.
+
+### DETAILED_AUDIT
+1. pi500/test_bad.py:48: Forbidden default fallback in .get()."""
+
+    extracted = tools_audit.extract_spoken_summary(mock_ornith_rejection, "REJECTED")
+    print(f"  Extracted Spoken Script: '{extracted}'")
+    assert "rejecting Antigravity's implementation" in extracted
+    assert "manifest.json" in extracted
+    assert "approval on the build" in extracted
+    print("  [PASS] Successfully extracted inferred SPOKEN_SUMMARY from Ornith response.")
+
+    # Test 1.5: Read Workspace File
     print("Testing read_workspace_file()...")
     read_res = tools_audit.read_workspace_file("AGENTS.md", start_line=1, max_lines=10)
     assert read_res.get("status") == "success", f"Read workspace file failed: {read_res}"
