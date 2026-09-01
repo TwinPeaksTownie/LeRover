@@ -944,19 +944,14 @@ def compile_choreography_tracks(
             }
         compiled_master_blocks.append(blk_with_accent)
 
-    if "amplitude_envelope" in analysis:
-        amp_env = analysis["amplitude_envelope"]
-    elif "amplitude_envelope_50hz" in analysis:
-        amp_env = analysis["amplitude_envelope_50hz"]
-    else:
-        raise KeyError("Fail-Fast Error: 'amplitude_envelope' missing in audio analysis")
+    # STRICT FAIL-FAST: Single canonical key per parameter
+    if "amplitude_envelope_50hz" not in analysis:
+        raise KeyError("Fail-Fast Error: 'amplitude_envelope_50hz' missing in audio analysis")
+    amp_env = analysis["amplitude_envelope_50hz"]
 
-    if "mouth_envelope_50hz" in analysis:
-        mouth_env = analysis["mouth_envelope_50hz"]
-    elif "vocal_envelope_50hz" in analysis:
-        mouth_env = analysis["vocal_envelope_50hz"]
-    else:
+    if "mouth_envelope_50hz" not in analysis:
         raise KeyError("Fail-Fast Error: 'mouth_envelope_50hz' missing in audio analysis")
+    mouth_env = analysis["mouth_envelope_50hz"]
 
     if "drops" not in analysis:
         raise KeyError("Fail-Fast Error: 'drops' missing in audio analysis")

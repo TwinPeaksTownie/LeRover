@@ -1349,10 +1349,10 @@ export function renderTimeline() {
             ctx.fillStyle = '#0f2744';
             ctx.fillRect(0, midY - 0.5, laneW, 1);
 
-            const ampEnv = activeChoreoData.amplitude_envelope_50hz || activeChoreoData.amplitude_envelope || [];
-            const drops = activeChoreoData.drops || [];
+            const ampEnv = activeChoreoData.amplitude_envelope_50hz;
+            const drops = activeChoreoData.drops;
 
-            if (ampEnv && ampEnv.length > 0) {
+            if (Array.isArray(ampEnv) && ampEnv.length > 0) {
                 const totalSamples = ampEnv.length;
                 const fps = 50.0;
 
@@ -1369,22 +1369,24 @@ export function renderTimeline() {
                     }
                 }
             }
-            drops.forEach(d => {
-                const dropSec = Number(d.drop_sec || 0);
-                const dropX = dropSec * pps;
+            if (Array.isArray(drops)) {
+                drops.forEach(d => {
+                    const dropSec = Number(d.drop_sec || 0);
+                    const dropX = dropSec * pps;
 
-                // Red drop marker line
-                ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-                ctx.fillRect(dropX - 1, 0, 2, laneH);
+                    // Red drop marker line
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+                    ctx.fillRect(dropX - 1, 0, 2, laneH);
 
-                // Small drop badge
-                ctx.fillStyle = '#ef4444';
-                ctx.beginPath();
-                ctx.moveTo(dropX - 4, 0);
-                ctx.lineTo(dropX + 4, 0);
-                ctx.lineTo(dropX, 6);
-                ctx.fill();
-            });
+                    // Small drop badge
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath();
+                    ctx.moveTo(dropX - 4, 0);
+                    ctx.lineTo(dropX + 4, 0);
+                    ctx.lineTo(dropX, 6);
+                    ctx.fill();
+                });
+            }
         }
     }
 
@@ -1410,9 +1412,9 @@ export function renderTimeline() {
             ctx.fillStyle = '#380e45';
             ctx.fillRect(0, midY - 0.5, laneW, 1);
 
-            const vocalEnv = activeChoreoData.mouth_envelope_50hz || activeChoreoData.vocal_envelope_50hz || [];
+            const vocalEnv = activeChoreoData.mouth_envelope_50hz;
 
-            if (vocalEnv && vocalEnv.length > 0) {
+            if (Array.isArray(vocalEnv) && vocalEnv.length > 0) {
                 const totalSamples = vocalEnv.length;
                 const fps = 50.0;
 
