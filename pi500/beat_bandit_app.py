@@ -116,11 +116,22 @@ class BeatBanditApp(BaseApp):
     def get_status(self) -> Dict[str, Any]:
         if self.player and self.player.is_playing:
             p_stat = self.player.get_status()
+            tempo_val = float(self.active_track.get("bpm") or self.active_track.get("tempo", 0.0)) if self.active_track else 0.0
+            track_obj = {
+                "title": self.active_track.get("title", ""),
+                "artist": self.active_track.get("artist", "")
+            } if self.active_track else None
+
             return {
                 "app_name": "beat_bandit_app",
-                "state": p_stat["state"],
+                "state": "DANCING",
+                "is_dancing": True,
+                "is_playing": True,
                 "active_track": self.active_track.get("title") if self.active_track else None,
                 "artist": self.active_track.get("artist") if self.active_track else None,
+                "track": track_obj,
+                "tempo": tempo_val,
+                "progress": p_stat["progress_pct"],
                 "progress_pct": p_stat["progress_pct"],
                 "time_sec": p_stat["time_sec"],
                 "current_beat": p_stat["current_beat"],
@@ -129,15 +140,27 @@ class BeatBanditApp(BaseApp):
                 "vocal_power": p_stat["vocal_power"],
                 "pedestal_rom_pct": p_stat["pedestal_rom_pct"],
                 "pedestal_angle_deg": p_stat["pedestal_angle_deg"],
+                "s7_angle_deg": p_stat["pedestal_angle_deg"],
                 "tracks_count": len(self.manifest),
                 "error": p_stat["error"] or self.error,
             }
 
+        tempo_val = float(self.active_track.get("bpm") or self.active_track.get("tempo", 0.0)) if self.active_track else 0.0
+        track_obj = {
+            "title": self.active_track.get("title", ""),
+            "artist": self.active_track.get("artist", "")
+        } if self.active_track else None
+
         return {
             "app_name": "beat_bandit_app",
             "state": self.current_state,
+            "is_dancing": (self.current_state == "DANCING"),
+            "is_playing": False,
             "active_track": self.active_track.get("title") if self.active_track else None,
             "artist": self.active_track.get("artist") if self.active_track else None,
+            "track": track_obj,
+            "tempo": tempo_val,
+            "progress": 0.0,
             "progress_pct": 0.0,
             "time_sec": 0.0,
             "current_beat": 0,
@@ -146,6 +169,7 @@ class BeatBanditApp(BaseApp):
             "vocal_power": 0.0,
             "pedestal_rom_pct": 50.0,
             "pedestal_angle_deg": 0.0,
+            "s7_angle_deg": 0.0,
             "tracks_count": len(self.manifest),
             "error": self.error,
         }

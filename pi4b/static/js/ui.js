@@ -912,14 +912,18 @@ export function updateTelemetryUI(data) {
 
     // Beat Bandit Telemetry Parsing
     const bbData = ht.beat_bandit || data.beat_bandit || {};
-    setIsBeatBanditDancing(!!(bbData.is_dancing || (bbData.state === 'DANCING')));
+    const isDancingState = !!(bbData.is_dancing || bbData.is_playing || bbData.state === 'DANCING' || bbData.state === 'PLAYING');
+    setIsBeatBanditDancing(isDancingState);
+    if (!isDancingState && timelineIsPlaying) {
+        setTimelineIsPlaying(false);
+    }
 
     const bbBadge = document.getElementById('bbStateBadge');
     if (bbBadge) {
         const st = bbData.state || (isBeatBanditDancing ? 'DANCING' : (isBeatBanditAppRunning ? 'ACTIVE' : 'IDLE'));
         if (bbBadge.innerText !== st) {
             bbBadge.innerText = st;
-            if (st === 'DANCING') {
+            if (st === 'DANCING' || st === 'PLAYING') {
                 bbBadge.style.background = '#113311';
                 bbBadge.style.color = '#00ff66';
             } else if (st === 'ANALYZING' || st === 'DOWNLOADING') {
@@ -932,22 +936,27 @@ export function updateTelemetryUI(data) {
         }
     }
 
-    if (bbData.track) {
+    const trackObj = bbData.track || (bbData.active_track ? { title: bbData.active_track, artist: bbData.artist || '' } : null);
+    if (trackObj) {
         const tTitle = document.getElementById('bbTrackTitle');
         const tArtist = document.getElementById('bbTrackArtist');
-        if (tTitle && bbData.track.title && tTitle.innerText !== bbData.track.title) tTitle.innerText = bbData.track.title;
-        if (tArtist && bbData.track.artist && tArtist.innerText !== bbData.track.artist) tArtist.innerText = bbData.track.artist;
+        if (tTitle && trackObj.title && tTitle.innerText !== trackObj.title) tTitle.innerText = trackObj.title;
+        if (tArtist && trackObj.artist && tArtist.innerText !== trackObj.artist) tArtist.innerText = trackObj.artist;
     }
 
     const bbProg = document.getElementById('bbProgressBar');
     const bbBeatCtr = document.getElementById('bbBeatCounter');
-    if (bbProg && bbData.progress !== undefined) bbProg.style.width = bbData.progress + '%';
-    if (bbBeatCtr && bbData.current_beat !== undefined) bbBeatCtr.innerText = `Beat: ${bbData.current_beat} / ${bbData.total_beats || 0}`;
+    const progVal = (bbData.progress !== undefined) ? bbData.progress : bbData.progress_pct;
+    if (bbProg && progVal !== undefined) bbProg.style.width = progVal + '%';
+    if (bbBeatCtr && bbData.current_beat !== undefined) {
+        const totalB = bbData.total_beats || (activeChoreoData && activeChoreoData.beat_times ? activeChoreoData.beat_times.length : 0);
+        bbBeatCtr.innerText = `Beat: ${bbData.current_beat} / ${totalB}`;
+    }
 
-    if (bbData.time_sec !== undefined && isBeatBanditDancing) {
+    if (bbData.time_sec !== undefined && (isDancingState || timelineIsPlaying)) {
         setTimelinePlayheadTime(bbData.time_sec);
         if (bbStudioTab === 'timeline') {
-            renderTimeline();
+            updateTimelinePlayhead(bbData.time_sec);
         }
     }
 
@@ -956,11 +965,13 @@ export function updateTelemetryUI(data) {
     const bbS7 = document.getElementById('bbS7Display');
     const bbMove = document.getElementById('bbMoveDisplay');
 
-    if (bbBpm && bbData.tempo) bbBpm.innerText = Number(bbData.tempo).toFixed(1) + ' BPM';
+    const tempoVal = (bbData.tempo !== undefined) ? bbData.tempo : bbData.bpm;
+    if (bbBpm && tempoVal) bbBpm.innerText = Number(tempoVal).toFixed(1) + ' BPM';
     if (bbJaw && bbData.vocal_power !== undefined) bbJaw.innerText = (Number(bbData.vocal_power) * 100).toFixed(0) + '%';
-    if (bbS7 && bbData.s7_angle_deg !== undefined) {
-        const s7val = Number(bbData.s7_angle_deg);
-        bbS7.innerText = (s7val > 0 ? '+' : '') + s7val.toFixed(1) + '°';
+    const s7Val = (bbData.s7_angle_deg !== undefined) ? bbData.s7_angle_deg : bbData.pedestal_angle_deg;
+    if (bbS7 && s7Val !== undefined && s7Val !== null) {
+        const s7num = Number(s7Val);
+        bbS7.innerText = (s7num > 0 ? '+' : '') + s7num.toFixed(1) + '°';
     }
     if (bbMove && bbData.current_move) bbMove.innerText = bbData.current_move;
 
@@ -1378,20 +1389,26 @@ export function renderTimeline() {
     }
 
     // 6. Update Playhead Scrubber Position
+    updateTimelinePlayhead(timelinePlayheadTime);
+}
+
+export function updateTimelinePlayhead(timeSec = timelinePlayheadTime) {
+    const pps = timelinePixelsPerSec;
+    const labelOffset = 100;
     const playhead = document.getElementById('bbPlayheadLine');
     if (playhead) {
-        const phLeft = labelOffset + (timelinePlayheadTime * pps);
+        const phLeft = labelOffset + (timeSec * pps);
         playhead.style.left = `${phLeft}px`;
     }
 
     const timeDisplay = document.getElementById('bbTimelineTimeDisplay');
     if (timeDisplay) {
-        const mins = Math.floor(timelinePlayheadTime / 60);
-        const secs = (timelinePlayheadTime % 60).toFixed(1).padStart(4, '0');
-        const beatTimes = activeChoreoData.beat_times || [];
+        const mins = Math.floor(timeSec / 60);
+        const secs = (timeSec % 60).toFixed(1).padStart(4, '0');
+        const beatTimes = (activeChoreoData && activeChoreoData.beat_times) || [];
         let currBeat = 0;
         for (let i = 0; i < beatTimes.length; i++) {
-            if (beatTimes[i] <= timelinePlayheadTime) currBeat = i + 1;
+            if (beatTimes[i] <= timeSec) currBeat = i + 1;
             else break;
         }
         timeDisplay.innerText = `⏱️ ${mins}:${secs} (B ${currBeat}/${beatTimes.length || '--'})`;
