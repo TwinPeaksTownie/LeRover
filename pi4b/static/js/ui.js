@@ -1465,6 +1465,12 @@ export function openMoveInspector(channel, block) {
                 <button id="inspSnapBeatBtn" class="btn-action" style="padding: 1px 6px; font-size: 9px; font-weight: 800; height: 18px; min-height: 0; background: #2e1065; border: 1px solid #a855f7; color: #e9d5ff; border-radius: 3px;">SNAP BEAT</button>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                ${(channel === 'lyrics' || channel === 'lyrics_phrasing') ? `
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 9px; color: #ec4899; font-weight: 700; cursor: pointer;" title="Automatically synchronize start/end times across all joint tracks (Spine, Rail, Pedestal, Torso, Tilt, Jaw)">
+                    <input type="checkbox" id="inspCascadeAllTracks" checked style="cursor: pointer;">
+                    🔗 CASCADE ALL TRACKS
+                </label>
+                ` : `
                 <label style="display: flex; align-items: center; gap: 4px; font-size: 9px; color: #38bdf8; font-weight: 700; cursor: pointer;">
                     <input type="checkbox" id="inspUserOverride" ${block.user_override ? 'checked' : ''} style="cursor: pointer;">
                     OVERRIDE
@@ -1473,6 +1479,7 @@ export function openMoveInspector(channel, block) {
                     <input type="checkbox" id="inspBounceEnabled" ${(block.bounce_modifier && block.bounce_modifier.enabled !== false) ? 'checked' : ''} style="cursor: pointer;">
                     BOUNCE 12%
                 </label>
+                `}
             </div>
         </div>
     `;

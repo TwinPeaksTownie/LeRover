@@ -1201,6 +1201,142 @@ function bindEventListeners() {
         ui.closeMoveInspector();
     });
 
+    function parseStrictTime(val, fieldName = "time") {
+        if (val === undefined || val === null || val === "") {
+            throw new TypeError(`Fail-Fast Error: ${fieldName} value cannot be empty or null.`);
+        }
+        const num = Number(val);
+        if (!Number.isFinite(num) || Number.isNaN(num)) {
+            throw new TypeError(`Fail-Fast Error: ${fieldName} '${val}' is not a valid finite number.`);
+        }
+        if (num < 0) {
+            throw new RangeError(`Fail-Fast Error: ${fieldName} '${num}' cannot be negative.`);
+        }
+        return parseFloat(num.toFixed(2));
+    }
+
+    // Propagate vocal block timeframe adjustments to master blocks and all joint tracks
+    function propagateVocalTimeChange(lyricBlock, newStartSec, newEndSec) {
+        if (!activeChoreoData || !lyricBlock) {
+            throw new Error("Cannot propagate vocal time change: activeChoreoData or lyricBlock is null");
+        }
+
+        const startSec = parseStrictTime(newStartSec, "start_sec");
+        const endSec = parseStrictTime(newEndSec, "end_sec");
+        if (endSec <= startSec) {
+            throw new RangeError(`Fail-Fast Error: end_sec (${endSec}) must be strictly greater than start_sec (${startSec})`);
+        }
+
+        const blockId = lyricBlock.id;
+        if (!blockId) {
+            throw new Error("Fail-Fast Error: lyricBlock missing mandatory 'id' field");
+        }
+
+        const dur = parseFloat((endSec - startSec).toFixed(2));
+        const beatTimes = activeChoreoData.beat_times;
+        if (!Array.isArray(beatTimes) || beatTimes.length === 0) {
+            throw new Error("Fail-Fast Error: activeChoreoData.beat_times array is empty. Calibration sync required.");
+        }
+
+        const getBeatIdx = (sec) => {
+            let closest = 0;
+            let minDiff = Math.abs(beatTimes[0] - sec);
+            for (let i = 1; i < beatTimes.length; i++) {
+                const diff = Math.abs(beatTimes[i] - sec);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = i;
+                }
+            }
+            return closest;
+        };
+
+        const sBeat = getBeatIdx(startSec);
+        const eBeat = Math.max(sBeat + 1, getBeatIdx(endSec));
+        const durBeats = eBeat - sBeat;
+        const measure = Math.floor(sBeat / 4);
+
+        // 1. Update the vocal block itself
+        lyricBlock.start_sec = startSec;
+        lyricBlock.end_sec = endSec;
+        lyricBlock.start_beat = sBeat;
+        lyricBlock.end_beat = eBeat;
+        lyricBlock.duration_beats = durBeats;
+        lyricBlock.measure = measure;
+        lyricBlock.is_user_edited = true;
+
+        // 2. Update Master Block in activeChoreoData.blocks
+        if (Array.isArray(activeChoreoData.blocks)) {
+            const mb = activeChoreoData.blocks.find(b => b.id === blockId);
+            if (mb) {
+                mb.start_sec = startSec;
+                mb.end_sec = endSec;
+                mb.duration = dur;
+                mb.start_beat = sBeat;
+                mb.end_beat = eBeat;
+                mb.duration_beats = durBeats;
+                mb.measure = measure;
+                mb.is_user_edited = true;
+            }
+        }
+
+        // 3. Update all corresponding joint tracks (Spine, Rail, Pedestal, Torso, Tilt, Jaw)
+        const tracks = activeChoreoData.tracks;
+        if (!tracks || typeof tracks !== "object") {
+            throw new Error("Fail-Fast Error: activeChoreoData missing mandatory 'tracks' dictionary");
+        }
+
+        const jointChannels = [
+            'spine_gaze', 'body_pose',
+            's8_gantry',
+            's7_pedestal',
+            's1_torso',
+            's5_head_tilt',
+            's6_jaw', 'head_jaw'
+        ];
+
+        let matchedCount = 0;
+        jointChannels.forEach(ch => {
+            const list = tracks[ch];
+            if (Array.isArray(list)) {
+                list.forEach(b => {
+                    const isMatch = (
+                        b.block_id === blockId ||
+                        b.id === blockId ||
+                        b.id === `sp_${blockId}` ||
+                        b.id === `s8_${blockId}` ||
+                        b.id === `s7_${blockId}` ||
+                        b.id === `s1_${blockId}` ||
+                        b.id === `s5_${blockId}` ||
+                        b.id === `jw_${blockId}` ||
+                        (typeof b.id === 'string' && b.id.endsWith(`_${blockId}`))
+                    );
+                    if (isMatch) {
+                        b.start_sec = startSec;
+                        b.end_sec = endSec;
+                        b.start_beat = sBeat;
+                        b.end_beat = eBeat;
+                        b.duration_beats = durBeats;
+                        b.measure = measure;
+                        b.is_user_edited = true;
+                        matchedCount++;
+                    }
+                });
+                list.sort((a, b) => Number(a.start_sec) - Number(b.start_sec));
+            }
+        });
+
+        // Also sort lyrics lanes
+        ['lyrics', 'lyrics_phrasing'].forEach(ch => {
+            if (Array.isArray(tracks[ch])) {
+                tracks[ch].sort((a, b) => Number(a.start_sec) - Number(b.start_sec));
+            }
+        });
+
+        // Rule 4 Audit Telemetry Log
+        console.log(`[TELEMETRY_AUDIT] choreo_cascade_sync: Block ${blockId} timeframe synchronized to [${startSec}s - ${endSec}s] (${dur}s, ${durBeats} beats) across ${matchedCount} joint track blocks.`);
+    }
+
     // Inspector dynamic input delegator
     if (inspDynamicCtrls) {
         inspDynamicCtrls.addEventListener('input', (e) => {
@@ -1209,10 +1345,34 @@ function bindEventListeners() {
             const val = e.target.value;
 
             if (id === 'inspStartSec') {
-                selectedMoveBlock.start_sec = parseFloat(val) || 0;
+                const newStart = parseStrictTime(val, "inspStartSec");
+                const isLyric = (selectedMoveChannel === 'lyrics' || selectedMoveChannel === 'lyrics_phrasing');
+                const cascadeEl = document.getElementById('inspCascadeAllTracks');
+                if (isLyric && !cascadeEl) {
+                    throw new Error("Fail-Fast Error: Cascade toggle element #inspCascadeAllTracks not mounted.");
+                }
+                const shouldCascade = isLyric && cascadeEl.checked;
+                if (shouldCascade) {
+                    propagateVocalTimeChange(selectedMoveBlock, newStart, Number(selectedMoveBlock.end_sec));
+                } else {
+                    selectedMoveBlock.start_sec = newStart;
+                    selectedMoveBlock.is_user_edited = true;
+                }
                 ui.renderTimeline();
             } else if (id === 'inspEndSec') {
-                selectedMoveBlock.end_sec = parseFloat(val) || 0;
+                const newEnd = parseStrictTime(val, "inspEndSec");
+                const isLyric = (selectedMoveChannel === 'lyrics' || selectedMoveChannel === 'lyrics_phrasing');
+                const cascadeEl = document.getElementById('inspCascadeAllTracks');
+                if (isLyric && !cascadeEl) {
+                    throw new Error("Fail-Fast Error: Cascade toggle element #inspCascadeAllTracks not mounted.");
+                }
+                const shouldCascade = isLyric && cascadeEl.checked;
+                if (shouldCascade) {
+                    propagateVocalTimeChange(selectedMoveBlock, Number(selectedMoveBlock.start_sec), newEnd);
+                } else {
+                    selectedMoveBlock.end_sec = newEnd;
+                    selectedMoveBlock.is_user_edited = true;
+                }
                 ui.renderTimeline();
             } else if (id === 'inspBasePose') {
                 selectedMoveBlock.pose_name = val;
@@ -1309,10 +1469,35 @@ function bindEventListeners() {
 
             const nudgeBtn = e.target.closest('.insp-nudge-btn');
             if (nudgeBtn) {
-                const nudge = parseFloat(nudgeBtn.getAttribute('data-nudge') || '0');
-                const dur = Math.max(0.1, selectedMoveBlock.end_sec - selectedMoveBlock.start_sec);
-                selectedMoveBlock.start_sec = Math.max(0, parseFloat((selectedMoveBlock.start_sec + nudge).toFixed(1)));
-                selectedMoveBlock.end_sec = parseFloat((selectedMoveBlock.start_sec + dur).toFixed(1));
+                const nudgeRaw = nudgeBtn.getAttribute('data-nudge');
+                if (nudgeRaw === null || nudgeRaw === undefined) {
+                    throw new Error("Fail-Fast Error: nudge button missing mandatory 'data-nudge' attribute");
+                }
+                const nudge = Number(nudgeRaw);
+                if (!Number.isFinite(nudge)) {
+                    throw new TypeError(`Fail-Fast Error: Invalid finite nudge value: ${nudgeRaw}`);
+                }
+                const curStart = Number(selectedMoveBlock.start_sec);
+                const curEnd = Number(selectedMoveBlock.end_sec);
+                if (!Number.isFinite(curStart) || !Number.isFinite(curEnd)) {
+                    throw new RangeError("Fail-Fast Error: selectedMoveBlock start_sec/end_sec must be finite numbers.");
+                }
+                const dur = Math.max(0.1, curEnd - curStart);
+                const newStart = Math.max(0, parseFloat((curStart + nudge).toFixed(1)));
+                const newEnd = parseFloat((newStart + dur).toFixed(1));
+                const isLyric = (selectedMoveChannel === 'lyrics' || selectedMoveChannel === 'lyrics_phrasing');
+                const cascadeEl = document.getElementById('inspCascadeAllTracks');
+                if (isLyric && !cascadeEl) {
+                    throw new Error("Fail-Fast Error: Cascade toggle element #inspCascadeAllTracks not mounted.");
+                }
+                const shouldCascade = isLyric && cascadeEl.checked;
+                if (shouldCascade) {
+                    propagateVocalTimeChange(selectedMoveBlock, newStart, newEnd);
+                } else {
+                    selectedMoveBlock.start_sec = newStart;
+                    selectedMoveBlock.end_sec = newEnd;
+                    selectedMoveBlock.is_user_edited = true;
+                }
                 ui.openMoveInspector(selectedMoveChannel, selectedMoveBlock);
                 return;
             }
@@ -1320,15 +1505,36 @@ function bindEventListeners() {
             const snapBtn = e.target.closest('#inspSnapBeatBtn');
             if (snapBtn && activeChoreoData && activeChoreoData.beat_times) {
                 const bts = activeChoreoData.beat_times;
-                let closest = bts[0] || 0;
-                let minDiff = 9999;
+                if (!Array.isArray(bts) || bts.length === 0) {
+                    throw new Error("Fail-Fast Error: activeChoreoData.beat_times array is empty. Calibration sync required.");
+                }
+                const curStart = Number(selectedMoveBlock.start_sec);
+                const curEnd = Number(selectedMoveBlock.end_sec);
+                if (!Number.isFinite(curStart) || !Number.isFinite(curEnd)) {
+                    throw new RangeError("Fail-Fast Error: selectedMoveBlock start_sec/end_sec must be finite numbers.");
+                }
+                let closest = bts[0];
+                let minDiff = Math.abs(bts[0] - curStart);
                 bts.forEach(bt => {
-                    const diff = Math.abs(bt - selectedMoveBlock.start_sec);
+                    const diff = Math.abs(bt - curStart);
                     if (diff < minDiff) { minDiff = diff; closest = bt; }
                 });
-                const dur = Math.max(0.1, selectedMoveBlock.end_sec - selectedMoveBlock.start_sec);
-                selectedMoveBlock.start_sec = parseFloat(closest.toFixed(2));
-                selectedMoveBlock.end_sec = parseFloat((closest + dur).toFixed(2));
+                const dur = Math.max(0.1, curEnd - curStart);
+                const newStart = parseFloat(Number(closest).toFixed(2));
+                const newEnd = parseFloat((newStart + dur).toFixed(2));
+                const isLyric = (selectedMoveChannel === 'lyrics' || selectedMoveChannel === 'lyrics_phrasing');
+                const cascadeEl = document.getElementById('inspCascadeAllTracks');
+                if (isLyric && !cascadeEl) {
+                    throw new Error("Fail-Fast Error: Cascade toggle element #inspCascadeAllTracks not mounted.");
+                }
+                const shouldCascade = isLyric && cascadeEl.checked;
+                if (shouldCascade) {
+                    propagateVocalTimeChange(selectedMoveBlock, newStart, newEnd);
+                } else {
+                    selectedMoveBlock.start_sec = newStart;
+                    selectedMoveBlock.end_sec = newEnd;
+                    selectedMoveBlock.is_user_edited = true;
+                }
                 ui.openMoveInspector(selectedMoveChannel, selectedMoveBlock);
                 return;
             }
