@@ -1134,24 +1134,96 @@ export function renderTimeline() {
             const widthPx = Math.max(4, dur * pps);
             const isSel = selectedMoveBlock && selectedMoveBlock.id === blk.id;
 
-            let label = blk.text || blk.name || blk.pose_name || `${st.toFixed(0)}s-${et.toFixed(0)}s`;
+            let label = blk.name || blk.text || blk.pose_name || (blk.measure !== undefined && blk.start_beat !== undefined ? `M${blk.measure + 1} B${blk.start_beat + 1}` : `${st.toFixed(1)}s-${et.toFixed(1)}s`);
             let effectiveClass = blockClass;
 
-            if (channelKey === 's7_pedestal') {
-                const tdeg = blk.target_deg !== undefined ? blk.target_deg : ((blk.height_norm !== undefined ? (blk.height_norm - 0.5) * 60 : 0));
-                label = `${blk.name || 'Pedestal'} (${tdeg > 0 ? '+' : ''}${Number(tdeg).toFixed(0)}°)`;
-            } else if (channelKey === 's8_gantry') {
-                const tpos = blk.target_pos !== undefined ? blk.target_pos : (blk.position_norm !== undefined ? Math.round(blk.position_norm * 4800) : 2400);
-                label = `${blk.name || 'Gantry'} (${tpos})`;
-            } else if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
+            if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
                 const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
                     label = `[breath]`;
+                } else if (blk.style === 'belting') {
+                    effectiveClass = 'block-vocal-belting';
+                    label = blk.text || blk.name || 'Belting';
+                } else if (blk.style === 'conversational') {
+                    effectiveClass = 'block-vocal-conversational';
+                    label = blk.text || blk.name || 'Conversational';
                 } else {
                     effectiveClass = 'block-lyric-vocal';
-                    label = `${blk.text || ''}`;
+                    label = blk.text || blk.name || 'Vocal';
                 }
+            } else if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
+                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'stand').toLowerCase();
+                if (pose === 'squat') {
+                    effectiveClass = 'block-spine-squat';
+                } else if (pose === 'tiptoe') {
+                    effectiveClass = 'block-spine-tiptoe';
+                } else if (pose === 'arch') {
+                    effectiveClass = 'block-spine-arch';
+                } else {
+                    effectiveClass = 'block-spine-stand';
+                }
+                label = blk.name || `Spine (${pose.toUpperCase()})`;
+            } else if (channelKey === 's8_gantry') {
+                const mode = String(blk.mode || 'hold').toLowerCase();
+                const isDrop = (blk.drop_sec !== null && blk.drop_sec !== undefined) || mode.includes('drop');
+                if (isDrop) {
+                    effectiveClass = 'block-s8-drop';
+                } else if (mode === 'full_glide') {
+                    effectiveClass = 'block-s8-full_glide';
+                } else if (mode === 'early_step' || mode === 'early_settle') {
+                    effectiveClass = 'block-s8-early_step';
+                } else if (mode === 'late_step' || mode === 'late_move') {
+                    effectiveClass = 'block-s8-late_step';
+                } else {
+                    effectiveClass = 'block-s8-hold';
+                }
+                label = blk.name || `Gantry (${mode.replace('_', ' ').toUpperCase()})`;
+            } else if (channelKey === 's7_pedestal') {
+                if (blk.target_deg !== undefined) {
+                    const tdeg = Number(blk.target_deg);
+                    effectiveClass = tdeg > 5 ? 'block-s7-left' : (tdeg < -5 ? 'block-s7-right' : 'block-s7-center');
+                    label = blk.name || `Pedestal (${tdeg > 0 ? '+' : ''}${tdeg.toFixed(0)}°)`;
+                } else if (blk.mode) {
+                    const m = String(blk.mode).toLowerCase();
+                    effectiveClass = m.includes('left') ? 'block-s7-left' : (m.includes('right') ? 'block-s7-right' : 'block-s7-center');
+                    label = blk.name || `Pedestal (${m.replace('_', ' ').toUpperCase()})`;
+                } else {
+                    effectiveClass = 'block-s7-center';
+                    label = blk.name || 'Pedestal';
+                }
+            } else if (channelKey === 's1_torso') {
+                if (blk.groove_intensity !== undefined) {
+                    const groove = Number(blk.groove_intensity);
+                    effectiveClass = groove <= 0.05 ? 'block-s1-still' : (groove >= 0.75 ? 'block-s1-dance' : 'block-s1-verse');
+                    label = blk.name || `Torso (${Math.round(groove * 100)}%)`;
+                } else if (blk.facing_mode === 'audience_counter') {
+                    effectiveClass = 'block-s1-dance';
+                    label = blk.name || 'Torso (Counter)';
+                } else {
+                    effectiveClass = 'block-s1-verse';
+                    label = blk.name || 'Torso (Verse)';
+                }
+            } else if (channelKey === 's5_head_tilt') {
+                if (blk.tilt_mode === 'continuous_roll') {
+                    effectiveClass = 'block-s5-roll';
+                    label = blk.name || 'Tilt (Roll)';
+                } else if (blk.tilt_deg !== undefined) {
+                    const tilt = Number(blk.tilt_deg);
+                    effectiveClass = tilt < -2 ? 'block-s5-left' : (tilt > 2 ? 'block-s5-right' : 'block-s5-level');
+                    label = blk.name || `Tilt (${tilt > 0 ? '+' : ''}${tilt.toFixed(0)}°)`;
+                } else if (blk.tilt_mode) {
+                    const tm = String(blk.tilt_mode).toLowerCase();
+                    effectiveClass = tm.includes('left') ? 'block-s5-left' : (tm.includes('right') ? 'block-s5-right' : 'block-s5-level');
+                    label = blk.name || `Tilt (${tm.replace('_', ' ').toUpperCase()})`;
+                } else {
+                    effectiveClass = 'block-s5-level';
+                    label = blk.name || 'Tilt';
+                }
+            } else if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
+                const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
+                effectiveClass = isSinging ? 'block-jaw-singing' : 'block-jaw-closed';
+                label = blk.name || (isSinging ? 'Jaw (Singing)' : 'Jaw (Closed)');
             }
             const isUserEdited = !!blk.is_user_edited;
 
