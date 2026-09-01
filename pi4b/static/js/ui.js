@@ -1124,8 +1124,8 @@ export function renderTimeline() {
     function renderLaneBlocks(laneEl, blockList, channelKey, blockClass) {
         if (!laneEl) return;
         let html = '';
-        let runningPedDeg = 0;
-        let prevGantryPos = 2400;
+        let runningPedDeg = null;
+        let prevGantryPos = null;
 
         function formatConciseBlockLabel(channelKey, blk, st, et) {
             if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
@@ -1137,17 +1137,15 @@ export function renderTimeline() {
 
             if (channelKey === 's7_pedestal') {
                 let endDeg = 0;
-                if (blk.target_deg !== undefined) {
+                if (blk.target_deg !== undefined && blk.target_deg !== null) {
                     endDeg = Math.round(Number(blk.target_deg));
-                } else if (blk.target_pos_rom !== undefined) {
+                } else if (blk.target_pos_rom !== undefined && blk.target_pos_rom !== null) {
                     endDeg = Math.round((Number(blk.target_pos_rom) - 50.0) * 2.7);
-                } else if (blk.mode === 'return_center' || blk.mode === 'center_hold') {
-                    endDeg = 0;
-                } else {
+                } else if (runningPedDeg !== null) {
                     endDeg = runningPedDeg;
                 }
 
-                const deltaDeg = endDeg - runningPedDeg;
+                const deltaDeg = (runningPedDeg !== null) ? endDeg - runningPedDeg : 0;
                 runningPedDeg = endDeg;
 
                 const endHeadingStr = (endDeg > 0) ? `+${endDeg}°` : `${endDeg}°`;
@@ -1163,30 +1161,21 @@ export function renderTimeline() {
             }
 
             if (channelKey === 's8_gantry') {
-                let pos = 2400;
-                if (blk.target_pos !== undefined) {
-                    pos = parseInt(blk.target_pos, 10);
-                } else if (blk.target_pos_rom !== undefined) {
-                    pos = Math.round(3 + (Number(blk.target_pos_rom) / 100.0) * 4797);
-                }
-                const pPos = prevGantryPos;
-                prevGantryPos = pos;
-
-                if (pos <= 50) return `Full Left (${pos})`;
-                if (pos >= 4750) return `Full Right (${pos})`;
-                if (pos >= 2350 && pos <= 2450 && blk.mode !== 'full_glide') return `Center (2400)`;
-
+                const pos = (blk.target_pos !== undefined && blk.target_pos !== null) ? parseInt(blk.target_pos, 10) : null;
                 const mode = String(blk.mode || 'hold').toLowerCase();
+                const pPos = prevGantryPos;
+                if (pos !== null) prevGantryPos = pos;
+
                 if (mode === 'full_glide' || mode === 'glide') {
-                    if (pos > pPos) return `Glide Right (${pos})`;
-                    if (pos < pPos) return `Glide Left (${pos})`;
-                    return `Glide (${pos})`;
+                    if (pos !== null && pPos !== null && pos > pPos) return `Glide Right (${pos})`;
+                    if (pos !== null && pPos !== null && pos < pPos) return `Glide Left (${pos})`;
+                    return pos !== null ? `Glide (${pos})` : 'Glide';
                 }
-                if (mode === 'hold_to_drop_glide' || pos === 4350) return `Drop Peak (${pos})`;
-                if (mode === 'late_move') return `Late Settle (${pos})`;
-                if (mode === 'early_settle') return `Early Settle (${pos})`;
-                if (mode === 'hold') return `Hold (${pos})`;
-                return `${mode.replace(/_/g, ' ')} (${pos})`;
+                if (mode === 'hold_to_drop_glide' || (pos !== null && pos === 4350)) return pos !== null ? `Drop Peak (${pos})` : 'Drop Peak';
+                if (mode === 'late_move') return pos !== null ? `Late Settle (${pos})` : 'Late Settle';
+                if (mode === 'early_settle') return pos !== null ? `Early Settle (${pos})` : 'Early Settle';
+                if (mode === 'hold') return pos !== null ? `Hold (${pos})` : 'Hold';
+                return pos !== null ? `${mode.replace(/_/g, ' ')} (${pos})` : mode.replace(/_/g, ' ');
             }
 
             if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
