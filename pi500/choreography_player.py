@@ -202,6 +202,7 @@ class ChoreographyPlayer:
                 hip_sway_rom = 0.0
                 body_bounce_rom = 0.0
                 head_bob_rom = 0.0
+                head_tilt_bounce_rom = 0.0
                 if bmod is not None:
                     if "enabled" not in bmod or "intensity" not in bmod or "target" not in bmod:
                         raise KeyError(f"Fail-Fast Error: Bounce modifier payload missing required keys ('enabled', 'intensity', 'target'): {bmod}")
@@ -213,8 +214,11 @@ class ChoreographyPlayer:
                             hip_sway_rom = b_int * 15.0 * sway_offset
                         elif btarget == "body_bounce":
                             body_bounce_rom = b_int * 15.0 * abs(sway_offset)
+                            head_bob_rom = b_int * 8.0 * max(0.0, sway_offset)
+                            head_tilt_bounce_rom = b_int * 6.0 * sway_offset
                         elif btarget == "head_bob":
                             head_bob_rom = b_int * 18.0 * max(0.0, sway_offset)
+                            head_tilt_bounce_rom = b_int * 10.0 * sway_offset
                         else:
                             raise ValueError(f"Unsupported bounce target: {btarget}")
 
@@ -254,6 +258,9 @@ class ChoreographyPlayer:
                     smooth_posture_rom["shoulder_lift"] += alpha * ((target_lift + body_bounce_rom) - smooth_posture_rom["shoulder_lift"])
                     smooth_posture_rom["elbow_flex"] += alpha * ((target_elbow - (body_bounce_rom * 0.6)) - smooth_posture_rom["elbow_flex"])
                     smooth_posture_rom["wrist_flex"] += alpha * ((target_pitch + head_bob_rom) - smooth_posture_rom["wrist_flex"])
+                    smooth_posture_rom["shoulder_lift"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_lift"]))
+                    smooth_posture_rom["elbow_flex"] = max(0.0, min(100.0, smooth_posture_rom["elbow_flex"]))
+                    smooth_posture_rom["wrist_flex"] = max(0.0, min(100.0, smooth_posture_rom["wrist_flex"]))
 
                     self.current_move_name = spine_block.get("name", active_pose_name)
                     self.current_energy_level = "HIGH ENERGY" if active_pose_name in ["tiptoe", "arch"] else "GROOVE"
@@ -278,8 +285,9 @@ class ChoreographyPlayer:
                 else:
                     target_pan = 50.0 + hip_sway_rom
                 smooth_posture_rom["shoulder_pan"] += 0.25 * (target_pan - smooth_posture_rom["shoulder_pan"])
+                smooth_posture_rom["shoulder_pan"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_pan"]))
 
-                # 4. Track 5: Head Tilt (Servo 5)
+                # 4. Track 5: Head Tilt (Servo 5) - 3-Phase Motion Lifecycle (Attack -> Settle -> Return to Center)
                 s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if s5_block:
                     mode = s5_block.get("tilt_mode", "center")
@@ -289,22 +297,6 @@ class ChoreographyPlayer:
 
                     if mode == "center":
                         target_roll = 50.0
-                    elif mode.startswith("snap_pulse"):
-                        pulse_dur = float(s5_block.get("pulse_duration_sec", 0.8))
-                        peak_rom = float(s5_block.get("target_rom", s5_block.get("tilt_rom", 50.0)))
-                        if t_in_block < pulse_dur:
-                            attack = 0.25 * pulse_dur
-                            hold = 0.40 * pulse_dur
-                            if t_in_block < attack:
-                                progress = t_in_block / max(0.001, attack)
-                                target_roll = 50.0 + progress * (peak_rom - 50.0)
-                            elif t_in_block < hold:
-                                target_roll = peak_rom
-                            else:
-                                progress = (t_in_block - hold) / max(0.001, (pulse_dur - hold))
-                                target_roll = peak_rom + progress * (50.0 - peak_rom)
-                        else:
-                            target_roll = 50.0
                     elif mode == "continuous_roll":
                         amp = float(s5_block.get("roll_amplitude", 8.0))
                         freq = float(s5_block.get("roll_freq_hz", 1.0))
@@ -316,10 +308,27 @@ class ChoreographyPlayer:
                             env = max(0.0, (b_dur - t_in_block) / max(0.001, fade_time))
                         target_roll = 50.0 + env * amp * math.sin(2.0 * math.pi * freq * t_in_block)
                     else:
-                        target_roll = float(s5_block.get("tilt_rom", 50.0))
+                        # 3-Phase Lifecycle Curve over Vocal Block Duration
+                        u = max(0.0, min(1.0, t_in_block / b_dur))
+                        peak_rom = float(s5_block.get("target_rom", s5_block.get("tilt_rom", 50.0)))
+                        if u < 0.20:
+                            # Attack Phase (0% - 20%): Level Center (50.0) -> Peak ROM
+                            attack_p = u / 0.20
+                            target_roll = 50.0 + attack_p * (peak_rom - 50.0)
+                        elif u < 0.45:
+                            # Hold / Vocal Accent Phase (20% - 45%): Peak ROM
+                            target_roll = peak_rom
+                        else:
+                            # Return to Center Phase (45% - 100%): Peak ROM -> Level Center (50.0)
+                            return_p = (u - 0.45) / 0.55
+                            target_roll = peak_rom + return_p * (50.0 - peak_rom)
                 else:
                     target_roll = 50.0
-                smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll - smooth_posture_rom["wrist_roll"])
+
+                # Combine macro tilt with sinusoidal bounce micro-offset and safety clamp
+                target_roll_final = max(0.0, min(100.0, target_roll + head_tilt_bounce_rom))
+                smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll_final - smooth_posture_rom["wrist_roll"])
+                smooth_posture_rom["wrist_roll"] = max(0.0, min(100.0, smooth_posture_rom["wrist_roll"]))
 
                 # 5. Track 8: Gantry (Servo 8)
                 s8_block = next((b for b in s8_track if b["start_sec"] <= elapsed < b["end_sec"]), None)

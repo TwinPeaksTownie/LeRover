@@ -1458,6 +1458,29 @@ function bindEventListeners() {
         inspDynamicCtrls.addEventListener('click', (e) => {
             if (!selectedMoveBlock) return;
 
+            const bounceDownBtn = e.target.closest('#inspBounceDownBtn');
+            const bounceUpBtn = e.target.closest('#inspBounceUpBtn');
+            if (bounceDownBtn || bounceUpBtn) {
+                if (!selectedMoveBlock.bounce_modifier) {
+                    selectedMoveBlock.bounce_modifier = { enabled: true, intensity: 0.12, target: 'body_bounce' };
+                }
+                let curInt = Math.round(Number((selectedMoveBlock.bounce_modifier.intensity !== undefined) ? selectedMoveBlock.bounce_modifier.intensity : 0.12) * 100);
+                if (bounceDownBtn) {
+                    curInt = Math.max(0, curInt - 1);
+                } else if (bounceUpBtn) {
+                    curInt = Math.min(100, curInt + 1);
+                }
+                selectedMoveBlock.bounce_modifier.intensity = parseFloat((curInt / 100).toFixed(2));
+                selectedMoveBlock.bounce_modifier.enabled = (curInt > 0);
+                selectedMoveBlock.is_user_edited = true;
+                const valEl = document.getElementById('inspBounceIntensityVal');
+                if (valEl) valEl.innerText = `${curInt}%`;
+                const chkEl = document.getElementById('inspBounceEnabled');
+                if (chkEl) chkEl.checked = selectedMoveBlock.bounce_modifier.enabled;
+                ui.renderTimeline();
+                return;
+            }
+
             const vocalStyleBtn = e.target.closest('.insp-vocal-style-btn');
             if (vocalStyleBtn) {
                 const st = vocalStyleBtn.getAttribute('data-style');

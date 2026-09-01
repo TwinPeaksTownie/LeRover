@@ -179,6 +179,80 @@ class TestHeadlessPlayer(unittest.TestCase):
         self.assertFalse(st["is_playing"])
         self.assertGreater(st["time_sec"], 0.0)
 
+    def test_head_tilt_three_phase_lifecycle(self):
+        """Verifies that Head Tilt (S5) executes Attack -> Hold -> Return to Center (50.0)."""
+        choreo = dict(self.compiled_choreo)
+        s5_track = choreo["tracks"]["s5_head_tilt"]
+        # Explicitly configure a tilt block from 0.0 to 2.0s with peak ROM 70.0 (Right Tilt)
+        s5_track[0] = {
+            "id": "s5_test_tilt",
+            "block_id": "blk_001",
+            "name": "Test Snap Right",
+            "tilt_mode": "snap_pulse_right",
+            "tilt_rom": 70.0,
+            "target_rom": 70.0,
+            "start_sec": 0.0,
+            "end_sec": 2.0,
+            "pulse_duration_sec": 2.0,
+            "roll_amplitude": 0.0,
+            "roll_freq_hz": 0.0,
+        }
+
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+
+        player.start()
+        time.sleep(2.1)
+        player.stop()
+
+        self.assertGreater(len(backend.dispatched_frames), 30)
+        roll_vals = [f["rom_posture"]["wrist_roll"] for f in backend.dispatched_frames]
+
+        # 1. Start near 50.0
+        self.assertAlmostEqual(roll_vals[0], 50.0, delta=5.0)
+        # 2. Reaches peak tilt (> 60.0) during hold phase
+        max_roll = max(roll_vals)
+        self.assertGreater(max_roll, 60.0, f"Head tilt did not reach peak tilt ROM: {max_roll}")
+        # 3. Resolves back to level center near 50.0 at end of block
+        self.assertAlmostEqual(roll_vals[-1], 50.0, delta=5.0, msg=f"Head tilt did not return to center: {roll_vals[-1]}")
+
+    def test_head_bob_and_tilt_bounce_modulation(self):
+        """Verifies that bounce modifier modulates Servos 4 (wrist_flex) and 5 (wrist_roll)."""
+        choreo = dict(self.compiled_choreo)
+        for b in choreo["tracks"]["spine_gaze"]:
+            b["bounce_modifier"] = {"enabled": True, "intensity": 0.30, "target": "head_bob"}
+
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+
+        player.start()
+        time.sleep(1.2)
+        player.stop()
+
+        self.assertGreater(len(backend.dispatched_frames), 20)
+        flex_vals = [f["rom_posture"]["wrist_flex"] for f in backend.dispatched_frames]
+        roll_vals = [f["rom_posture"]["wrist_roll"] for f in backend.dispatched_frames]
+
+        flex_var = max(flex_vals) - min(flex_vals)
+        roll_var = max(roll_vals) - min(roll_vals)
+
+        self.assertGreater(flex_var, 0.5, f"Servo 4 (wrist_flex) lack of bounce variance: {flex_var}")
+        self.assertGreater(roll_var, 0.3, f"Servo 5 (wrist_roll) lack of bounce variance: {roll_var}")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1124,6 +1124,8 @@ export function renderTimeline() {
     function renderLaneBlocks(laneEl, blockList, channelKey, blockClass) {
         if (!laneEl) return;
         let html = '';
+        let runningPedDeg = 0;
+        let prevGantryPos = 2400;
 
         function formatConciseBlockLabel(channelKey, blk, st, et) {
             if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
@@ -1132,60 +1134,95 @@ export function renderTimeline() {
             }
 
             const rawName = blk.name || '';
-            const parenMatch = rawName.match(/\(([^)]+)\)/);
-            const parenContent = parenMatch ? parenMatch[1].trim() : null;
 
             if (channelKey === 's7_pedestal') {
-                if (parenContent) return parenContent;
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Pedestal:?\s*/i, '').trim();
-                if (clean) return clean;
+                let endDeg = 0;
                 if (blk.target_deg !== undefined) {
-                    const deg = Number(blk.target_deg);
-                    if (deg === 0) return 'Center (0°)';
-                    return deg > 0 ? `Left (+${deg.toFixed(0)}°)` : `Right (${deg.toFixed(0)}°)`;
+                    endDeg = Math.round(Number(blk.target_deg));
+                } else if (blk.target_pos_rom !== undefined) {
+                    endDeg = Math.round((Number(blk.target_pos_rom) - 50.0) * 2.7);
+                } else if (blk.mode === 'return_center' || blk.mode === 'center_hold') {
+                    endDeg = 0;
+                } else {
+                    endDeg = runningPedDeg;
                 }
-                if (blk.mode) return blk.mode.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                return 'Center';
-            }
 
-            if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
-                if (parenContent) return parenContent;
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Spine:?\s*/i, '').trim();
-                if (clean) return clean;
-                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'Stand');
-                return pose.charAt(0).toUpperCase() + pose.slice(1);
+                const deltaDeg = endDeg - runningPedDeg;
+                runningPedDeg = endDeg;
+
+                const endHeadingStr = (endDeg > 0) ? `+${endDeg}°` : `${endDeg}°`;
+
+                if (deltaDeg === 0) {
+                    if (endDeg === 0) return `Center (0°)`;
+                    return `Hold (${endHeadingStr})`;
+                } else if (deltaDeg > 0) {
+                    return `Left +${deltaDeg}° (${endHeadingStr})`;
+                } else {
+                    return `Right ${deltaDeg}° (${endHeadingStr})`;
+                }
             }
 
             if (channelKey === 's8_gantry') {
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Rail|Gantry):?\s*/i, '').trim();
-                if (clean) return clean;
-                const mode = String(blk.mode || 'Hold').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                return mode;
+                let pos = 2400;
+                if (blk.target_pos !== undefined) {
+                    pos = parseInt(blk.target_pos, 10);
+                } else if (blk.target_pos_rom !== undefined) {
+                    pos = Math.round(3 + (Number(blk.target_pos_rom) / 100.0) * 4797);
+                }
+                const pPos = prevGantryPos;
+                prevGantryPos = pos;
+
+                if (pos <= 50) return `Full Left (${pos})`;
+                if (pos >= 4750) return `Full Right (${pos})`;
+                if (pos >= 2350 && pos <= 2450 && blk.mode !== 'full_glide') return `Center (2400)`;
+
+                const mode = String(blk.mode || 'hold').toLowerCase();
+                if (mode === 'full_glide' || mode === 'glide') {
+                    if (pos > pPos) return `Glide Right (${pos})`;
+                    if (pos < pPos) return `Glide Left (${pos})`;
+                    return `Glide (${pos})`;
+                }
+                if (mode === 'hold_to_drop_glide' || pos === 4350) return `Drop Peak (${pos})`;
+                if (mode === 'late_move') return `Late Settle (${pos})`;
+                if (mode === 'early_settle') return `Early Settle (${pos})`;
+                if (mode === 'hold') return `Hold (${pos})`;
+                return `${mode.replace(/_/g, ' ')} (${pos})`;
+            }
+
+            if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
+                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'Stand');
+                const poseName = pose.charAt(0).toUpperCase() + pose.slice(1);
+                if (blk.bounce_modifier && blk.bounce_modifier.enabled) {
+                    const bInt = Math.round(Number(blk.bounce_modifier.intensity || 0.12) * 100);
+                    return `${poseName} (${bInt}% ↕)`;
+                }
+                return poseName;
             }
 
             if (channelKey === 's1_torso') {
-                if (parenContent) return parenContent;
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Hips|Torso):?\s*/i, '').trim();
-                if (clean) return clean;
-                if (blk.groove_intensity !== undefined) return `${Math.round(Number(blk.groove_intensity) * 100)}%`;
-                return 'Verse';
+                if (blk.groove_intensity !== undefined) {
+                    const gPct = Math.round(Number(blk.groove_intensity) * 100);
+                    if (gPct === 100) return `Counter (100%)`;
+                    if (gPct === 50) return `Verse (50%)`;
+                    if (gPct === 0) return `Still (0%)`;
+                    return `${gPct}%`;
+                }
+                return 'Verse (50%)';
             }
 
             if (channelKey === 's5_head_tilt') {
-                if (parenContent) return parenContent;
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Tilt|Head):?\s*/i, '').trim();
-                if (clean) return clean;
+                let tiltDeg = 0;
                 if (blk.tilt_deg !== undefined) {
-                    const t = Number(blk.tilt_deg);
-                    return t === 0 ? 'Level' : (t > 0 ? `+${t.toFixed(0)}°` : `${t.toFixed(0)}°`);
+                    tiltDeg = Math.round(Number(blk.tilt_deg));
+                } else if (blk.tilt_rom !== undefined) {
+                    tiltDeg = Math.round((Number(blk.tilt_rom) - 50.0) * 0.5);
                 }
-                return 'Level';
+                if (tiltDeg === 0 || blk.tilt_mode === 'center') return 'Level (0°)';
+                if (tiltDeg > 0) return `Snap Right (+${tiltDeg}°)`;
+                return `Snap Left (${tiltDeg}°)`;
             }
 
             if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
-                if (parenContent) return parenContent;
-                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Jaw:?\s*/i, '').trim();
-                if (clean) return clean;
                 const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
                 return isSinging ? 'Singing' : 'Closed';
             }
@@ -1198,7 +1235,7 @@ export function renderTimeline() {
             const et = Number(blk.end_sec !== undefined ? blk.end_sec : st);
             const dur = Math.max(0.05, et - st);
 
-            const leftPx = st * pps;
+            const leftPx = labelOffset + (st * pps);
             const widthPx = Math.max(4, dur * pps);
             const isSel = selectedMoveBlock && selectedMoveBlock.id === blk.id;
 
@@ -1209,81 +1246,16 @@ export function renderTimeline() {
                 const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
-                } else if (blk.style === 'belting') {
-                    effectiveClass = 'block-vocal-belting';
-                } else if (blk.style === 'conversational') {
-                    effectiveClass = 'block-vocal-conversational';
                 } else {
                     effectiveClass = 'block-lyric-vocal';
                 }
-            } else if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
-                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'stand').toLowerCase();
-                if (pose === 'squat') {
-                    effectiveClass = 'block-spine-squat';
-                } else if (pose === 'tiptoe') {
-                    effectiveClass = 'block-spine-tiptoe';
-                } else if (pose === 'arch') {
-                    effectiveClass = 'block-spine-arch';
-                } else {
-                    effectiveClass = 'block-spine-stand';
-                }
-            } else if (channelKey === 's8_gantry') {
-                const mode = String(blk.mode || 'hold').toLowerCase();
-                const isDrop = (blk.drop_sec !== null && blk.drop_sec !== undefined) || mode.includes('drop');
-                if (isDrop) {
-                    effectiveClass = 'block-s8-drop';
-                } else if (mode === 'full_glide') {
-                    effectiveClass = 'block-s8-full_glide';
-                } else if (mode === 'early_step' || mode === 'early_settle') {
-                    effectiveClass = 'block-s8-early_step';
-                } else if (mode === 'late_step' || mode === 'late_move') {
-                    effectiveClass = 'block-s8-late_step';
-                } else {
-                    effectiveClass = 'block-s8-hold';
-                }
-            } else if (channelKey === 's7_pedestal') {
-                if (blk.target_deg !== undefined) {
-                    const tdeg = Number(blk.target_deg);
-                    effectiveClass = tdeg > 5 ? 'block-s7-left' : (tdeg < -5 ? 'block-s7-right' : 'block-s7-center');
-                } else if (blk.mode) {
-                    const m = String(blk.mode).toLowerCase();
-                    effectiveClass = m.includes('left') ? 'block-s7-left' : (m.includes('right') ? 'block-s7-right' : 'block-s7-center');
-                } else {
-                    effectiveClass = 'block-s7-center';
-                }
-            } else if (channelKey === 's1_torso') {
-                if (blk.groove_intensity !== undefined) {
-                    const groove = Number(blk.groove_intensity);
-                    effectiveClass = groove <= 0.05 ? 'block-s1-still' : (groove >= 0.75 ? 'block-s1-dance' : 'block-s1-verse');
-                } else if (blk.facing_mode === 'audience_counter') {
-                    effectiveClass = 'block-s1-dance';
-                } else {
-                    effectiveClass = 'block-s1-verse';
-                }
-            } else if (channelKey === 's5_head_tilt') {
-                if (blk.tilt_mode === 'continuous_roll') {
-                    effectiveClass = 'block-s5-roll';
-                } else if (blk.tilt_deg !== undefined) {
-                    const tilt = Number(blk.tilt_deg);
-                    effectiveClass = tilt < -2 ? 'block-s5-left' : (tilt > 2 ? 'block-s5-right' : 'block-s5-level');
-                } else if (blk.tilt_mode) {
-                    const tm = String(blk.tilt_mode).toLowerCase();
-                    effectiveClass = tm.includes('left') ? 'block-s5-left' : (tm.includes('right') ? 'block-s5-right' : 'block-s5-level');
-                } else {
-                    effectiveClass = 'block-s5-level';
-                }
-            } else if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
-                const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
-                effectiveClass = isSinging ? 'block-jaw-singing' : 'block-jaw-closed';
             }
-            const isUserEdited = !!blk.is_user_edited;
+
+            const borderStyle = isSel ? 'border: 2px solid #ffffff; box-shadow: 0 0 10px rgba(255,255,255,0.8); z-index: 10;' : '';
 
             html += `
-                <div class="bb-move-block ${effectiveClass} ${isSel ? 'selected' : ''} ${isUserEdited ? 'user-edited' : ''}"
-                     data-channel="${channelKey}" data-id="${blk.id}"
-                     style="left: ${leftPx}px; width: ${widthPx}px;"
-                     title="${label} [${st.toFixed(1)}s - ${et.toFixed(1)}s] ${isUserEdited ? '(Edited)' : ''}">
-                    ${label}
+                <div class="bb-timeline-block ${effectiveClass}" data-channel="${channelKey}" data-block-id="${blk.id}" style="left: ${leftPx}px; width: ${widthPx}px; ${borderStyle}">
+                    <span class="bb-block-text">${label}</span>
                 </div>
             `;
         });
@@ -1291,99 +1263,73 @@ export function renderTimeline() {
         laneEl.innerHTML = html;
     }
 
+    // Render all 6 lanes
     const tracks = activeChoreoData.tracks || {};
-    renderLaneBlocks(document.getElementById('bbLaneLyrics'), tracks.lyrics || tracks.lyrics_phrasing, 'lyrics', 'block-lyric-female');
-    renderLaneBlocks(document.getElementById('bbLaneBody'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-body');
-    renderLaneBlocks(document.getElementById('bbLaneS8'), tracks.s8_gantry, 's8_gantry', 'block-s8');
-    renderLaneBlocks(document.getElementById('bbLaneS7'), tracks.s7_pedestal, 's7_pedestal', 'block-s7');
-    renderLaneBlocks(document.getElementById('bbLaneS1'), tracks.s1_torso, 's1_torso', 'block-s1');
-    renderLaneBlocks(document.getElementById('bbLaneS5'), tracks.s5_head_tilt, 's5_head_tilt', 'block-s5');
-    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-head');
+    renderLaneBlocks(document.getElementById('bbLaneLyrics'), tracks.lyrics || tracks.lyrics_phrasing, 'lyrics', 'block-lyrics');
+    renderLaneBlocks(document.getElementById('bbLaneSpineGaze'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-spine');
+    renderLaneBlocks(document.getElementById('bbLaneRailGantry'), tracks.s8_gantry, 's8_gantry', 'block-gantry');
+    renderLaneBlocks(document.getElementById('bbLanePedestal'), tracks.s7_pedestal, 's7_pedestal', 'block-pedestal');
+    renderLaneBlocks(document.getElementById('bbLaneTorsoHips'), tracks.s1_torso, 's1_torso', 'block-torso');
+    renderLaneBlocks(document.getElementById('bbLaneHeadTilt'), tracks.s5_head_tilt, 's5_head_tilt', 'block-tilt');
+    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-jaw');
 
-    // 3.5 Render Audio Waveform Visualizer Lane (Dark Blue Background, Cyan Ticks, Red Drop Lines)
-    const waveCanvas = document.getElementById('bbWaveformCanvas');
-    if (waveCanvas) {
-        const laneW = Math.max(1000, duration * pps);
-        const laneH = 46;
-        waveCanvas.width = laneW;
-        waveCanvas.height = laneH;
-        waveCanvas.style.left = '0px';
-        waveCanvas.style.width = `${laneW}px`;
-        waveCanvas.style.height = `${laneH}px`;
-        const ctx = waveCanvas.getContext('2d');
+    // 3.5 Render Amplitude Visualizer Lane (Dark Blue Background, Cyan / Light Blue Ticks)
+    const ampCanvas = document.getElementById('bbAmpWaveformCanvas');
+    if (ampCanvas) {
+        const laneW = totalWidth - labelOffset;
+        const laneH = 40;
+        ampCanvas.width = laneW;
+        ampCanvas.height = laneH;
+        ampCanvas.style.left = '0px';
+        ampCanvas.style.width = `${laneW}px`;
+        ampCanvas.style.height = `${laneH}px`;
+
+        const ctx = ampCanvas.getContext('2d');
         if (ctx) {
-            ctx.fillRect(0, 0, laneW, laneH);
+            ctx.clearRect(0, 0, laneW, laneH);
 
-            // Subtle horizontal center baseline
-            ctx.strokeStyle = '#1e293b';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, laneH / 2);
-            ctx.lineTo(laneW, laneH / 2);
-            ctx.stroke();
-
-            const ampEnv = activeChoreoData.amplitude_envelope || [];
-            const drops = activeChoreoData.drops || [];
             const midY = laneH / 2;
-            const maxH = (laneH / 2) - 4;
+            const maxH = laneH * 0.45;
+
+            // Draw center baseline
+            ctx.fillStyle = '#0f2744';
+            ctx.fillRect(0, midY - 0.5, laneW, 1);
+
+            const ampEnv = activeChoreoData.amplitude_envelope_50hz || [];
+            const drops = activeChoreoData.drops || [];
 
             if (ampEnv && ampEnv.length > 0) {
-                const fps = 50.0;
                 const totalSamples = ampEnv.length;
-                const barSpacing = 2.5;
-                const totalBars = Math.floor(laneW / barSpacing);
+                const fps = 50.0;
 
-                for (let b = 0; b < totalBars; b++) {
-                    const x = b * barSpacing;
+                for (let x = 0; x < laneW; x += 3) {
                     const timeAtX = x / pps;
                     const sampleIdx = Math.floor(timeAtX * fps);
                     if (sampleIdx < totalSamples) {
                         let rawVal = ampEnv[sampleIdx];
                         if (rawVal > 1.0) rawVal = rawVal / 45.0;
                         const amp = Math.max(0.06, Math.min(1.0, rawVal));
-                        const barHeight = amp * maxH;
-
-                        // Cyan / light blue vertical tick gradient
-                        const grad = ctx.createLinearGradient(0, midY - barHeight, 0, midY + barHeight);
-                        grad.addColorStop(0, '#38bdf8');   // Light blue
-                        grad.addColorStop(0.5, '#00e5ff'); // Bright cyan
-                        grad.addColorStop(1, '#0284c7');   // Deeper cyan
-
-                        ctx.fillStyle = grad;
-                        ctx.fillRect(x, midY - barHeight, 1.6, barHeight * 2);
+                        const barH = amp * maxH;
+                        ctx.fillStyle = '#38bdf8';
+                        ctx.fillRect(x, midY - barH, 2, barH * 2);
                     }
                 }
-            } else {
-                // Beat-aligned visualizer ticks fallback
-                const beatTimes = activeChoreoData.beat_times || [];
-                beatTimes.forEach((bt, idx) => {
-                    const bx = bt * pps;
-                    const isDownbeat = (idx % 4 === 0);
-                    const bh = isDownbeat ? maxH * 0.85 : maxH * 0.45;
-                    ctx.fillStyle = isDownbeat ? '#00e5ff' : '#38bdf8';
-                    ctx.fillRect(bx, midY - bh, 1.8, bh * 2);
-                });
             }
-
-            // Draw thin vertical red lines for detected drops
             drops.forEach(d => {
                 const dropSec = Number(d.drop_sec || 0);
                 const dropX = dropSec * pps;
 
                 // Red drop marker line
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.moveTo(dropX, 0);
-                ctx.lineTo(dropX, laneH);
-                ctx.stroke();
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+                ctx.fillRect(dropX - 1, 0, 2, laneH);
 
-                // Drop tag banner
+                // Small drop badge
                 ctx.fillStyle = '#ef4444';
-                ctx.fillRect(dropX - 1, 0, 3, 10);
-                ctx.font = 'bold 8.5px monospace';
-                ctx.fillStyle = '#ff6b6b';
-                ctx.fillText('⚡DROP', dropX + 4, 9);
+                ctx.beginPath();
+                ctx.moveTo(dropX - 4, 0);
+                ctx.lineTo(dropX + 4, 0);
+                ctx.lineTo(dropX, 6);
+                ctx.fill();
             });
         }
     }
@@ -1391,7 +1337,7 @@ export function renderTimeline() {
     // 3.6 Render Vocal Energy Visualizer Lane (Dark Magenta Background, Pink/Rose Ticks)
     const vocalCanvas = document.getElementById('bbVocalWaveformCanvas');
     if (vocalCanvas) {
-        const laneW = Math.max(1000, duration * pps);
+        const laneW = totalWidth - labelOffset;
         const laneH = 40;
         vocalCanvas.width = laneW;
         vocalCanvas.height = laneH;
@@ -1401,46 +1347,31 @@ export function renderTimeline() {
 
         const ctx = vocalCanvas.getContext('2d');
         if (ctx) {
-            // Dark plum / magenta background
-            ctx.fillStyle = '#0c020d';
-            ctx.fillRect(0, 0, laneW, laneH);
+            ctx.clearRect(0, 0, laneW, laneH);
 
-            // Subtle horizontal center baseline
-            ctx.strokeStyle = '#330727';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, laneH / 2);
-            ctx.lineTo(laneW, laneH / 2);
-            ctx.stroke();
+            const midY = laneH / 2;
+            const maxH = laneH * 0.45;
+
+            // Draw center baseline
+            ctx.fillStyle = '#380e45';
+            ctx.fillRect(0, midY - 0.5, laneW, 1);
 
             const vocalEnv = activeChoreoData.mouth_envelope_50hz || [];
-            const midY = laneH / 2;
-            const maxH = (laneH / 2) - 3;
 
             if (vocalEnv && vocalEnv.length > 0) {
-                const fps = 50.0;
                 const totalSamples = vocalEnv.length;
-                const barSpacing = 2.5;
-                const totalBars = Math.floor(laneW / barSpacing);
+                const fps = 50.0;
 
-                for (let b = 0; b < totalBars; b++) {
-                    const x = b * barSpacing;
+                for (let x = 0; x < laneW; x += 3) {
                     const timeAtX = x / pps;
                     const sampleIdx = Math.floor(timeAtX * fps);
                     if (sampleIdx < totalSamples) {
                         let rawVal = vocalEnv[sampleIdx];
                         if (rawVal > 1.0) rawVal = rawVal / 45.0;
                         const amp = Math.max(0.03, Math.min(1.0, rawVal));
-                        const barHeight = amp * maxH;
-
-                        // Vibrant pink / magenta vertical tick gradient
-                        const grad = ctx.createLinearGradient(0, midY - barHeight, 0, midY + barHeight);
-                        grad.addColorStop(0, '#f472b6');   // Light pink
-                        grad.addColorStop(0.5, '#ec4899'); // Vibrant hot pink
-                        grad.addColorStop(1, '#db2777');   // Deep rose
-
-                        ctx.fillStyle = grad;
-                        ctx.fillRect(x, midY - barHeight, 1.6, barHeight * 2);
+                        const barH = amp * maxH;
+                        ctx.fillStyle = '#ec4899';
+                        ctx.fillRect(x, midY - barH, 2, barH * 2);
                     }
                 }
             }
@@ -1598,10 +1529,15 @@ export function openMoveInspector(channel, block) {
                     <input type="checkbox" id="inspUserOverride" ${block.user_override ? 'checked' : ''} style="cursor: pointer;">
                     OVERRIDE
                 </label>
-                <label style="display: flex; align-items: center; gap: 4px; font-size: 9px; color: #f59e0b; font-weight: 700; cursor: pointer;">
-                    <input type="checkbox" id="inspBounceEnabled" ${(block.bounce_modifier && block.bounce_modifier.enabled !== false) ? 'checked' : ''} style="cursor: pointer;">
-                    BOUNCE 12%
-                </label>
+                <div style="display: flex; align-items: center; gap: 3px; background: #1a1500; border: 1px solid #78350f; padding: 1px 4px; border-radius: 4px;">
+                    <label style="display: flex; align-items: center; gap: 3px; font-size: 9px; color: #f59e0b; font-weight: 700; cursor: pointer;">
+                        <input type="checkbox" id="inspBounceEnabled" ${(block.bounce_modifier && block.bounce_modifier.enabled !== false) ? 'checked' : ''} style="cursor: pointer;">
+                        BOUNCE
+                    </label>
+                    <button id="inspBounceDownBtn" class="btn-action" style="padding: 0 4px; font-size: 8px; height: 16px; min-height: 0; background: #291b00; border: 1px solid #d97706; border-radius: 2px; color: #fbbf24; cursor: pointer;" title="Decrease bounce intensity by 1%">▼</button>
+                    <span id="inspBounceIntensityVal" style="font-size: 9px; font-family: monospace; font-weight: 800; color: #fbbf24; min-width: 22px; text-align: center;">${Math.round(Number((block.bounce_modifier && block.bounce_modifier.intensity !== undefined) ? block.bounce_modifier.intensity : 0.12) * 100)}%</span>
+                    <button id="inspBounceUpBtn" class="btn-action" style="padding: 0 4px; font-size: 8px; height: 16px; min-height: 0; background: #291b00; border: 1px solid #d97706; border-radius: 2px; color: #fbbf24; cursor: pointer;" title="Increase bounce intensity by 1%">▲</button>
+                </div>
                 `}
             </div>
         </div>
