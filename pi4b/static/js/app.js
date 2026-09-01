@@ -78,7 +78,7 @@ import {
 } from './state.js';
 
 import * as api from './api.js';
-import * as ui from './ui.js?v=2.2';
+import * as ui from './ui.js?v=2.4';
 
 // ==========================================
 // Action Handlers

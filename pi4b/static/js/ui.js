@@ -1125,6 +1125,74 @@ export function renderTimeline() {
         if (!laneEl) return;
         let html = '';
 
+        function formatConciseBlockLabel(channelKey, blk, st, et) {
+            if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
+                if (blk.type === 'breath') return '[breath]';
+                return blk.text || blk.name || '';
+            }
+
+            const rawName = blk.name || '';
+            const parenMatch = rawName.match(/\(([^)]+)\)/);
+            const parenContent = parenMatch ? parenMatch[1].trim() : null;
+
+            if (channelKey === 's7_pedestal') {
+                if (parenContent) return parenContent;
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Pedestal:?\s*/i, '').trim();
+                if (clean) return clean;
+                if (blk.target_deg !== undefined) {
+                    const deg = Number(blk.target_deg);
+                    if (deg === 0) return 'Center (0°)';
+                    return deg > 0 ? `Left (+${deg.toFixed(0)}°)` : `Right (${deg.toFixed(0)}°)`;
+                }
+                if (blk.mode) return blk.mode.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return 'Center';
+            }
+
+            if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
+                if (parenContent) return parenContent;
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Spine:?\s*/i, '').trim();
+                if (clean) return clean;
+                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'Stand');
+                return pose.charAt(0).toUpperCase() + pose.slice(1);
+            }
+
+            if (channelKey === 's8_gantry') {
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Rail|Gantry):?\s*/i, '').trim();
+                if (clean) return clean;
+                const mode = String(blk.mode || 'Hold').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return mode;
+            }
+
+            if (channelKey === 's1_torso') {
+                if (parenContent) return parenContent;
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Hips|Torso):?\s*/i, '').trim();
+                if (clean) return clean;
+                if (blk.groove_intensity !== undefined) return `${Math.round(Number(blk.groove_intensity) * 100)}%`;
+                return 'Verse';
+            }
+
+            if (channelKey === 's5_head_tilt') {
+                if (parenContent) return parenContent;
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*(Tilt|Head):?\s*/i, '').trim();
+                if (clean) return clean;
+                if (blk.tilt_deg !== undefined) {
+                    const t = Number(blk.tilt_deg);
+                    return t === 0 ? 'Level' : (t > 0 ? `+${t.toFixed(0)}°` : `${t.toFixed(0)}°`);
+                }
+                return 'Level';
+            }
+
+            if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
+                if (parenContent) return parenContent;
+                let clean = rawName.replace(/^(Line\s*\d+|Intro|Chorus(\s*\d+)?|Verse(\s*\d+)?|Bridge(\s*\d+)?|Outro|Instrumental\s*Break(\s*Pt\s*\d+)?)\s*Jaw:?\s*/i, '').trim();
+                if (clean) return clean;
+                const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
+                return isSinging ? 'Singing' : 'Closed';
+            }
+
+            return rawName || blk.text || (blk.measure !== undefined && blk.start_beat !== undefined ? `M${blk.measure + 1} B${blk.start_beat + 1}` : `${st.toFixed(1)}s`);
+        }
+
         (blockList || []).forEach((blk) => {
             const st = Number(blk.start_sec !== undefined ? blk.start_sec : (blk.time_sec !== undefined ? blk.time_sec : 0));
             const et = Number(blk.end_sec !== undefined ? blk.end_sec : st);
@@ -1134,23 +1202,19 @@ export function renderTimeline() {
             const widthPx = Math.max(4, dur * pps);
             const isSel = selectedMoveBlock && selectedMoveBlock.id === blk.id;
 
-            let label = blk.name || blk.text || blk.pose_name || (blk.measure !== undefined && blk.start_beat !== undefined ? `M${blk.measure + 1} B${blk.start_beat + 1}` : `${st.toFixed(1)}s-${et.toFixed(1)}s`);
+            let label = formatConciseBlockLabel(channelKey, blk, st, et);
             let effectiveClass = blockClass;
 
             if (channelKey === 'lyrics' || channelKey === 'lyrics_phrasing') {
                 const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
-                    label = `[breath]`;
                 } else if (blk.style === 'belting') {
                     effectiveClass = 'block-vocal-belting';
-                    label = blk.text || blk.name || 'Belting';
                 } else if (blk.style === 'conversational') {
                     effectiveClass = 'block-vocal-conversational';
-                    label = blk.text || blk.name || 'Conversational';
                 } else {
                     effectiveClass = 'block-lyric-vocal';
-                    label = blk.text || blk.name || 'Vocal';
                 }
             } else if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
                 const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'stand').toLowerCase();
@@ -1163,7 +1227,6 @@ export function renderTimeline() {
                 } else {
                     effectiveClass = 'block-spine-stand';
                 }
-                label = blk.name || `Spine (${pose.toUpperCase()})`;
             } else if (channelKey === 's8_gantry') {
                 const mode = String(blk.mode || 'hold').toLowerCase();
                 const isDrop = (blk.drop_sec !== null && blk.drop_sec !== undefined) || mode.includes('drop');
@@ -1178,52 +1241,40 @@ export function renderTimeline() {
                 } else {
                     effectiveClass = 'block-s8-hold';
                 }
-                label = blk.name || `Gantry (${mode.replace('_', ' ').toUpperCase()})`;
             } else if (channelKey === 's7_pedestal') {
                 if (blk.target_deg !== undefined) {
                     const tdeg = Number(blk.target_deg);
                     effectiveClass = tdeg > 5 ? 'block-s7-left' : (tdeg < -5 ? 'block-s7-right' : 'block-s7-center');
-                    label = blk.name || `Pedestal (${tdeg > 0 ? '+' : ''}${tdeg.toFixed(0)}°)`;
                 } else if (blk.mode) {
                     const m = String(blk.mode).toLowerCase();
                     effectiveClass = m.includes('left') ? 'block-s7-left' : (m.includes('right') ? 'block-s7-right' : 'block-s7-center');
-                    label = blk.name || `Pedestal (${m.replace('_', ' ').toUpperCase()})`;
                 } else {
                     effectiveClass = 'block-s7-center';
-                    label = blk.name || 'Pedestal';
                 }
             } else if (channelKey === 's1_torso') {
                 if (blk.groove_intensity !== undefined) {
                     const groove = Number(blk.groove_intensity);
                     effectiveClass = groove <= 0.05 ? 'block-s1-still' : (groove >= 0.75 ? 'block-s1-dance' : 'block-s1-verse');
-                    label = blk.name || `Torso (${Math.round(groove * 100)}%)`;
                 } else if (blk.facing_mode === 'audience_counter') {
                     effectiveClass = 'block-s1-dance';
-                    label = blk.name || 'Torso (Counter)';
                 } else {
                     effectiveClass = 'block-s1-verse';
-                    label = blk.name || 'Torso (Verse)';
                 }
             } else if (channelKey === 's5_head_tilt') {
                 if (blk.tilt_mode === 'continuous_roll') {
                     effectiveClass = 'block-s5-roll';
-                    label = blk.name || 'Tilt (Roll)';
                 } else if (blk.tilt_deg !== undefined) {
                     const tilt = Number(blk.tilt_deg);
                     effectiveClass = tilt < -2 ? 'block-s5-left' : (tilt > 2 ? 'block-s5-right' : 'block-s5-level');
-                    label = blk.name || `Tilt (${tilt > 0 ? '+' : ''}${tilt.toFixed(0)}°)`;
                 } else if (blk.tilt_mode) {
                     const tm = String(blk.tilt_mode).toLowerCase();
                     effectiveClass = tm.includes('left') ? 'block-s5-left' : (tm.includes('right') ? 'block-s5-right' : 'block-s5-level');
-                    label = blk.name || `Tilt (${tm.replace('_', ' ').toUpperCase()})`;
                 } else {
                     effectiveClass = 'block-s5-level';
-                    label = blk.name || 'Tilt';
                 }
             } else if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
                 const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
                 effectiveClass = isSinging ? 'block-jaw-singing' : 'block-jaw-closed';
-                label = blk.name || (isSinging ? 'Jaw (Singing)' : 'Jaw (Closed)');
             }
             const isUserEdited = !!blk.is_user_edited;
 

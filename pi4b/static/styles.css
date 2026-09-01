@@ -345,177 +345,205 @@ body {
 }
 
 .block-body {
-    background: linear-gradient(135deg, #6366f1, #3730a3);
-    border-color: #818cf8;
+    background: #4f46e5;
+    border-color: #a5b4fc;
+    color: #ffffff;
 }
 
 .block-s7 {
-    background: linear-gradient(135deg, #059669, #064e3b);
-    border-color: #34d399;
+    background: #16a34a;
+    border-color: #86efac;
+    color: #ffffff;
 }
 
 .block-s8 {
-    background: linear-gradient(135deg, #2563eb, #1e3a8a);
-    border-color: #60a5fa;
+    background: #2563eb;
+    border-color: #93c5fd;
+    color: #ffffff;
 }
 
 .block-s1 {
-    background: linear-gradient(135deg, #d97706, #78350f);
-    border-color: #fbbf24;
+    background: #d97706;
+    border-color: #fcd34d;
+    color: #ffffff;
 }
 
 .block-s5 {
-    background: linear-gradient(135deg, #0d9488, #134e4a);
-    border-color: #2dd4bf;
+    background: #0d9488;
+    border-color: #5eead4;
+    color: #ffffff;
 }
 
 .block-head {
-    background: linear-gradient(135deg, #db2777, #831843);
-    border-color: #f472b6;
+    background: #e11d48;
+    border-color: #fecdd3;
+    color: #ffffff;
 }
 
 /* 1. Spine Postures (S2-4) */
 .block-spine-stand {
-    background: linear-gradient(135deg, #6366f1, #3730a3);
-    border-color: #818cf8;
+    background: #4f46e5;
+    border-color: #a5b4fc;
+    color: #ffffff;
 }
 
 .block-spine-squat {
-    background: linear-gradient(135deg, #9f1239, #4c0519);
-    border-color: #f43f5e;
+    background: #be123c;
+    border-color: #fda4af;
+    color: #ffffff;
 }
 
 .block-spine-tiptoe {
-    background: linear-gradient(135deg, #0284c7, #075985);
-    border-color: #38bdf8;
+    background: #0284c7;
+    border-color: #7dd3fc;
+    color: #ffffff;
 }
 
 .block-spine-arch {
-    background: linear-gradient(135deg, #eab308, #854d0e);
-    border-color: #facc15;
+    background: #ca8a04;
+    border-color: #fef08a;
     color: #ffffff;
-    box-shadow: 0 2px 10px rgba(234, 179, 8, 0.4);
+    font-weight: 800;
 }
 
 /* 2. Gantry Slider Modes (S8) */
 .block-s8-full_glide {
-    background: linear-gradient(135deg, #2563eb, #1e3a8a);
-    border-color: #60a5fa;
+    background: #2563eb;
+    border-color: #93c5fd;
+    color: #ffffff;
 }
 
 .block-s8-early_step,
 .block-s8-early_settle {
-    background: linear-gradient(135deg, #059669, #064e3b);
-    border-color: #34d399;
+    background: #059669;
+    border-color: #6ee7b7;
+    color: #ffffff;
 }
 
 .block-s8-late_step,
 .block-s8-late_move {
-    background: linear-gradient(135deg, #ea580c, #9a3412);
-    border-color: #fb923c;
+    background: #ea580c;
+    border-color: #fdba74;
+    color: #ffffff;
 }
 
 .block-s8-hold {
-    background: linear-gradient(135deg, #475569, #1e293b);
+    background: #334155;
     border-color: #94a3b8;
+    color: #e2e8f0;
 }
 
 .block-s8-drop,
 .block-s8-glide_to_drop_hold,
 .block-s8-hold_to_drop_glide {
-    background: linear-gradient(135deg, #e11d48, #881337);
-    border-color: #fb7185;
-    box-shadow: 0 2px 10px rgba(225, 29, 72, 0.4);
+    background: #db2777;
+    border-color: #fbcfe8;
+    color: #ffffff;
 }
 
 /* 3. Pedestal Facing Angles (S7) */
 .block-s7-center {
-    background: linear-gradient(135deg, #059669, #064e3b);
-    border-color: #34d399;
+    background: #15803d;
+    border-color: #86efac;
+    color: #ffffff;
 }
 
 .block-s7-left {
-    background: linear-gradient(135deg, #0891b2, #164e63);
-    border-color: #22d3ee;
+    background: #0891b2;
+    border-color: #67e8f9;
+    color: #ffffff;
 }
 
 .block-s7-right {
-    background: linear-gradient(135deg, #65a30d, #365314);
-    border-color: #a3e635;
+    background: #65a30d;
+    border-color: #bef264;
+    color: #ffffff;
 }
 
 /* 4. Torso Pan & Groove Levels (S1) */
 .block-s1-still {
-    background: linear-gradient(135deg, #44403c, #1c1917);
-    border-color: #78716c;
+    background: #44403c;
+    border-color: #a8a29e;
+    color: #d6d3d1;
 }
 
 .block-s1-verse {
-    background: linear-gradient(135deg, #d97706, #78350f);
-    border-color: #fbbf24;
+    background: #d97706;
+    border-color: #fcd34d;
+    color: #ffffff;
 }
 
 .block-s1-dance {
-    background: linear-gradient(135deg, #f59e0b, #b45309);
+    background: #b45309;
     border-color: #fde047;
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+    color: #ffffff;
+    font-weight: 800;
 }
 
 /* 5. Head Tilt Directions (S5) */
 .block-s5-level {
-    background: linear-gradient(135deg, #0d9488, #134e4a);
-    border-color: #2dd4bf;
+    background: #0f766e;
+    border-color: #5eead4;
+    color: #ffffff;
 }
 
 .block-s5-left {
-    background: linear-gradient(135deg, #14b8a6, #0f766e);
-    border-color: #5eead4;
+    background: #0d9488;
+    border-color: #99f6e4;
+    color: #ffffff;
 }
 
 .block-s5-right {
-    background: linear-gradient(135deg, #0284c7, #075985);
-    border-color: #38bdf8;
+    background: #0369a1;
+    border-color: #7dd3fc;
+    color: #ffffff;
 }
 
 .block-s5-roll {
-    background: linear-gradient(135deg, #7c3aed, #0d9488);
-    border-color: #a78bfa;
+    background: #7c3aed;
+    border-color: #c4b5fd;
+    color: #ffffff;
 }
 
 /* 6. Lip-Sync Jaw Activity (S6) */
 .block-jaw-singing {
-    background: linear-gradient(135deg, #ec4899, #9d174d);
-    border-color: #f472b6;
-    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+    background: #e11d48;
+    border-color: #fecdd3;
+    color: #ffffff;
 }
 
 .block-jaw-closed {
-    background: linear-gradient(135deg, #3b0764, #18022b);
-    border-color: #6b21a8;
-    color: #a855f7;
+    background: #1e1e24;
+    border-color: #3f3f46;
+    color: #71717a;
 }
 
 /* Lyrics & Phrasing Blocks */
-.block-lyric-female {
-    background: linear-gradient(135deg, #ec4899, #be185d);
+.block-lyric-female,
+.block-lyric-vocal {
+    background: #be185d;
     border-color: #f472b6;
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
 }
 
-.block-lyric-male {
-    background: linear-gradient(135deg, #0284c7, #1d4ed8);
+.block-lyric-male,
+.block-vocal-conversational {
+    background: #0369a1;
     border-color: #38bdf8;
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
 }
 
 .block-lyric-breath {
-    background: linear-gradient(135deg, #475569, #334155);
+    background: #1e293b;
     border: 1.5px dashed #94a3b8 !important;
-    color: #cbd5e1;
+    color: #94a3b8;
     font-style: italic;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.block-vocal-belting {
+    background: #c2410c;
+    border-color: #fb923c;
+    color: #ffffff;
 }
 
 .bb-move-block.user-edited::after {
