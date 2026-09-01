@@ -781,9 +781,18 @@ def compile_choreography_tracks(
                 "pattern": spine_pattern,
                 "head_pitch": head_pitch_mode,
                 "neck_pitch_rom": neck_pitch_rom,
+                "start_beat": b["start_beat"],
+                "end_beat": b["end_beat"],
+                "duration_beats": b["duration_beats"],
+                "measure": b["measure"],
                 "start_sec": b_st,
                 "end_sec": b_et,
                 "transition_sec": trans_sec,
+                "bounce_modifier": {
+                    "enabled": True,
+                    "intensity": float(probs["bounce_modifier"]["default_intensity"]),
+                    "target": rng.choice(probs["bounce_modifier"]["targets"]),
+                },
             })
 
         # 5. Track 7: Pedestal Spinner (S7)

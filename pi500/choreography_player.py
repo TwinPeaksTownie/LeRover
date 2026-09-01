@@ -189,24 +189,35 @@ class ChoreographyPlayer:
                 else:
                     sway_offset = 0.0
 
-                # Bounce Modifier
+                # 1. Tracks 2-4: Spine & Pitch (Servos 2, 3, 4)
+                spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
+
+                # Bounce Modifier: prioritize user-edited spine block, fallback to master block
+                bmod = None
+                if spine_block is not None and "bounce_modifier" in spine_block:
+                    bmod = spine_block["bounce_modifier"]
+                elif current_block is not None and "bounce_modifier" in current_block:
+                    bmod = current_block["bounce_modifier"]
+
                 hip_sway_rom = 0.0
                 body_bounce_rom = 0.0
                 head_bob_rom = 0.0
-                if current_block and "bounce_modifier" in current_block:
-                    bmod = current_block["bounce_modifier"]
-                    if bmod.get("enabled", True):
-                        b_int = float(bmod.get("intensity", 0.12))
-                        btarget = bmod.get("target", "body_bounce")
+                if bmod is not None:
+                    if "enabled" not in bmod or "intensity" not in bmod or "target" not in bmod:
+                        raise KeyError(f"Fail-Fast Error: Bounce modifier payload missing required keys ('enabled', 'intensity', 'target'): {bmod}")
+                    is_enabled = bool(bmod["enabled"])
+                    if is_enabled:
+                        b_int = float(bmod["intensity"])
+                        btarget = str(bmod["target"])
                         if btarget == "hip_sway":
                             hip_sway_rom = b_int * 15.0 * sway_offset
                         elif btarget == "body_bounce":
                             body_bounce_rom = b_int * 15.0 * abs(sway_offset)
                         elif btarget == "head_bob":
                             head_bob_rom = b_int * 18.0 * max(0.0, sway_offset)
+                        else:
+                            raise ValueError(f"Unsupported bounce target: {btarget}")
 
-                # 1. Tracks 2-4: Spine & Pitch (Servos 2, 3, 4)
-                spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if spine_block:
                     pat = spine_block["pattern"]
                     b_st = float(spine_block["start_sec"])

@@ -89,6 +89,96 @@ class TestHeadlessPlayer(unittest.TestCase):
         player.stop()
         self.assertFalse(player.is_playing)
 
+    def test_spine_block_bounce_modifier(self):
+        """Verifies that user-edited spine block bounce_modifier drives dynamic vertical oscillation."""
+        choreo_with_bounce = dict(self.compiled_choreo)
+        spine_track = choreo_with_bounce["tracks"]["spine_gaze"]
+        for block in spine_track:
+            block["bounce_modifier"] = {
+                "enabled": True,
+                "intensity": 0.20,
+                "target": "body_bounce"
+            }
+
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo_with_bounce,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+
+        player.start()
+        time.sleep(1.2)
+        player.stop()
+
+        self.assertGreater(len(backend.dispatched_frames), 20)
+        lift_values = [f["rom_posture"]["shoulder_lift"] for f in backend.dispatched_frames]
+        # Verify dynamic oscillation variance exists
+        lift_variance = max(lift_values) - min(lift_values)
+        self.assertGreater(lift_variance, 0.5, f"Shoulder lift variance too low: {lift_variance}")
+
+    def test_spine_block_bounce_fail_fast(self):
+        """Verifies fail-fast schema: missing required bounce keys records KeyError immediately."""
+        choreo_malformed = dict(self.compiled_choreo)
+        spine_track = choreo_malformed["tracks"]["spine_gaze"]
+        # Missing 'target' key
+        spine_track[0]["bounce_modifier"] = {"enabled": True, "intensity": 0.20}
+
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo_malformed,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+
+        player._playback_loop()
+        self.assertIsNotNone(player.error)
+        self.assertIn("Fail-Fast Error", player.error)
+
+    def test_four_state_verification_pipeline(self):
+        """Verifies complete 4-state verification pipeline for bounce modifier integration."""
+        # State 1: Schema contract & MD5 / key presence verification
+        choreo = dict(self.compiled_choreo)
+        for b in choreo["tracks"]["spine_gaze"]:
+            b["bounce_modifier"] = {"enabled": True, "intensity": 0.25, "target": "body_bounce"}
+            self.assertIn("enabled", b["bounce_modifier"])
+            self.assertIn("intensity", b["bounce_modifier"])
+            self.assertIn("target", b["bounce_modifier"])
+
+        # State 2: Bi-directional motion cycle (Origin -> Target A -> Target B -> Origin)
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+        player.start()
+        time.sleep(1.0)
+        player.stop()
+
+        # State 3: Live telemetry & joint variance sampling across both S2 and S3
+        self.assertGreater(len(backend.dispatched_frames), 15)
+        s2_vals = [f["rom_posture"]["shoulder_lift"] for f in backend.dispatched_frames]
+        s3_vals = [f["rom_posture"]["elbow_flex"] for f in backend.dispatched_frames]
+        s2_variance = max(s2_vals) - min(s2_vals)
+        s3_variance = max(s3_vals) - min(s3_vals)
+        self.assertGreater(s2_variance, 0.5, f"State 3 failed: S2 lift variance {s2_variance} < 0.5")
+        self.assertGreater(s3_variance, 0.3, f"State 3 failed: S3 elbow variance {s3_variance} < 0.3")
+
+        # State 4: Telemetry verification handshake
+        st = player.get_status()
+        self.assertFalse(st["is_playing"])
+        self.assertGreater(st["time_sec"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

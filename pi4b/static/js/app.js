@@ -1281,9 +1281,14 @@ function bindEventListeners() {
                 ui.renderTimeline();
             } else if (id === 'inspBounceEnabled') {
                 if (!selectedMoveBlock.bounce_modifier) {
-                    selectedMoveBlock.bounce_modifier = { enabled: true, intensity: 0.12, target: 'hip_sway' };
+                    selectedMoveBlock.bounce_modifier = { enabled: true, intensity: 0.12, target: 'body_bounce' };
+                } else {
+                    if (selectedMoveBlock.bounce_modifier.target === 'hip_sway') {
+                        selectedMoveBlock.bounce_modifier.target = 'body_bounce';
+                    }
                 }
                 selectedMoveBlock.bounce_modifier.enabled = e.target.checked;
+                selectedMoveBlock.is_user_edited = true;
                 ui.renderTimeline();
             } else if (id === 'inspBasePose' || id === 'inspHeadPitch' || id === 'inspGantryMode') {
                 ui.renderTimeline();
