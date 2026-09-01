@@ -1224,7 +1224,7 @@ export function renderTimeline() {
             const et = Number(blk.end_sec !== undefined ? blk.end_sec : st);
             const dur = Math.max(0.05, et - st);
 
-            const leftPx = labelOffset + (st * pps);
+            const leftPx = st * pps;
             const widthPx = Math.max(4, dur * pps);
             const isSel = selectedMoveBlock && selectedMoveBlock.id === blk.id;
 
@@ -1235,16 +1235,81 @@ export function renderTimeline() {
                 const isBreath = (blk.type === 'breath');
                 if (isBreath) {
                     effectiveClass = 'block-lyric-breath';
+                } else if (blk.style === 'belting') {
+                    effectiveClass = 'block-vocal-belting';
+                } else if (blk.style === 'conversational') {
+                    effectiveClass = 'block-vocal-conversational';
                 } else {
                     effectiveClass = 'block-lyric-vocal';
                 }
+            } else if (channelKey === 'spine_gaze' || channelKey === 'body_pose') {
+                const pose = String(blk.pose_name || blk.mid_pose || blk.end_pose || 'stand').toLowerCase();
+                if (pose === 'squat') {
+                    effectiveClass = 'block-spine-squat';
+                } else if (pose === 'tiptoe') {
+                    effectiveClass = 'block-spine-tiptoe';
+                } else if (pose === 'arch') {
+                    effectiveClass = 'block-spine-arch';
+                } else {
+                    effectiveClass = 'block-spine-stand';
+                }
+            } else if (channelKey === 's8_gantry') {
+                const mode = String(blk.mode || 'hold').toLowerCase();
+                const isDrop = (blk.drop_sec !== null && blk.drop_sec !== undefined) || mode.includes('drop');
+                if (isDrop) {
+                    effectiveClass = 'block-s8-drop';
+                } else if (mode === 'full_glide') {
+                    effectiveClass = 'block-s8-full_glide';
+                } else if (mode === 'early_step' || mode === 'early_settle') {
+                    effectiveClass = 'block-s8-early_step';
+                } else if (mode === 'late_step' || mode === 'late_move') {
+                    effectiveClass = 'block-s8-late_step';
+                } else {
+                    effectiveClass = 'block-s8-hold';
+                }
+            } else if (channelKey === 's7_pedestal') {
+                if (blk.target_deg !== undefined) {
+                    const tdeg = Number(blk.target_deg);
+                    effectiveClass = tdeg > 5 ? 'block-s7-left' : (tdeg < -5 ? 'block-s7-right' : 'block-s7-center');
+                } else if (blk.mode) {
+                    const m = String(blk.mode).toLowerCase();
+                    effectiveClass = m.includes('left') ? 'block-s7-left' : (m.includes('right') ? 'block-s7-right' : 'block-s7-center');
+                } else {
+                    effectiveClass = 'block-s7-center';
+                }
+            } else if (channelKey === 's1_torso') {
+                if (blk.groove_intensity !== undefined) {
+                    const groove = Number(blk.groove_intensity);
+                    effectiveClass = groove <= 0.05 ? 'block-s1-still' : (groove >= 0.75 ? 'block-s1-dance' : 'block-s1-verse');
+                } else if (blk.facing_mode === 'audience_counter') {
+                    effectiveClass = 'block-s1-dance';
+                } else {
+                    effectiveClass = 'block-s1-verse';
+                }
+            } else if (channelKey === 's5_head_tilt') {
+                if (blk.tilt_mode === 'continuous_roll') {
+                    effectiveClass = 'block-s5-roll';
+                } else if (blk.tilt_deg !== undefined) {
+                    const tilt = Number(blk.tilt_deg);
+                    effectiveClass = tilt < -2 ? 'block-s5-left' : (tilt > 2 ? 'block-s5-right' : 'block-s5-level');
+                } else if (blk.tilt_mode) {
+                    const tm = String(blk.tilt_mode).toLowerCase();
+                    effectiveClass = tm.includes('left') ? 'block-s5-left' : (tm.includes('right') ? 'block-s5-right' : 'block-s5-level');
+                } else {
+                    effectiveClass = 'block-s5-level';
+                }
+            } else if (channelKey === 's6_jaw' || channelKey === 'head_jaw') {
+                const isSinging = (blk.jaw_mode === 'singing' || blk.is_vocal === true || blk.type === 'lyric');
+                effectiveClass = isSinging ? 'block-jaw-singing' : 'block-jaw-closed';
             }
-
-            const borderStyle = isSel ? 'border: 2px solid #ffffff; box-shadow: 0 0 10px rgba(255,255,255,0.8); z-index: 10;' : '';
+            const isUserEdited = !!blk.is_user_edited;
 
             html += `
-                <div class="bb-timeline-block ${effectiveClass}" data-channel="${channelKey}" data-block-id="${blk.id}" style="left: ${leftPx}px; width: ${widthPx}px; ${borderStyle}">
-                    <span class="bb-block-text">${label}</span>
+                <div class="bb-move-block ${effectiveClass} ${isSel ? 'selected' : ''} ${isUserEdited ? 'user-edited' : ''}"
+                     data-channel="${channelKey}" data-id="${blk.id}"
+                     style="left: ${leftPx}px; width: ${widthPx}px;"
+                     title="${label} [${st.toFixed(1)}s - ${et.toFixed(1)}s] ${isUserEdited ? '(Edited)' : ''}">
+                    ${label}
                 </div>
             `;
         });
@@ -1254,13 +1319,13 @@ export function renderTimeline() {
 
     // Render all 6 lanes
     const tracks = activeChoreoData.tracks || {};
-    renderLaneBlocks(document.getElementById('bbLaneLyrics'), tracks.lyrics || tracks.lyrics_phrasing, 'lyrics', 'block-lyrics');
-    renderLaneBlocks(document.getElementById('bbLaneSpineGaze'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-spine');
-    renderLaneBlocks(document.getElementById('bbLaneRailGantry'), tracks.s8_gantry, 's8_gantry', 'block-gantry');
-    renderLaneBlocks(document.getElementById('bbLanePedestal'), tracks.s7_pedestal, 's7_pedestal', 'block-pedestal');
-    renderLaneBlocks(document.getElementById('bbLaneTorsoHips'), tracks.s1_torso, 's1_torso', 'block-torso');
-    renderLaneBlocks(document.getElementById('bbLaneHeadTilt'), tracks.s5_head_tilt, 's5_head_tilt', 'block-tilt');
-    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-jaw');
+    renderLaneBlocks(document.getElementById('bbLaneLyrics'), tracks.lyrics || tracks.lyrics_phrasing, 'lyrics', 'block-lyric-female');
+    renderLaneBlocks(document.getElementById('bbLaneBody'), tracks.spine_gaze || tracks.body_pose, 'spine_gaze', 'block-body');
+    renderLaneBlocks(document.getElementById('bbLaneS8'), tracks.s8_gantry, 's8_gantry', 'block-s8');
+    renderLaneBlocks(document.getElementById('bbLaneS7'), tracks.s7_pedestal, 's7_pedestal', 'block-s7');
+    renderLaneBlocks(document.getElementById('bbLaneS1'), tracks.s1_torso, 's1_torso', 'block-s1');
+    renderLaneBlocks(document.getElementById('bbLaneS5'), tracks.s5_head_tilt, 's5_head_tilt', 'block-s5');
+    renderLaneBlocks(document.getElementById('bbLaneHeadJaw'), tracks.s6_jaw || tracks.head_jaw, 's6_jaw', 'block-head');
 
     // 3.5 Render Amplitude Visualizer Lane (Dark Blue Background, Cyan / Light Blue Ticks)
     const ampCanvas = document.getElementById('bbAmpWaveformCanvas');
