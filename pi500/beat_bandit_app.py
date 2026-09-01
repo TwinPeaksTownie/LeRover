@@ -116,19 +116,27 @@ class BeatBanditApp(BaseApp):
     def get_status(self) -> Dict[str, Any]:
         if self.player and self.player.is_playing:
             p_stat = self.player.get_status()
-            tempo_val = float(self.active_track.get("bpm") or self.active_track.get("tempo", 0.0)) if self.active_track else 0.0
-            track_obj = {
-                "title": self.active_track.get("title", ""),
-                "artist": self.active_track.get("artist", "")
-            } if self.active_track else None
+            tempo_val = 0.0
+            if self.active_track:
+                if "bpm" in self.active_track and self.active_track["bpm"] is not None:
+                    tempo_val = float(self.active_track["bpm"])
+                elif "tempo" in self.active_track and self.active_track["tempo"] is not None:
+                    tempo_val = float(self.active_track["tempo"])
+
+            track_obj = None
+            if self.active_track:
+                track_obj = {
+                    "title": self.active_track["title"] if "title" in self.active_track else "",
+                    "artist": self.active_track["artist"] if "artist" in self.active_track else ""
+                }
 
             return {
                 "app_name": "beat_bandit_app",
-                "state": "DANCING",
+                "state": p_stat["state"],
                 "is_dancing": True,
                 "is_playing": True,
-                "active_track": self.active_track.get("title") if self.active_track else None,
-                "artist": self.active_track.get("artist") if self.active_track else None,
+                "active_track": self.active_track["title"] if (self.active_track and "title" in self.active_track) else None,
+                "artist": self.active_track["artist"] if (self.active_track and "artist" in self.active_track) else None,
                 "track": track_obj,
                 "tempo": tempo_val,
                 "progress": p_stat["progress_pct"],
@@ -145,19 +153,27 @@ class BeatBanditApp(BaseApp):
                 "error": p_stat["error"] or self.error,
             }
 
-        tempo_val = float(self.active_track.get("bpm") or self.active_track.get("tempo", 0.0)) if self.active_track else 0.0
-        track_obj = {
-            "title": self.active_track.get("title", ""),
-            "artist": self.active_track.get("artist", "")
-        } if self.active_track else None
+        tempo_val = 0.0
+        if self.active_track:
+            if "bpm" in self.active_track and self.active_track["bpm"] is not None:
+                tempo_val = float(self.active_track["bpm"])
+            elif "tempo" in self.active_track and self.active_track["tempo"] is not None:
+                tempo_val = float(self.active_track["tempo"])
+
+        track_obj = None
+        if self.active_track:
+            track_obj = {
+                "title": self.active_track["title"] if "title" in self.active_track else "",
+                "artist": self.active_track["artist"] if "artist" in self.active_track else ""
+            }
 
         return {
             "app_name": "beat_bandit_app",
             "state": self.current_state,
             "is_dancing": (self.current_state == "DANCING"),
             "is_playing": False,
-            "active_track": self.active_track.get("title") if self.active_track else None,
-            "artist": self.active_track.get("artist") if self.active_track else None,
+            "active_track": self.active_track["title"] if (self.active_track and "title" in self.active_track) else None,
+            "artist": self.active_track["artist"] if (self.active_track and "artist" in self.active_track) else None,
             "track": track_obj,
             "tempo": tempo_val,
             "progress": 0.0,
