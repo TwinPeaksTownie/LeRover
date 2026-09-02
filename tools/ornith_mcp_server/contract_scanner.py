@@ -163,21 +163,39 @@ class PythonASTContractVisitor(ast.NodeVisitor):
 
 def scan_python_code(code: str, filename: str) -> List[Dict[str, Any]]:
     violations = []
+    tree = None
     try:
         tree = ast.parse(code, filename=filename)
+    except (IndentationError, SyntaxError):
+        # Diff chunks may be indented or fragmented lines. Try wrapping in dummy function
+        try:
+            import textwrap
+            wrapped = "def _diff_fragment():\n" + textwrap.indent(textwrap.dedent(code), "    ")
+            tree = ast.parse(wrapped, filename=filename)
+        except Exception:
+            # Only flag actual syntax error if filename exists as a complete file on disk
+            if os.path.isfile(filename):
+                try:
+                    with open(filename, "r", encoding="utf-8", errors="replace") as f:
+                        ast.parse(f.read(), filename=filename)
+                except SyntaxError as se:
+                    violations.append({
+                        "rule": "SYNTAX_ERROR",
+                        "file": filename,
+                        "line": se.lineno or 1,
+                        "snippet": se.text or "",
+                        "reason": f"Python syntax error: {se.msg}"
+                    })
+            return violations
+    except Exception as e:
+        sys.stderr.write(f"[CONTRACT_SCANNER] AST parse error in {filename}: {e}\n")
+        return violations
+
+    if tree:
         visitor = PythonASTContractVisitor(filename=filename)
         visitor.visit(tree)
         violations.extend(visitor.violations)
-    except SyntaxError as e:
-        violations.append({
-            "rule": "SYNTAX_ERROR",
-            "file": filename,
-            "line": e.lineno or 1,
-            "snippet": e.text or "",
-            "reason": f"Python syntax error: {e.msg}"
-        })
-    except Exception as e:
-        sys.stderr.write(f"[CONTRACT_SCANNER] AST parse error in {filename}: {e}\n")
+
 
     # Line-based regex scan for artificial range cages
     for idx, line in enumerate(code.splitlines(), 1):
