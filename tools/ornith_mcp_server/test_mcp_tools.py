@@ -46,7 +46,10 @@ def test_audit():
 +++ b/pi500/test_bad.py
 +def parse_config(data):
 +    min_val = data.get("calib_min", 0)
++    facing = data.get("facing_mode", "audience_counter")
 +    homing_pos = 2048
++    head_bob_rom = intensity * max_pitch * 0.5
++    caged_roll = max(35.0, min(65.0, target_val))
 +    try:
 +        send_command(min_val)
 +    except:
@@ -55,9 +58,11 @@ def test_audit():
     scan_res = tools_audit.scan_code_contracts(diff_text=bad_diff)
     print(f"  Clean: {scan_res.get('clean')}")
     print(f"  Violations found: {len(scan_res.get('violations', []))}")
+    for v in scan_res.get("violations", []):
+        print(f"    - [{v.get('rule')}] {v.get('snippet')} -> {v.get('reason')}")
     assert not scan_res.get("clean"), "Scanner should have flagged violations in bad diff"
-    assert len(scan_res.get("violations")) == 3, f"Expected 3 violations, got {len(scan_res.get('violations'))}"
-    print("  [PASS] Contract scanner successfully flagged all 3 violations.")
+    assert len(scan_res.get("violations")) == 6, f"Expected 6 violations, got {len(scan_res.get('violations'))}"
+    print("  [PASS] Contract scanner successfully flagged all 6 violations (fallbacks, 2048, exceptions, multipliers, cages).")
 
     # Test 1.4: Spoken Summary Extraction
     print("Testing extract_spoken_summary()...")

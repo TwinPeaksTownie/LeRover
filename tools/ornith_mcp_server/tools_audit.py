@@ -241,15 +241,25 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
         if code_line.startswith("#") or code_line.startswith("//"):
             continue
 
-        if re.search(r'\.get\s*\(\s*["\'](calib_min|calib_max|homing_offset|position|target|angle|servo_id)["\']\s*,\s*[^)]+\)', code_line):
+        # 1. FAIL-FAST SCHEMA: Ban ALL .get(key, default) and chained fallback lookups
+        if re.search(r'\.get\s*\(\s*["\'][^"\']+["\']\s*,\s*[^)]+\)', code_line):
             violations.append({
-                "rule": "FAIL_FAST_CALIBRATION_SCHEMA",
+                "rule": "FAIL_FAST_SCHEMA_FALLBACK",
                 "file": current_file,
                 "line": line_idx,
                 "snippet": code_line,
-                "reason": "Forbidden fallback default in .get() for hardware/calibration parameters. Must fail-fast with KeyError."
+                "reason": "Forbidden default fallback in .get(key, default). Must enforce schema contracts with direct key indexing or raise KeyError."
+            })
+        elif re.search(r'\.get\s*\([^)]+\)\s+or\s+', code_line):
+            violations.append({
+                "rule": "FAIL_FAST_SCHEMA_FALLBACK",
+                "file": current_file,
+                "line": line_idx,
+                "snippet": code_line,
+                "reason": "Forbidden speculative chained fallback lookups ('.get(...) or ...'). Must enforce canonical request schema."
             })
 
+        # 2. NO HARDCODED 2048 / 0x800 NEUTRAL
         if re.search(r'\b(2048|0x800)\b', code_line) and not current_file.lower().endswith((".md", ".json")):
             if any(k in code_line.lower() for k in ["pos", "target", "neutral", "center", "homing", "offset", "default"]):
                 violations.append({
@@ -260,6 +270,7 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
                     "reason": "Hardcoded 2048/0x800 neutral detected. Offsets and bounds must load dynamically from follower.json or calibration_aux.json."
                 })
 
+        # 3. NO SWALLOWED EXCEPTIONS
         if re.search(r'except(\s+\w+)?:(\s*pass|\s*\.\.\.)\b', code_line):
             violations.append({
                 "rule": "NO_SWALLOWED_EXCEPTIONS",
@@ -284,6 +295,26 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
             if code_line:
                 prev_except_line = None
 
+        # 4. NO SAFETY SLOP / NEUTERING MULTIPLIERS
+        if not current_file.startswith("tests/") and not current_file.endswith(".md"):
+            if re.search(r'\*\s*0\.[1-9]\d*\b', code_line) and any(w in code_line.lower() for w in ["bob", "tilt", "pan", "bounce", "lift", "flex", "pitch", "roll", "jaw", "amp", "intensity", "scale", "mod", "target", "rom"]):
+                violations.append({
+                    "rule": "NO_SAFETY_SLOP_MULTIPLIERS",
+                    "file": current_file,
+                    "line": line_idx,
+                    "snippet": code_line,
+                    "reason": "Forbidden hardcoded motion scaling factor (neutering multiplier). Intensities must be controlled via loaded probabilities."
+                })
+            elif re.search(r'max\s*\(\s*(3[0-9]|4[0-9])\.[0-9]+\s*,\s*min\s*\(\s*(5[0-9]|6[0-9])\.[0-9]+', code_line):
+                violations.append({
+                    "rule": "NO_ARTIFICIAL_RANGE_CAGES",
+                    "file": current_file,
+                    "line": line_idx,
+                    "snippet": code_line,
+                    "reason": "Forbidden artificial sub-range cage detected. Joint ranges must span full calibrated ROM (0.0 to 100.0%)."
+                })
+
+        # 5. SERIAL BUS LOCK HYGIENE
         if "/dev/ttyACM0" in code_line and "serial.Serial" in code_line:
             warnings.append({
                 "rule": "SERIAL_BUS_LOCK_HYGIENE",
@@ -365,11 +396,12 @@ def query_ornith_for_review(
     
     system_prompt = """You are Ornith, the adversarial code reviewer and hardware supervisor for the SO-101 robotic arm and touch UI system.
 Your job is to strictly enforce the following rules:
-1. FAIL-FAST SCHEMA: No .get(key, default) or 'or <default>' fallbacks for hardware/calibration parameters. Raise KeyError immediately.
+1. FAIL-FAST SCHEMA: Zero tolerance for .get(key, default) or 'or <default>' fallbacks anywhere in internal payloads, motion blocks, track dictionaries, modes, speeds, envelopes, or calibration. All dictionaries and motion blocks must use direct bracket access (e.g. block["speed"]) and fail-fast schema validators. Raise KeyError immediately on missing or malformed keys.
 2. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load dynamically from follower.json (servos 1-6), calibration_aux.json (servos 7-8), or manifest.json.
-3. NO SWALLOWED EXCEPTIONS: No 'except: pass' or unhandled generic catches.
-4. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
-5. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
+3. NO SWALLOWED EXCEPTIONS: No 'except: pass' or unhandled generic catches. Raise descriptive errors or log explicit tracebacks.
+4. NO SAFETY SLOP / OVER-DAMPING: No hardcoded neutering multipliers (* 0.5, * 0.8), no artificial sub-range cages (e.g. caging head roll to 35-65%), and no low-pass filters that crush dynamic beat frequencies. Joint ranges and modifier intensities must be controlled strictly via loaded JSON probabilities and calibrated ROM.
+5. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
+6. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
 
 Evaluate the git diff against the task summary and these strict rules.
 
