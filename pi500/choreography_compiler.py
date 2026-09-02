@@ -976,6 +976,7 @@ def compile_choreography_tracks(
         "bpm": tempo,
         "settings": DEFAULT_CHOREO_SETTINGS,
         "poses": ROM_POSES,
+        "probabilities": probs,
         "sections": sec_blocks,
         "blocks": compiled_master_blocks,
         "beat_times": beat_times,

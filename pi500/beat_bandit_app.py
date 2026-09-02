@@ -371,8 +371,8 @@ class BeatBanditApp(BaseApp):
         if not os.path.exists(wav_path):
             raise FileNotFoundError(f"Fail-Fast Error: WAV audio file not found at '{wav_path}' for track '{track_id}'")
 
-        if "start_sec" not in block or "end_sec" not in block:
-            raise KeyError("Fail-Fast Error: 'start_sec' and 'end_sec' required in preview block payload")
+        if "start_sec" not in block or "end_sec" not in block or "name" not in block:
+            raise KeyError("Fail-Fast Error: 'name', 'start_sec', and 'end_sec' required in preview block payload")
 
         st = max(0.0, float(block["start_sec"]))
         et = float(block["end_sec"])
@@ -436,6 +436,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "spine_gaze":
             isolated_tracks["spine_gaze"] = [{
                 "id": "neutral_spine",
+                "name": "Neutral Hold",
                 "start_sec": st,
                 "end_sec": et,
                 "pose_name": "stand",
@@ -448,6 +449,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "s7_pedestal":
             isolated_tracks["s7_pedestal"] = [{
                 "id": "neutral_s7",
+                "name": "Center Hold",
                 "start_sec": st,
                 "end_sec": et,
                 "mode": "center_hold",
@@ -458,6 +460,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "s8_gantry":
             isolated_tracks["s8_gantry"] = [{
                 "id": "neutral_s8",
+                "name": "Center Hold",
                 "start_sec": st,
                 "end_sec": et,
                 "mode": "hold",
@@ -468,6 +471,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "s1_torso":
             isolated_tracks["s1_torso"] = [{
                 "id": "neutral_s1",
+                "name": "Base Aligned",
                 "start_sec": st,
                 "end_sec": et,
                 "facing_mode": "base_aligned"
@@ -476,6 +480,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "s5_head_tilt":
             isolated_tracks["s5_head_tilt"] = [{
                 "id": "neutral_s5",
+                "name": "Level Center",
                 "start_sec": st,
                 "end_sec": et,
                 "tilt_mode": "center",
@@ -485,6 +490,7 @@ class BeatBanditApp(BaseApp):
         if target_channel != "s6_jaw":
             isolated_tracks["s6_jaw"] = [{
                 "id": "neutral_s6",
+                "name": "Closed",
                 "start_sec": st,
                 "end_sec": et,
                 "jaw_mode": "closed"
@@ -492,7 +498,7 @@ class BeatBanditApp(BaseApp):
 
         isolated_choreo = {
             "version": "3.3.0",
-            "title": f"Preview: {block.get('name', target_channel)}",
+            "title": f"Preview: {block['name']}",
             "duration": et,
             "poses": poses,
             "probabilities": probs,

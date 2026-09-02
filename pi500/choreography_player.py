@@ -41,10 +41,33 @@ class ChoreographyPlayer:
         on_finish_callback: Optional[Callable[[], None]] = None,
     ) -> None:
         self.backend = backend
+        if not isinstance(choreography, dict):
+            raise KeyError("Fail-Fast Error: choreography payload must be a dict")
+        if not isinstance(analysis, dict):
+            raise KeyError("Fail-Fast Error: audio analysis payload must be a dict")
+        if "duration" not in choreography:
+            raise KeyError("Fail-Fast Error: 'duration' missing in choreography payload")
+        if "poses" not in choreography or not isinstance(choreography["poses"], dict):
+            raise KeyError("Fail-Fast Error: 'poses' dictionary missing in choreography payload")
+        if "probabilities" not in choreography or not isinstance(choreography["probabilities"], dict):
+            raise KeyError("Fail-Fast Error: 'probabilities' dictionary missing in choreography payload")
+        if "tracks" not in choreography or not isinstance(choreography["tracks"], dict):
+            raise KeyError("Fail-Fast Error: 'tracks' dictionary missing in choreography payload")
+
+        required_tracks = ["spine_gaze", "s7_pedestal", "s8_gantry", "s1_torso", "s5_head_tilt", "s6_jaw"]
+        for tr in required_tracks:
+            if tr not in choreography["tracks"] or not isinstance(choreography["tracks"][tr], list):
+                raise KeyError(f"Fail-Fast Error: Mandatory track '{tr}' missing or not a list in choreography['tracks']")
+
+        if "beat_times" not in analysis:
+            raise KeyError("Fail-Fast Error: 'beat_times' missing in audio analysis")
+        if "mouth_envelope_50hz" not in analysis:
+            raise KeyError("Fail-Fast Error: 'mouth_envelope_50hz' missing in audio analysis")
+
         self.choreo = choreography
         self.analysis = analysis
         self.start_sec = max(0.0, float(start_sec))
-        self.duration = float(choreography.get("duration", 0.0) or analysis.get("duration", 0.0))
+        self.duration = float(choreography["duration"])
         self.end_sec = min(self.duration, float(end_sec)) if (end_sec is not None and float(end_sec) > 0.0) else self.duration
         if self.end_sec <= self.start_sec:
             self.end_sec = self.duration
@@ -105,23 +128,21 @@ class ChoreographyPlayer:
     def _playback_loop(self) -> None:
         """Core 50 Hz playback execution."""
         try:
-            beat_times = np.array(self.analysis.get("beat_times", []))
+            beat_times = np.array(self.analysis["beat_times"])
             if len(beat_times) == 0:
                 raise ValueError("Missing 'beat_times' in audio analysis.")
 
-            choreo_tracks = self.choreo.get("tracks", {})
-            spine_track = choreo_tracks.get("spine_gaze", [])
-            s7_track = choreo_tracks.get("s7_pedestal", [])
-            s8_track = choreo_tracks.get("s8_gantry", [])
-            s1_track = choreo_tracks.get("s1_torso", [])
-            s5_track = choreo_tracks.get("s5_head_tilt", [])
-            jaw_track = choreo_tracks.get("s6_jaw", [])
-            mouth_env_50hz = self.analysis.get("mouth_envelope_50hz", [])
+            choreo_tracks = self.choreo["tracks"]
+            spine_track = choreo_tracks["spine_gaze"]
+            s7_track = choreo_tracks["s7_pedestal"]
+            s8_track = choreo_tracks["s8_gantry"]
+            s1_track = choreo_tracks["s1_torso"]
+            s5_track = choreo_tracks["s5_head_tilt"]
+            jaw_track = choreo_tracks["s6_jaw"]
+            mouth_env_50hz = self.analysis["mouth_envelope_50hz"]
 
-            choreo_poses = self.choreo.get("poses") or load_dance_presets()
-            choreo_probs = self.choreo.get("probabilities")
-            if choreo_probs is None:
-                choreo_probs = load_choreography_probabilities()
+            choreo_poses = self.choreo["poses"]
+            choreo_probs = self.choreo["probabilities"]
             if "bounce_modifier" not in choreo_probs:
                 raise KeyError("Fail-Fast Error: 'bounce_modifier' section missing in choreography probabilities")
             bounce_cfg = choreo_probs["bounce_modifier"]
@@ -244,8 +265,8 @@ class ChoreographyPlayer:
                             hip_sway_rom = b_int * max_hip_sway * sway_offset
                         elif btarget == "body_bounce":
                             body_bounce_rom = b_int * max_body_lift * beat_bounce_cycle
-                            head_bob_rom = b_int * (max_pitch * 0.5) * beat_bounce_cycle
-                            head_tilt_bounce_rom = b_int * (max_tilt * 0.5) * sway_offset
+                            head_bob_rom = b_int * max_pitch * beat_bounce_cycle
+                            head_tilt_bounce_rom = b_int * max_tilt * sway_offset
                         elif btarget == "head_bob":
                             head_bob_rom = b_int * max_pitch * beat_bounce_cycle
                             head_tilt_bounce_rom = b_int * max_tilt * sway_offset
@@ -296,7 +317,7 @@ class ChoreographyPlayer:
                     smooth_posture_rom["elbow_flex"] = max(0.0, min(100.0, smooth_posture_rom["elbow_flex"]))
                     smooth_posture_rom["wrist_flex"] = max(0.0, min(100.0, smooth_posture_rom["wrist_flex"]))
 
-                    self.current_move_name = spine_block.get("name", active_pose_name)
+                    self.current_move_name = str(spine_block["name"])
                     self.current_energy_level = "HIGH ENERGY" if active_pose_name in ["tiptoe", "arch"] else "GROOVE"
 
                 # 2. Track 7: Pedestal (Servo 7)
@@ -312,28 +333,31 @@ class ChoreographyPlayer:
 
                 # 3. Track 1: Torso / Hips (Servo 1)
                 s1_block = next((b for b in s1_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                facing_mode = s1_block.get("facing_mode", "audience_counter") if s1_block else "audience_counter"
-                if facing_mode == "audience_counter":
-                    counter_pan_rom = (50.0 - current_s7_rom) * 0.8
-                    target_pan = 50.0 + counter_pan_rom + hip_sway_rom
-                else:
-                    target_pan = 50.0 + hip_sway_rom
-                smooth_posture_rom["shoulder_pan"] += 0.25 * (target_pan - smooth_posture_rom["shoulder_pan"])
-                smooth_posture_rom["shoulder_pan"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_pan"]))
+                if s1_block:
+                    facing_mode = s1_block["facing_mode"]
+                    if facing_mode == "audience_counter":
+                        counter_pan_rom = 50.0 - current_s7_rom
+                        target_pan = 50.0 + counter_pan_rom + hip_sway_rom
+                    elif facing_mode == "base_aligned":
+                        target_pan = 50.0 + hip_sway_rom
+                    else:
+                        raise ValueError(f"Fail-Fast Error: Unknown facing_mode '{facing_mode}' in s1_torso block")
+                    smooth_posture_rom["shoulder_pan"] += 0.25 * (target_pan - smooth_posture_rom["shoulder_pan"])
+                    smooth_posture_rom["shoulder_pan"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_pan"]))
 
                 # 4. Track 5: Head Tilt (Servo 5) - 3-Phase Motion Lifecycle (Attack -> Settle -> Return to Center)
                 s5_block = next((b for b in s5_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 if s5_block:
-                    mode = s5_block.get("tilt_mode", "center")
-                    b_st = s5_block["start_sec"]
-                    b_dur = max(0.001, s5_block["end_sec"] - b_st)
+                    mode = s5_block["tilt_mode"]
+                    b_st = float(s5_block["start_sec"])
+                    b_dur = max(0.001, float(s5_block["end_sec"]) - b_st)
                     t_in_block = elapsed - b_st
 
                     if mode == "center":
                         target_roll = 50.0
                     elif mode == "continuous_roll":
-                        amp = float(s5_block.get("roll_amplitude", 8.0))
-                        freq = float(s5_block.get("roll_freq_hz", 1.0))
+                        amp = float(s5_block["roll_amplitude"])
+                        freq = float(s5_block["roll_freq_hz"])
                         env = 1.0
                         fade_time = min(0.4, b_dur * 0.2)
                         if t_in_block < fade_time:
@@ -341,10 +365,9 @@ class ChoreographyPlayer:
                         elif (b_dur - t_in_block) < fade_time:
                             env = max(0.0, (b_dur - t_in_block) / max(0.001, fade_time))
                         target_roll = 50.0 + env * amp * math.sin(2.0 * math.pi * freq * t_in_block)
-                    else:
-                        # 3-Phase Lifecycle Curve over Vocal Block Duration
+                    elif mode in ["snap_pulse", "snap_pulse_left", "snap_pulse_right", "vocal_accent"] or mode.startswith("snap_pulse"):
                         u = max(0.0, min(1.0, t_in_block / b_dur))
-                        peak_rom = float(s5_block.get("target_rom", s5_block.get("tilt_rom", 50.0)))
+                        peak_rom = float(s5_block["tilt_rom"])
                         if u < 0.20:
                             # Attack Phase (0% - 20%): Level Center (50.0) -> Peak ROM
                             attack_p = u / 0.20
@@ -356,11 +379,13 @@ class ChoreographyPlayer:
                             # Return to Center Phase (45% - 100%): Peak ROM -> Level Center (50.0)
                             return_p = (u - 0.45) / 0.55
                             target_roll = peak_rom + return_p * (50.0 - peak_rom)
+                    else:
+                        raise ValueError(f"Fail-Fast Error: Unknown tilt_mode '{mode}' in s5_head_tilt block")
                 else:
                     target_roll = 50.0
 
-                # Combine macro tilt with sinusoidal bounce micro-offset and safety clamp within calibrated range [35.0, 65.0]
-                target_roll_final = max(35.0, min(65.0, target_roll + head_tilt_bounce_rom))
+                # Combine macro tilt with sinusoidal bounce micro-offset across full calibrated range [0.0, 100.0]
+                target_roll_final = max(0.0, min(100.0, target_roll + head_tilt_bounce_rom))
                 smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll_final - smooth_posture_rom["wrist_roll"])
                 smooth_posture_rom["wrist_roll"] = max(0.0, min(100.0, smooth_posture_rom["wrist_roll"]))
 
@@ -370,36 +395,43 @@ class ChoreographyPlayer:
                 s8_speed = 500
                 if s8_block and s8_block["id"] != last_s8_block_id:
                     s8_mode = s8_block["mode"]
-                    s8_drop_sec = s8_block.get("drop_sec")
-                    s8_speed = int(s8_block.get("speed", 500))
+                    s8_speed = int(s8_block["speed"])
                     should_move = True
-                    if s8_mode == "hold_to_drop_glide" and s8_drop_sec and elapsed < float(s8_drop_sec):
-                        should_move = False
+                    if s8_mode == "hold_to_drop_glide":
+                        s8_drop_sec = float(s8_block["drop_sec"])
+                        if elapsed < s8_drop_sec:
+                            should_move = False
 
                     if should_move:
                         s8_goal_rom = float(s8_block["target_pos_rom"])
                         last_s8_block_id = s8_block["id"]
                 elif s8_block and s8_block["id"] == last_s8_block_id:
                     s8_mode = s8_block["mode"]
-                    s8_drop_sec = s8_block.get("drop_sec")
-                    if s8_mode == "hold_to_drop_glide" and s8_drop_sec and elapsed >= float(s8_drop_sec):
-                        s8_goal_rom = float(s8_block["target_pos_rom"])
-                        s8_speed = int(s8_block.get("speed", 500))
+                    if s8_mode == "hold_to_drop_glide":
+                        s8_drop_sec = float(s8_block["drop_sec"])
+                        if elapsed >= s8_drop_sec:
+                            s8_goal_rom = float(s8_block["target_pos_rom"])
+                            s8_speed = int(s8_block["speed"])
 
                 # 6. Track 6: Singing Jaw (Servo 6) Capped strictly at 45%
                 jaw_block = next((b for b in jaw_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
-                jaw_mode = jaw_block.get("jaw_mode", "singing") if jaw_block else "singing"
-                jaw_open_pct = 0.0
-                if jaw_mode == "singing" and mouth_env_50hz:
-                    env_idx = int(elapsed * 50.0)
-                    if 0 <= env_idx < len(mouth_env_50hz):
-                        jaw_open_pct = float(mouth_env_50hz[env_idx])
-                elif jaw_mode == "nod" and sway_offset > 0.4:
-                    jaw_open_pct = 12.0
+                if jaw_block:
+                    jaw_mode = jaw_block["jaw_mode"]
+                    jaw_open_pct = 0.0
+                    if jaw_mode == "singing":
+                        env_idx = int(elapsed * 50.0)
+                        if 0 <= env_idx < len(mouth_env_50hz):
+                            jaw_open_pct = float(mouth_env_50hz[env_idx])
+                    elif jaw_mode == "nod":
+                        jaw_open_pct = 12.0 if sway_offset > 0.4 else 0.0
+                    elif jaw_mode == "closed":
+                        jaw_open_pct = 0.0
+                    else:
+                        raise ValueError(f"Fail-Fast Error: Unknown jaw_mode '{jaw_mode}' in s6_jaw block")
 
-                jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
-                smooth_posture_rom["gripper"] = jaw_open_pct
-                self.current_vocal_power = jaw_open_pct
+                    jaw_open_pct = max(0.0, min(45.0, jaw_open_pct))
+                    smooth_posture_rom["gripper"] = jaw_open_pct
+                    self.current_vocal_power = jaw_open_pct
 
                 # Dispatch atomic frame to backend
                 if hasattr(self.backend, "dispatch_dance_frame"):
@@ -424,7 +456,7 @@ class ChoreographyPlayer:
             # Return home neutral
             if hasattr(self.backend, "dispatch_dance_frame"):
                 try:
-                    choreo_poses = self.choreo.get("poses") or load_dance_presets()
+                    choreo_poses = self.choreo["poses"]
                     home_rom = {
                         "shoulder_pan": float(choreo_poses["stand"]["shoulder_pan"]),
                         "shoulder_lift": float(choreo_poses["stand"]["shoulder_lift"]),
@@ -434,8 +466,8 @@ class ChoreographyPlayer:
                         "gripper": 0.0,
                     }
                     self.backend.dispatch_dance_frame(home_rom, s7_rom=50.0, s8_goal=50.0, s8_is_rom=True, s8_speed=500)
-                except Exception:
-                    pass
+                except Exception as ex:
+                    logger.warning(f"Home neutral frame dispatch failed: {ex}")
 
             if self.on_finish_callback:
                 self.on_finish_callback()

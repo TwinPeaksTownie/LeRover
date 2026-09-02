@@ -440,7 +440,7 @@ Provide your adversarial audit:"""
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.2
     }
 
@@ -451,10 +451,12 @@ Provide your adversarial audit:"""
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=90) as res:
+        with urllib.request.urlopen(req, timeout=120) as res:
             data = json.loads(res.read())
             content = data["choices"][0]["message"].get("content", "")
             reasoning = data["choices"][0]["message"].get("reasoning_content", "")
+            if not content and reasoning:
+                content = reasoning
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         _log_debug(f"LM Studio HTTP {e.code}: {err_body}")
@@ -472,11 +474,15 @@ Provide your adversarial audit:"""
         }
 
     verdict_text = content.strip()
-    is_approved = "[APPROVED]" in verdict_text.upper()
-    is_rejected = "[REJECTED]" in verdict_text.upper()
-    is_blocker = "[BLOCKER]" in verdict_text.upper()
-
-    verdict_str = "APPROVED" if is_approved else ("REJECTED" if is_rejected else ("BLOCKER" if is_blocker else "REVIEW_COMPLETED"))
+    # Robust verdict extraction matching ### VERDICT block with or without brackets
+    verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', verdict_text, re.IGNORECASE)
+    if verdict_match:
+        verdict_str = verdict_match.group(1).upper()
+    else:
+        is_rejected = "[REJECTED]" in verdict_text.upper() or "VERDICT: REJECTED" in verdict_text.upper()
+        is_blocker = "[BLOCKER]" in verdict_text.upper() or "VERDICT: BLOCKER" in verdict_text.upper()
+        is_approved = "[APPROVED]" in verdict_text.upper() or "VERDICT: APPROVED" in verdict_text.upper()
+        verdict_str = "APPROVED" if is_approved else ("REJECTED" if is_rejected else ("BLOCKER" if is_blocker else "REVIEW_COMPLETED"))
     spoken_text = extract_spoken_summary(verdict_text, verdict_str, contract_res, task_summary)
 
     spoken_status = "not_spoken"
