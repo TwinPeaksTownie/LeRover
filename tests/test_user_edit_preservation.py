@@ -30,6 +30,8 @@ class TestUserEditPreservation(unittest.TestCase):
             ],
             "drops": [],
             "held_notes": [],
+            "downbeats": [0.0, 2.0, 4.0, 6.0, 8.0],
+            "amplitude_envelope_50hz": [0.5] * 500,
             "mouth_envelope_50hz": [0.0] * 500,
         }
 

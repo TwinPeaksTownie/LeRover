@@ -27,6 +27,9 @@ class TestChoreographyCompiler(unittest.TestCase):
                 {"start_sec": 10.0, "end_sec": 25.0, "type": "verse", "energy_score": 0.65},
                 {"start_sec": 25.0, "end_sec": 45.0, "type": "chorus", "energy_score": 0.9},
             ],
+            "downbeats": [0.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0],
+            "amplitude_envelope_50hz": [0.5] * int(45.0 * 50),
+            "mouth_envelope_50hz": [0.0] * int(45.0 * 50),
             "drops": [{"drop_sec": 25.0}],
             "held_notes": [{"start_sec": 18.0, "end_sec": 22.0}],
             "lyrics": [

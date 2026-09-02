@@ -1590,9 +1590,19 @@ class RobotBackend:
         goal_ticks = {}
         for mname in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]:
             if mname in rom_posture:
-                m_obj = arm_calib.get(mname, {})
-                r_min = int(getattr(m_obj, "range_min", m_obj.get("range_min", 0) if isinstance(m_obj, dict) else 0))
-                r_max = int(getattr(m_obj, "range_max", m_obj.get("range_max", 4095) if isinstance(m_obj, dict) else 4095))
+                if mname not in arm_calib:
+                    raise KeyError(f"Fail-Fast Error: Calibration missing for arm motor '{mname}'")
+                m_obj = arm_calib[mname]
+                if isinstance(m_obj, dict):
+                    if "range_min" not in m_obj or "range_max" not in m_obj:
+                        raise KeyError(f"Fail-Fast Error: 'range_min' or 'range_max' missing in calibration for '{mname}'")
+                    r_min = int(m_obj["range_min"])
+                    r_max = int(m_obj["range_max"])
+                else:
+                    if not hasattr(m_obj, "range_min") or not hasattr(m_obj, "range_max"):
+                        raise KeyError(f"Fail-Fast Error: 'range_min' or 'range_max' attribute missing on calibration object for '{mname}'")
+                    r_min = int(m_obj.range_min)
+                    r_max = int(m_obj.range_max)
                 clamped_rom = max(0.0, min(100.0, float(rom_posture[mname])))
                 ticks = int(round(r_min + (clamped_rom / 100.0) * (r_max - r_min)))
                 goal_ticks[mname] = ticks
@@ -1600,11 +1610,14 @@ class RobotBackend:
         s7_ticks = None
         if s7_rom is not None:
             aux_calib = getattr(self, "aux_calibration", {})
-            if "7" in aux_calib:
-                s7_min = int(aux_calib["7"].get("min_ticks", 0))
-                s7_max = int(aux_calib["7"].get("max_ticks", 4095))
-                clamped_s7 = max(0.0, min(100.0, float(s7_rom)))
-                s7_ticks = int(round(s7_min + (clamped_s7 / 100.0) * (s7_max - s7_min)))
+            if "7" not in aux_calib:
+                raise KeyError("Fail-Fast Error: Auxiliary calibration missing for Servo 7")
+            if "min_ticks" not in aux_calib["7"] or "max_ticks" not in aux_calib["7"]:
+                raise KeyError("Fail-Fast Error: 'min_ticks' or 'max_ticks' missing for Servo 7 in aux_calibration")
+            s7_min = int(aux_calib["7"]["min_ticks"])
+            s7_max = int(aux_calib["7"]["max_ticks"])
+            clamped_s7 = max(0.0, min(100.0, float(s7_rom)))
+            s7_ticks = int(round(s7_min + (clamped_s7 / 100.0) * (s7_max - s7_min)))
 
         s8_ticks = None
         if s8_goal is not None:

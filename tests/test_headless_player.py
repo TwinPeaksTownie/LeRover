@@ -42,6 +42,7 @@ class TestHeadlessPlayer(unittest.TestCase):
             "duration": 6.0,
             "bpm": 120.0,
             "beat_times": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5],
+            "downbeats": [0.0, 2.0, 4.0],
             "lyrics": [
                 {"id": "ly_001", "name": "Vocal 1", "text": "Hello world", "start_sec": 1.0, "end_sec": 3.0, "type": "lyric"}
             ],
@@ -50,6 +51,7 @@ class TestHeadlessPlayer(unittest.TestCase):
             ],
             "drops": [{"drop_sec": 2.5}],
             "held_notes": [{"start_sec": 1.5, "end_sec": 2.5}],
+            "amplitude_envelope_50hz": [0.5] * 300,
             "mouth_envelope_50hz": [0.0] * 50 + [35.0] * 100 + [0.0] * 150,
         }
         self.compiled_choreo = compile_choreography_tracks(self.mock_analysis, duration=6.0)
@@ -252,6 +254,47 @@ class TestHeadlessPlayer(unittest.TestCase):
 
         self.assertGreater(flex_var, 0.5, f"Servo 4 (wrist_flex) lack of bounce variance: {flex_var}")
         self.assertGreater(roll_var, 0.3, f"Servo 5 (wrist_roll) lack of bounce variance: {roll_var}")
+
+    def test_hip_sway_bounce_modulation(self):
+        """Verifies that hip_sway bounce target produces symmetric shoulder_pan oscillation."""
+        choreo = dict(self.compiled_choreo)
+        for b in choreo["tracks"]["spine_gaze"]:
+            b["bounce_modifier"] = {"enabled": True, "intensity": 0.40, "target": "hip_sway"}
+
+        backend = MockRobotBackend()
+        player = ChoreographyPlayer(
+            backend=backend,
+            choreography=choreo,
+            analysis=self.mock_analysis,
+            start_sec=0.0,
+            end_sec=2.0,
+            loop=False,
+        )
+
+        player.start()
+        time.sleep(1.2)
+        player.stop()
+
+        self.assertGreater(len(backend.dispatched_frames), 20)
+        pan_vals = [f["rom_posture"]["shoulder_pan"] for f in backend.dispatched_frames]
+        pan_var = max(pan_vals) - min(pan_vals)
+        self.assertGreater(pan_var, 0.5, f"Servo 1 (shoulder_pan) lack of hip sway variance: {pan_var}")
+
+    def test_max_rom_schema_validation(self):
+        """Verifies that missing max_rom sub-keys in probabilities raises KeyError."""
+        from choreography_compiler import validate_probabilities_schema
+        malformed_probs = {
+            "pedestal_s7": {"vocal_start_shift_probability": 0.3, "target_rom": {"shift_left": 42.0, "shift_right": 58.0, "center": 50.0}, "transition_beats": {"vocal_shift": 1.0, "return_center": 2.0, "hold": 1.0}},
+            "gantry_s8": {"non_drop_move_probability": 0.65, "move_type_probabilities": {"full_glide": 0.4, "early_step": 0.3, "late_step": 0.3}, "drop_targets_rom": [85.0, 15.0], "normal_targets_rom_left": [15.0, 40.0], "normal_targets_rom_right": [60.0, 85.0], "speeds": {"drop_glide": 700, "drop_hold": 600, "hold": 250, "min_glide": 350, "max_glide": 700}},
+            "torso_s1": {"audience_counter_probability": 0.8},
+            "head_tilt_s5": {"center_probability": 0.7, "snap_pulse_probability": 0.2, "continuous_roll_probability": 0.1, "snap_pulse_left_rom": 42.0, "snap_pulse_right_rom": 58.0, "snap_pulse_duration_sec": 0.8, "continuous_roll_amplitude_rom": 8.0, "continuous_roll_freq_hz": 1.0, "center_rom": 50.0},
+            "neck_pitch_s4": {"up_probability": 0.15, "down_probability": 0.05, "level_probability": 0.8, "pitch_up_rom": 50.0, "pitch_down_rom": 85.0, "pitch_level_rom": 70.0},
+            "spine_gaze": {"max_climax_arches": 2, "min_separation_bars": 4},
+            "bounce_modifier": {"default_intensity": 0.12, "targets": ["hip_sway", "body_bounce", "head_bob"]},  # Missing max_rom
+        }
+        with self.assertRaises(KeyError) as ctx:
+            validate_probabilities_schema(malformed_probs)
+        self.assertIn("max_rom", str(ctx.exception))
 
 
 if __name__ == "__main__":

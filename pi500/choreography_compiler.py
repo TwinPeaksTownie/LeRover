@@ -168,6 +168,14 @@ def validate_probabilities_schema(data: Dict[str, Any], source_desc: str = "prob
     _ = float(bounce["default_intensity"])
     if "targets" not in bounce or not isinstance(bounce["targets"], list):
         raise KeyError(f"Fail-Fast Schema Error: Mandatory 'targets' list missing in bounce_modifier section of {source_desc}")
+    if "max_rom" not in bounce or not isinstance(bounce["max_rom"], dict):
+        raise KeyError(f"Fail-Fast Schema Error: Mandatory 'max_rom' dict missing in bounce_modifier section of {source_desc}")
+    max_rom = bounce["max_rom"]
+    _ = float(max_rom["hip_sway"])
+    _ = float(max_rom["body_bounce_lift"])
+    _ = float(max_rom["body_bounce_elbow_ratio"])
+    _ = float(max_rom["head_bob_pitch"])
+    _ = float(max_rom["head_tilt_roll"])
 
     return data
 

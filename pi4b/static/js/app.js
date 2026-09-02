@@ -1854,7 +1854,7 @@ function bindEventListeners() {
             head_tilt_s5: { center_probability: 0.70, snap_pulse_probability: 0.20, continuous_roll_probability: 0.10, snap_pulse_left_rom: 42.0, snap_pulse_right_rom: 58.0, snap_pulse_duration_sec: 0.8, continuous_roll_amplitude_rom: 8.0, continuous_roll_freq_hz: 1.0, center_rom: 50.0 },
             neck_pitch_s4: { up_probability: 0.15, down_probability: 0.05, level_probability: 0.80, pitch_up_rom: 50.0, pitch_down_rom: 85.0, pitch_level_rom: 70.0 },
             spine_gaze: { max_climax_arches: 2, min_separation_bars: 4 },
-            bounce_modifier: { default_intensity: 0.12, targets: ["hip_sway", "body_bounce", "head_bob"] }
+            bounce_modifier: { default_intensity: 0.12, targets: ["hip_sway", "body_bounce", "head_bob"], max_rom: { hip_sway: 15.0, body_bounce_lift: 12.0, body_bounce_elbow_ratio: 1.15, head_bob_pitch: 10.0, head_tilt_roll: 6.0 } }
         });
         ui.renderSettingsView();
     });

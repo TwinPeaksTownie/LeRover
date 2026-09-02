@@ -33,6 +33,8 @@ class TestSynchronizedStop(unittest.TestCase):
             "sections": [{"start_sec": 0.0, "end_sec": 5.0, "type": "verse", "energy_score": 0.5}],
             "drops": [],
             "held_notes": [],
+            "downbeats": [0.0, 2.0, 4.0],
+            "amplitude_envelope_50hz": [0.5] * 250,
             "mouth_envelope_50hz": [0.0] * 250,
         }
 

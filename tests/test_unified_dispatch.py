@@ -72,6 +72,14 @@ class TestUnifiedDispatch(unittest.TestCase):
         self.backend.ctrl.write_goal_raw.assert_called_once_with(7, 2000, speed=800)
         self.backend.move_target.assert_called_once_with(8, 2500, speed=500, max_t=800)
 
+    def test_dispatch_dance_frame_fail_fast_missing_calibration(self):
+        """Tests that dispatch_dance_frame raises KeyError when arm calibration is missing."""
+        self.backend.arm_calibration = {}
+        rom_frame = {"shoulder_pan": 50.0}
+        with self.assertRaises(KeyError) as ctx:
+            self.backend.dispatch_dance_frame(rom_frame)
+        self.assertIn("Fail-Fast Error", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

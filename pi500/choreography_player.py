@@ -16,12 +16,12 @@ from typing import Dict, Any, Optional, List, Callable
 import numpy as np
 
 try:
-    from choreography_compiler import ROM_POSES, load_dance_presets
+    from choreography_compiler import ROM_POSES, load_dance_presets, load_choreography_probabilities
 except ImportError:
     import os
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from choreography_compiler import ROM_POSES, load_dance_presets
+    from choreography_compiler import ROM_POSES, load_dance_presets, load_choreography_probabilities
 
 logger = logging.getLogger("so101.choreography_player")
 
@@ -119,6 +119,32 @@ class ChoreographyPlayer:
             mouth_env_50hz = self.analysis.get("mouth_envelope_50hz", [])
 
             choreo_poses = self.choreo.get("poses") or load_dance_presets()
+            choreo_probs = self.choreo.get("probabilities")
+            if choreo_probs is None:
+                choreo_probs = load_choreography_probabilities()
+            if "bounce_modifier" not in choreo_probs:
+                raise KeyError("Fail-Fast Error: 'bounce_modifier' section missing in choreography probabilities")
+            bounce_cfg = choreo_probs["bounce_modifier"]
+            if "max_rom" not in bounce_cfg:
+                raise KeyError("Fail-Fast Error: 'max_rom' dict missing in bounce_modifier section")
+            max_rom = bounce_cfg["max_rom"]
+            if "hip_sway" not in max_rom:
+                raise KeyError("Fail-Fast Error: 'hip_sway' missing in bounce_modifier.max_rom")
+            if "body_bounce_lift" not in max_rom:
+                raise KeyError("Fail-Fast Error: 'body_bounce_lift' missing in bounce_modifier.max_rom")
+            if "body_bounce_elbow_ratio" not in max_rom:
+                raise KeyError("Fail-Fast Error: 'body_bounce_elbow_ratio' missing in bounce_modifier.max_rom")
+            if "head_bob_pitch" not in max_rom:
+                raise KeyError("Fail-Fast Error: 'head_bob_pitch' missing in bounce_modifier.max_rom")
+            if "head_tilt_roll" not in max_rom:
+                raise KeyError("Fail-Fast Error: 'head_tilt_roll' missing in bounce_modifier.max_rom")
+
+            max_hip_sway = float(max_rom["hip_sway"])
+            max_body_lift = float(max_rom["body_bounce_lift"])
+            elbow_ratio = float(max_rom["body_bounce_elbow_ratio"])
+            max_pitch = float(max_rom["head_bob_pitch"])
+            max_tilt = float(max_rom["head_tilt_roll"])
+
             base_home_rom = {
                 "shoulder_pan": float(choreo_poses["stand"]["shoulder_pan"]),
                 "shoulder_lift": float(choreo_poses["stand"]["shoulder_lift"]),
@@ -180,14 +206,18 @@ class ChoreographyPlayer:
                 beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
                 self.current_beat_idx = beat_idx
 
-                # Continuous rhythmic sway
+                # Continuous rhythmic sway & single-beat vertical harmonic bounce
                 if beat_idx < len(beat_times) - 1:
                     b_cur = beat_times[beat_idx]
                     b_nxt = beat_times[beat_idx + 1]
                     b_frac = (elapsed - b_cur) / max(0.05, b_nxt - b_cur)
+                    # 2-beat sinusoidal cycle: sway_offset in [-1.0, 1.0]
                     sway_offset = math.sin((beat_idx % 2 + b_frac) * math.pi)
+                    # 1-beat symmetric vertical harmonic cycle: in [-1.0, 1.0]
+                    beat_bounce_cycle = math.sin(b_frac * 2.0 * math.pi)
                 else:
                     sway_offset = 0.0
+                    beat_bounce_cycle = 0.0
 
                 # 1. Tracks 2-4: Spine & Pitch (Servos 2, 3, 4)
                 spine_block = next((b for b in spine_track if b["start_sec"] <= elapsed < b["end_sec"]), None)
@@ -211,14 +241,14 @@ class ChoreographyPlayer:
                         b_int = float(bmod["intensity"])
                         btarget = str(bmod["target"])
                         if btarget == "hip_sway":
-                            hip_sway_rom = b_int * 15.0 * sway_offset
+                            hip_sway_rom = b_int * max_hip_sway * sway_offset
                         elif btarget == "body_bounce":
-                            body_bounce_rom = b_int * 15.0 * abs(sway_offset)
-                            head_bob_rom = b_int * 8.0 * max(0.0, sway_offset)
-                            head_tilt_bounce_rom = b_int * 6.0 * sway_offset
+                            body_bounce_rom = b_int * max_body_lift * beat_bounce_cycle
+                            head_bob_rom = b_int * (max_pitch * 0.5) * beat_bounce_cycle
+                            head_tilt_bounce_rom = b_int * (max_tilt * 0.5) * sway_offset
                         elif btarget == "head_bob":
-                            head_bob_rom = b_int * 18.0 * max(0.0, sway_offset)
-                            head_tilt_bounce_rom = b_int * 10.0 * sway_offset
+                            head_bob_rom = b_int * max_pitch * beat_bounce_cycle
+                            head_tilt_bounce_rom = b_int * max_tilt * sway_offset
                         else:
                             raise ValueError(f"Unsupported bounce target: {btarget}")
 
@@ -255,9 +285,13 @@ class ChoreographyPlayer:
                     trans_sec = float(spine_block["transition_sec"])
                     alpha = min(1.0, max(0.04, 0.020 / max(0.1, trans_sec)))
 
-                    smooth_posture_rom["shoulder_lift"] += alpha * ((target_lift + body_bounce_rom) - smooth_posture_rom["shoulder_lift"])
-                    smooth_posture_rom["elbow_flex"] += alpha * ((target_elbow - (body_bounce_rom * 0.6)) - smooth_posture_rom["elbow_flex"])
-                    smooth_posture_rom["wrist_flex"] += alpha * ((target_pitch + head_bob_rom) - smooth_posture_rom["wrist_flex"])
+                    target_lift_final = max(0.0, min(100.0, target_lift + body_bounce_rom))
+                    target_elbow_final = max(0.0, min(100.0, target_elbow - (body_bounce_rom * elbow_ratio)))
+                    target_pitch_final = max(0.0, min(100.0, target_pitch + head_bob_rom))
+
+                    smooth_posture_rom["shoulder_lift"] += alpha * (target_lift_final - smooth_posture_rom["shoulder_lift"])
+                    smooth_posture_rom["elbow_flex"] += alpha * (target_elbow_final - smooth_posture_rom["elbow_flex"])
+                    smooth_posture_rom["wrist_flex"] += alpha * (target_pitch_final - smooth_posture_rom["wrist_flex"])
                     smooth_posture_rom["shoulder_lift"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_lift"]))
                     smooth_posture_rom["elbow_flex"] = max(0.0, min(100.0, smooth_posture_rom["elbow_flex"]))
                     smooth_posture_rom["wrist_flex"] = max(0.0, min(100.0, smooth_posture_rom["wrist_flex"]))
@@ -325,8 +359,8 @@ class ChoreographyPlayer:
                 else:
                     target_roll = 50.0
 
-                # Combine macro tilt with sinusoidal bounce micro-offset and safety clamp
-                target_roll_final = max(0.0, min(100.0, target_roll + head_tilt_bounce_rom))
+                # Combine macro tilt with sinusoidal bounce micro-offset and safety clamp within calibrated range [35.0, 65.0]
+                target_roll_final = max(35.0, min(65.0, target_roll + head_tilt_bounce_rom))
                 smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll_final - smooth_posture_rom["wrist_roll"])
                 smooth_posture_rom["wrist_roll"] = max(0.0, min(100.0, smooth_posture_rom["wrist_roll"]))
 
