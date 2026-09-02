@@ -43,5 +43,11 @@ for tid, track in manifest.items():
 with open(m_path, "w", encoding="utf-8") as f:
     json.dump(manifest, f, indent=2)
 
+pi4b_manifest = base_dir / "pi4b" / "beat_bandit_manifest.json"
+if pi4b_manifest.exists():
+    with open(pi4b_manifest, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"Synchronized copy to {pi4b_manifest}")
+
 print(f"Successfully recompiled {count} tracks to Version {CHOREO_SCHEMA_VERSION} at {m_path}!")
 
