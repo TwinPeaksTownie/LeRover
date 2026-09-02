@@ -850,8 +850,14 @@ export function updateTelemetryUI(data) {
             }
         }
 
-        if (dir && activeTelem) dir.innerText = (activeTelem.x_direction || 'CENTER').toUpperCase();
-        if (joy && activeTelem) joy.innerText = `x_val=${activeTelem.x_val !== undefined ? activeTelem.x_val : 7}, y_val=${activeTelem.y_val !== undefined ? activeTelem.y_val : 118}`;
+        if (dir && activeTelem) dir.innerText = (activeTelem.x_direction ? activeTelem.x_direction.toUpperCase() : '--');
+        if (joy && activeTelem) {
+            if (activeTelem.norm_x !== undefined && activeTelem.norm_y !== undefined) {
+                joy.innerText = `X: ${activeTelem.norm_x.toFixed(2)}, Y: ${activeTelem.norm_y.toFixed(2)}`;
+            } else {
+                joy.innerText = '--';
+            }
+        }
         if (rawHex && activeTelem) rawHex.innerText = activeTelem.raw_hex || '--';
         if (pkt && activeTelem) pkt.innerText = activeTelem.packet_count || 0;
         

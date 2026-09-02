@@ -258,6 +258,17 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
                 "snippet": code_line,
                 "reason": "Forbidden speculative chained fallback lookups ('.get(...) or ...'). Must enforce canonical request schema."
             })
+        elif current_file.lower().endswith(".js") and (
+            re.search(r'(telem|activeTelem|data|packet|telemetry)\.\w+\s*(!==|!=)\s*undefined\s*\?\s*[^:]+:\s*\d+', code_line) or
+            re.search(r'(telem|activeTelem|data|packet|telemetry)\.\w+\s*\?\?\s*\d+', code_line)
+        ):
+            violations.append({
+                "rule": "JS_TELEMETRY_DUMMY_FALLBACK",
+                "file": current_file,
+                "line": line_idx,
+                "snippet": code_line,
+                "reason": "Forbidden dummy fallback number on live telemetry in JavaScript. Must render actual live state or neutral placeholder ('--')."
+            })
 
         # 2. NO HARDCODED 2048 / 0x800 NEUTRAL
         if re.search(r'\b(2048|0x800)\b', code_line) and not current_file.lower().endswith((".md", ".json")):

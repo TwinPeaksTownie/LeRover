@@ -383,6 +383,8 @@ class PokeballApp(BaseApp):
                 "raw_hex": data.hex(' '),
                 "raw_bytes": list(data),
                 "data_len": len(data),
+                "raw_x": raw_x_12,
+                "raw_y": raw_y_12,
                 "norm_x": norm_x,
                 "norm_y": norm_y,
                 "x_direction": x_direction,
