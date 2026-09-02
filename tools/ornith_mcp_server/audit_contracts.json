@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "description": "Ornith Supervisor Code & Hardware Contracts Registry",
+  "contracts": [
+    {
+      "id": "FAIL_FAST_NO_FALLBACK",
+      "severity": "VIOLATION",
+      "engine": "python_ast",
+      "file_patterns": ["*.py"],
+      "description": "Zero tolerance for silent fallbacks (.get(key, default), .setdefault(key, default), .pop(key, default), getattr(obj, attr, default), or ternary d[k] if k in d else default). Code must fail fast with direct key indexing or raise KeyError."
+    },
+    {
+      "id": "JS_NO_DUMMY_FALLBACK",
+      "severity": "VIOLATION",
+      "engine": "js_structural",
+      "file_patterns": ["*.js", "*.html"],
+      "description": "Forbidden dummy fallback literals on telemetry, joystick coordinates, or motor state in JavaScript and HTML (<script> blocks). Nullish coalescing (?? <literal>), logical OR (|| <literal>), ternary defaults, or destructuring defaults on state are banned."
+    },
+    {
+      "id": "NO_HARDCODED_NEUTRAL",
+      "severity": "VIOLATION",
+      "engine": "pattern",
+      "file_patterns": ["*.py", "*.js"],
+      "description": "Hardcoded 2048 or 0x800 neutral ticks are prohibited. Servos 1-6 bounds and homing offsets must load dynamically from follower.json; Servos 7-8 from calibration_aux.json."
+    },
+    {
+      "id": "NO_SWALLOWED_EXCEPTIONS",
+      "severity": "VIOLATION",
+      "engine": "python_ast",
+      "file_patterns": ["*.py"],
+      "description": "Swallowed exceptions (except: pass, except: ...) are prohibited. Must raise descriptive exceptions or log explicit tracebacks."
+    },
+    {
+      "id": "NO_SAFETY_SLOP_MULTIPLIERS",
+      "severity": "VIOLATION",
+      "engine": "pattern",
+      "file_patterns": ["*.py"],
+      "description": "Forbidden hardcoded motion scaling factors (* 0.5, * 0.8) or artificial sub-range cages on joint kinematics. Rom and modifier intensities must load from JSON configuration."
+    },
+    {
+      "id": "DEPLOYMENT_PARITY",
+      "severity": "VIOLATION",
+      "engine": "deployment_md5",
+      "file_patterns": ["pi500/**", "pi4b/**"],
+      "description": "Modified hardware or UI code must be synced to physical target devices (Pi 500 @ 192.168.0.130 or Pi 4B @ 192.168.0.86) and MD5-verified before approval."
+    }
+  ]
+}

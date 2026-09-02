@@ -235,3 +235,41 @@ def query_daemon_logs(
         "detected_errors": detected_errors,
         "log_snippet": "\n".join(log_text.splitlines()[-20:])
     }
+
+def check_target_deployments(files: list, repo_path: str = None) -> dict:
+    """
+    Given a list of modified files, verifies that hardware-target files
+    (under pi500/ or pi4b/) match their remote deployed MD5 checksums.
+    """
+    if repo_path is None:
+        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+
+    deployments = []
+    has_mismatch = False
+
+    for rel_path in files:
+        norm_path = rel_path.replace("\\", "/").strip()
+        if norm_path.startswith("pi500/"):
+            target_node = "pi500"
+            remote_path = f"/home/user/so101/{norm_path}"
+            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
+            deployments.append(v_res)
+            if not v_res.get("match", False):
+                has_mismatch = True
+        elif norm_path.startswith("pi4b/"):
+            target_node = "pi4b"
+            remote_rel = norm_path[5:]
+            remote_path = f"/home/carson/touch_ui/{remote_rel}"
+            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
+            deployments.append(v_res)
+            if not v_res.get("match", False):
+                has_mismatch = True
+
+    return {
+        "status": "success",
+        "checked_files": len(deployments),
+        "has_mismatch": has_mismatch,
+        "all_verified": (len(deployments) == 0 or not has_mismatch),
+        "deployments": deployments
+    }
+

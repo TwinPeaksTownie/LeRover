@@ -88,6 +88,58 @@ I am rejecting Antigravity's implementation for violating Rule 9: Fail-Fast Sche
     assert read_res.get("status") == "success", f"Read workspace file failed: {read_res}"
     print(f"  [PASS] Read AGENTS.md lines 1-10 successfully ({read_res.get('total_lines')} total lines).")
 
+    # Test 1.6: Insidious Evasion Pattern Detection
+    print("\nTesting Insidious Evasion Pattern Detection...")
+    import contract_scanner
+
+    # Evasion 1: Python alternative fallbacks (setdefault, pop, getattr, ternary, or)
+    py_evasion = """
+def sneaky_handler(data, obj):
+    mode = data.setdefault("mode", "default")
+    speed = data.pop("speed", 500)
+    limit = getattr(obj, "limit", 100)
+    x = data["x"] if "x" in data else 7
+    y = data["y"] or 118
+"""
+    py_violations = contract_scanner.scan_python_code(py_evasion, "sneaky.py")
+    print(f"  Python evasion violations found: {len(py_violations)}")
+    for v in py_violations:
+        print(f"    - [{v.get('rule')}] Line {v.get('line')}: {v.get('reason')}")
+    assert len(py_violations) == 5, f"Expected 5 Python evasion violations, got {len(py_violations)}"
+    print("  [PASS] All 5 sneaky Python fallback evasions detected.")
+
+    # Evasion 2: JavaScript alternative fallbacks (ternary, ??, ||, destructuring)
+    js_evasion = """
+const joyX = activeTelem.x_val !== undefined ? activeTelem.x_val : 7;
+const joyY = stick.y ?? 118;
+const fallbackVal = state.data || 50;
+const { target = 2048 } = packet;
+"""
+    js_violations = contract_scanner.scan_javascript_code(js_evasion, "sneaky.js")
+    print(f"  JavaScript evasion violations found: {len(js_violations)}")
+    for v in js_violations:
+        print(f"    - [{v.get('rule')}] Line {v.get('line')}: {v.get('reason')}")
+    assert len(js_violations) >= 4, f"Expected >= 4 JS evasion violations, got {len(js_violations)}"
+    print("  [PASS] All JavaScript frontend dummy fallback evasions detected.")
+
+    # Evasion 3: HTML embedded <script> tags
+    html_evasion = """
+<html><body><script>
+let x = telem.raw_x || 7;
+let y = telem.raw_y ?? 118;
+</script></body></html>
+"""
+    html_violations = contract_scanner.scan_html_code(html_evasion, "index.html")
+    print(f"  HTML script evasion violations found: {len(html_violations)}")
+    assert len(html_violations) == 2, f"Expected 2 HTML script violations, got {len(html_violations)}"
+    print("  [PASS] HTML embedded <script> fallback evasions detected.")
+
+    # Evasion 4: Declarative Contracts Registry loading
+    contracts = contract_scanner.load_contracts()
+    print(f"  Loaded active contracts from JSON registry: {len(contracts)}")
+    assert len(contracts) >= 6, f"Expected >= 6 contracts loaded, got {len(contracts)}"
+    print("  [PASS] Declarative contract registry loaded successfully.")
+
 def test_hardware():
     print("\n--- 2. Testing tools_hardware.py ---")
     
@@ -109,6 +161,23 @@ def test_hardware():
     telem_res = tools_hardware.sample_motor_telemetry("pi500")
     print(f"  Status: {telem_res.get('status')} | Source: {telem_res.get('source')}")
     assert telem_res.get("status") == "success", "Telemetry check failed"
+
+    # Test 2.4: Target Deployment Parity Checks
+    print("Testing target deployment parity checks...")
+    dep_res = tools_hardware.check_target_deployments([
+        "pi4b/static/js/ui.js",
+        "pi500/pokeball_app.py"
+    ])
+    print(f"  Status: {dep_res.get('status')} | Checked: {dep_res.get('checked_files')} | All verified: {dep_res.get('all_verified')}")
+    assert dep_res.get("status") == "success" and dep_res.get("all_verified"), "Production files deployment parity failed"
+    print("  [PASS] Deployed files on Pi 4B and Pi 500 match local MD5.")
+
+    mismatch_res = tools_hardware.check_target_deployments([
+        "pi500/nonexistent_dummy_file.py"
+    ])
+    assert mismatch_res.get("has_mismatch"), "Missing remote file should flag mismatch"
+    print("  [PASS] Un-deployed remote file correctly flagged as deployment mismatch.")
+
 
 def test_speech():
     print("\n--- 3. Testing tools_speech.py ---")

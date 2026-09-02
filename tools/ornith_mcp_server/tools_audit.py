@@ -15,6 +15,8 @@ import sys
 import urllib.request
 import urllib.error
 import tools_speech
+import tools_hardware
+import contract_scanner
 
 DEFAULT_LM_STUDIO_URL = os.environ.get(
     "LM_STUDIO_URL",
@@ -199,152 +201,100 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"Failed to get git diff: {str(e)}"}
 
-def scan_code_contracts(diff_text: str = "", repo_path: str = None) -> dict:
+def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deployments: bool = True) -> dict:
     if repo_path is None:
         repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
 
-    if not diff_text:
-        diff_res = get_git_diff(repo_path)
-        if diff_res.get("status") != "success":
-            return diff_res
+    diff_res = get_git_diff(repo_path)
+    if not diff_text and diff_res.get("status") == "success":
         diff_text = diff_res.get("diff", "")
 
-    if not diff_text.strip():
-        return {
-            "status": "success",
-            "clean": True,
-            "violations": [],
-            "warnings": [],
-            "audit_summary": "No changes detected in repository diff."
-        }
+    modified_files = diff_res.get("modified_files", []) if isinstance(diff_res, dict) else []
+    untracked_files = diff_res.get("untracked_files", []) if isinstance(diff_res, dict) else []
+    all_changed_files = list(dict.fromkeys(modified_files + untracked_files))
 
     violations = []
     warnings = []
-    current_file = "unknown"
-    lines = diff_text.splitlines()
-    prev_except_line = None
-    
-    for line_idx, line in enumerate(lines, 1):
-        if line.startswith("+++ b/"):
-            current_file = line[6:].strip()
-            prev_except_line = None
-            continue
-        elif line.startswith("+++ "):
-            current_file = line[4:].strip()
-            prev_except_line = None
-            continue
 
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
+    # 1. If diff_text is provided (e.g. in unit tests or simulated audits), scan its contents
+    if diff_text.strip():
+        current_file = "unknown"
+        chunk_lines = []
+        for line in diff_text.splitlines():
+            if line.startswith("+++ b/"):
+                current_file = line[6:].strip()
+                continue
+            elif line.startswith("+++ "):
+                current_file = line[4:].strip()
+                continue
+            if line.startswith("+") and not line.startswith("+++"):
+                code_line = line[1:]
+                chunk_lines.append((current_file, code_line))
 
-        code_line = line[1:].strip()
-        if code_line.startswith("#") or code_line.startswith("//"):
-            continue
+        files_map = {}
+        for f, l in chunk_lines:
+            files_map.setdefault(f, []).append(l)
 
-        # 1. FAIL-FAST SCHEMA: Ban ALL .get(key, default) and chained fallback lookups
-        if re.search(r'\.get\s*\(\s*["\'][^"\']+["\']\s*,\s*[^)]+\)', code_line):
-            violations.append({
-                "rule": "FAIL_FAST_SCHEMA_FALLBACK",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": code_line,
-                "reason": "Forbidden default fallback in .get(key, default). Must enforce schema contracts with direct key indexing or raise KeyError."
-            })
-        elif re.search(r'\.get\s*\([^)]+\)\s+or\s+', code_line):
-            violations.append({
-                "rule": "FAIL_FAST_SCHEMA_FALLBACK",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": code_line,
-                "reason": "Forbidden speculative chained fallback lookups ('.get(...) or ...'). Must enforce canonical request schema."
-            })
-        elif current_file.lower().endswith(".js") and (
-            re.search(r'(telem|activeTelem|data|packet|telemetry)\.\w+\s*(!==|!=)\s*undefined\s*\?\s*[^:]+:\s*\d+', code_line) or
-            re.search(r'(telem|activeTelem|data|packet|telemetry)\.\w+\s*\?\?\s*\d+', code_line)
-        ):
-            violations.append({
-                "rule": "JS_TELEMETRY_DUMMY_FALLBACK",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": code_line,
-                "reason": "Forbidden dummy fallback number on live telemetry in JavaScript. Must render actual live state or neutral placeholder ('--')."
-            })
+        for f, lines_list in files_map.items():
+            code_block = "\n".join(lines_list)
+            lower_f = f.lower()
+            if lower_f.endswith(".py"):
+                violations.extend(contract_scanner.scan_python_code(code_block, f))
+            elif lower_f.endswith(".js"):
+                violations.extend(contract_scanner.scan_javascript_code(code_block, f))
+            elif lower_f.endswith((".html", ".htm")):
+                violations.extend(contract_scanner.scan_html_code(code_block, f))
 
-        # 2. NO HARDCODED 2048 / 0x800 NEUTRAL
-        if re.search(r'\b(2048|0x800)\b', code_line) and not current_file.lower().endswith((".md", ".json")):
-            if any(k in code_line.lower() for k in ["pos", "target", "neutral", "center", "homing", "offset", "default"]):
-                violations.append({
-                    "rule": "NO_HARDCODED_2048_NEUTRAL",
-                    "file": current_file,
-                    "line": line_idx,
-                    "snippet": code_line,
-                    "reason": "Hardcoded 2048/0x800 neutral detected. Offsets and bounds must load dynamically from follower.json or calibration_aux.json."
-                })
+    # 2. Full-file AST / Structural checks for all modified and untracked files on disk
+    for rel_file in all_changed_files:
+        full_path = os.path.join(repo_path, rel_file)
+        if os.path.isfile(full_path):
+            file_violations = contract_scanner.scan_source_file(full_path, repo_path=repo_path)
+            for fv in file_violations:
+                fv["file"] = rel_file
+                violations.append(fv)
 
-        # 3. NO SWALLOWED EXCEPTIONS
-        if re.search(r'except(\s+\w+)?:(\s*pass|\s*\.\.\.)\b', code_line):
-            violations.append({
-                "rule": "NO_SWALLOWED_EXCEPTIONS",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": code_line,
-                "reason": "Swallowed exception detected ('except: pass'). Must raise descriptive error or log explicit traceback."
-            })
-            prev_except_line = None
-        elif re.search(r'except(\s+\w+)?:', code_line):
-            prev_except_line = (line_idx, code_line)
-        elif prev_except_line and code_line in ("pass", "..."):
-            violations.append({
-                "rule": "NO_SWALLOWED_EXCEPTIONS",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": f"{prev_except_line[1]} -> {code_line}",
-                "reason": "Swallowed exception detected (multiline except -> pass). Must raise descriptive error or log explicit traceback."
-            })
-            prev_except_line = None
-        else:
-            if code_line:
-                prev_except_line = None
 
-        # 4. NO SAFETY SLOP / NEUTERING MULTIPLIERS
-        if not current_file.startswith("tests/") and not current_file.endswith(".md"):
-            if re.search(r'\*\s*0\.[1-9]\d*\b', code_line) and any(w in code_line.lower() for w in ["bob", "tilt", "pan", "bounce", "lift", "flex", "pitch", "roll", "jaw", "amp", "intensity", "scale", "mod", "target", "rom"]):
-                violations.append({
-                    "rule": "NO_SAFETY_SLOP_MULTIPLIERS",
-                    "file": current_file,
-                    "line": line_idx,
-                    "snippet": code_line,
-                    "reason": "Forbidden hardcoded motion scaling factor (neutering multiplier). Intensities must be controlled via loaded probabilities."
-                })
-            elif re.search(r'max\s*\(\s*(3[0-9]|4[0-9])\.[0-9]+\s*,\s*min\s*\(\s*(5[0-9]|6[0-9])\.[0-9]+', code_line):
-                violations.append({
-                    "rule": "NO_ARTIFICIAL_RANGE_CAGES",
-                    "file": current_file,
-                    "line": line_idx,
-                    "snippet": code_line,
-                    "reason": "Forbidden artificial sub-range cage detected. Joint ranges must span full calibrated ROM (0.0 to 100.0%)."
-                })
+    # 3. Target Node Deployment Parity Verification (Verification State 1)
+    deployment_res = None
+    if check_deployments and all_changed_files:
+        try:
+            deployment_res = tools_hardware.check_target_deployments(all_changed_files, repo_path=repo_path)
+            if deployment_res.get("has_mismatch"):
+                for dep in deployment_res.get("deployments", []):
+                    if not dep.get("match"):
+                        violations.append({
+                            "rule": "DEPLOYMENT_PARITY",
+                            "file": dep.get("local_file"),
+                            "line": 1,
+                            "snippet": f"Local MD5: {dep.get('local_md5')} | Remote MD5: {dep.get('remote_md5')}",
+                            "reason": f"Deployment mismatch on node {dep.get('node')}: {dep.get('message')}. Code must be deployed to physical device before approval."
+                        })
+        except Exception as e:
+            _log_debug(f"Deployment parity check exception: {e}")
 
-        # 5. SERIAL BUS LOCK HYGIENE
-        if "/dev/ttyACM0" in code_line and "serial.Serial" in code_line:
-            warnings.append({
-                "rule": "SERIAL_BUS_LOCK_HYGIENE",
-                "file": current_file,
-                "line": line_idx,
-                "snippet": code_line,
-                "reason": "Direct serial.Serial on /dev/ttyACM0 may collide with backend.service. Use HTTP REST telemetry or verify port isolation first."
-            })
+    # Deduplicate violations by (rule, file, line, reason)
+    deduped = []
+    seen = set()
+    for v in violations:
+        key = (v.get("rule"), v.get("file"), v.get("line"), v.get("reason"))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(v)
 
-    clean = len(violations) == 0
-    summary = f"Audit complete: {len(violations)} violations, {len(warnings)} warnings found across diff."
-    
+    clean = len(deduped) == 0
+    summary = f"Audit complete: {len(deduped)} violations, {len(warnings)} warnings found across {len(all_changed_files)} changed files."
+
     return {
         "status": "success",
         "clean": clean,
-        "violations": violations,
+        "violations": deduped,
         "warnings": warnings,
+        "changed_files": all_changed_files,
+        "deployment_status": deployment_res,
         "audit_summary": summary
     }
+
 
 def extract_spoken_summary(verdict_text: str, verdict: str, contract_res: dict = None, task_summary: str = "") -> str:
     """
@@ -404,17 +354,29 @@ def query_ornith_for_review(
         diff_text = diff_res.get("diff", "")
 
     contract_res = scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
-    
+
+    violations_detail = "\n".join(
+        f"- [{v['rule']}] {v['file']}:{v.get('line', 1)} - {v['reason']}\n  Snippet: {v.get('snippet', '')}"
+        for v in contract_res.get("violations", [])
+    ) if contract_res.get("violations") else "None. All code contracts verified."
+
+    deployment_info = "No remote target files changed."
+    if contract_res.get("deployment_status"):
+        dep = contract_res["deployment_status"]
+        deployment_info = f"Files checked: {dep.get('checked_files')}, Parity Mismatches: {dep.get('has_mismatch')}, All Verified: {dep.get('all_verified')}"
+
     system_prompt = """You are Ornith, the adversarial code reviewer and hardware supervisor for the SO-101 robotic arm and touch UI system.
 Your job is to strictly enforce the following rules:
-1. FAIL-FAST SCHEMA: Zero tolerance for .get(key, default) or 'or <default>' fallbacks anywhere in internal payloads, motion blocks, track dictionaries, modes, speeds, envelopes, or calibration. All dictionaries and motion blocks must use direct bracket access (e.g. block["speed"]) and fail-fast schema validators. Raise KeyError immediately on missing or malformed keys.
-2. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load dynamically from follower.json (servos 1-6), calibration_aux.json (servos 7-8), or manifest.json.
-3. NO SWALLOWED EXCEPTIONS: No 'except: pass' or unhandled generic catches. Raise descriptive errors or log explicit tracebacks.
-4. NO SAFETY SLOP / OVER-DAMPING: No hardcoded neutering multipliers (* 0.5, * 0.8), no artificial sub-range cages (e.g. caging head roll to 35-65%), and no low-pass filters that crush dynamic beat frequencies. Joint ranges and modifier intensities must be controlled strictly via loaded JSON probabilities and calibrated ROM.
-5. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
-6. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
+1. FAIL-FAST SCHEMA: Zero tolerance for .get(key, default), .setdefault(), .pop(k, default), getattr(obj, k, default), or 'd[k] if k in d else default' fallbacks in internal payloads, motion blocks, track dictionaries, modes, speeds, envelopes, or calibration. All dictionaries and motion blocks must use direct bracket access (e.g. block["speed"]) and fail-fast schema validators. Raise KeyError immediately on missing or malformed keys.
+2. FRONTEND & JS DUMMY FALLBACKS: Zero tolerance for ?? <literal>, || <literal>, ternary defaults, or destructuring defaults on live telemetry/state in JavaScript and HTML.
+3. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load dynamically from follower.json (servos 1-6), calibration_aux.json (servos 7-8), or manifest.json.
+4. NO SWALLOWED EXCEPTIONS: No 'except: pass', 'except: ...', or unhandled generic catches. Raise descriptive errors or log explicit tracebacks.
+5. NO SAFETY SLOP / OVER-DAMPING: No hardcoded neutering multipliers (* 0.5, * 0.8), no artificial sub-range cages (e.g. caging head roll to 35-65%), and no low-pass filters that crush dynamic beat frequencies. Joint ranges and modifier intensities must be controlled strictly via loaded JSON probabilities and calibrated ROM.
+6. TARGET DEPLOYMENT PARITY: Modified code under pi500/ or pi4b/ must be deployed and MD5-verified on physical targets.
+7. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
+8. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
 
-Evaluate the git diff against the task summary and these strict rules.
+Evaluate the git diff, contract violations, and deployment status against the task summary and these strict rules.
 
 You MUST structure your response strictly using these exact markdown headers:
 
@@ -423,7 +385,7 @@ State your verdict on a single line: [APPROVED], [REJECTED], or [BLOCKER].
 
 ### SPOKEN_SUMMARY
 Provide a concise, 2-to-3 sentence spoken voice summary written in active first-person voice as Ornith addressing Carson:
-- If REJECTED: State clearly that you are rejecting Antigravity's implementation for violating rule [Rule Name/Number]. State what Antigravity was required to do (e.g. utilize manifest.json or dynamic calibration) instead of what was coded (e.g. hardcoding values, adding default fallbacks). State that you will not provide approval on the build until the implementation complies with that rule.
+- If REJECTED: State clearly that you are rejecting Antigravity's implementation for violating rule [Rule Name/Number]. State what Antigravity was required to do instead. State that you will not provide approval on the build until the implementation complies.
 - If BLOCKER: State clearly that you encountered a blocker requiring Carson's intervention, explaining the specific missing dependency or hardware state.
 - If APPROVED: State clearly that you have approved Antigravity's implementation, confirming that all changes comply with project rules and verification requirements.
 Keep the SPOKEN_SUMMARY strictly under 60 words, natural for text-to-speech, with zero markdown symbols, bullet points, or code formatting.
@@ -433,10 +395,13 @@ Explain the exact technical reasons, line-by-line violations in the diff, and re
 
     user_prompt = f"""Task Summary: {task_summary}
 
-Static Contract Scan Result:
+Contract Scan Result:
 - Clean: {contract_res.get('clean')}
 - Rule Violations: {len(contract_res.get('violations', []))}
-- Warnings: {len(contract_res.get('warnings', []))}
+- Deployment Status: {deployment_info}
+
+Contract Violations Detail:
+{violations_detail}
 
 Repository Changes (Git Diff):
 ```diff
@@ -494,6 +459,13 @@ Provide your adversarial audit:"""
         is_blocker = "[BLOCKER]" in verdict_text.upper() or "VERDICT: BLOCKER" in verdict_text.upper()
         is_approved = "[APPROVED]" in verdict_text.upper() or "VERDICT: APPROVED" in verdict_text.upper()
         verdict_str = "APPROVED" if is_approved else ("REJECTED" if is_rejected else ("BLOCKER" if is_blocker else "REVIEW_COMPLETED"))
+
+    # Enforce contract safety: if AST contracts or deployment checks failed, verdict MUST NOT be APPROVED
+    if not contract_res.get("clean") and verdict_str == "APPROVED":
+        _log_debug("Overriding LLM APPROVED verdict: code contract violations or deployment parity failures exist.")
+        verdict_str = "REJECTED"
+        verdict_text = f"### VERDICT\n[REJECTED]\n\n### SPOKEN_SUMMARY\nI am rejecting Antigravity's implementation due to code contract violations and deployment requirements.\n\n### DETAILED_AUDIT\n{violations_detail}"
+
     spoken_text = extract_spoken_summary(verdict_text, verdict_str, contract_res, task_summary)
 
     spoken_status = "not_spoken"
