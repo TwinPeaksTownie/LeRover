@@ -23,12 +23,14 @@ try:
     from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
     from beat_studio import BeatStudioManager
     from choreography_player import ChoreographyPlayer
+    from choreography_compiler import load_dance_presets, load_choreography_probabilities
 except ImportError:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
     from beat_studio import BeatStudioManager
     from choreography_player import ChoreographyPlayer
+    from choreography_compiler import load_dance_presets, load_choreography_probabilities
 
 LIBRARY_DIR = Path.home() / "so101/beat_bandit/library"
 LOCAL_LIBRARY_DIR = Path(__file__).resolve().parent.parent / "library" / "beat_bandit"
@@ -346,3 +348,188 @@ class BeatBanditApp(BaseApp):
             self.player = None
         self.audio_client.stop_playback()
         self.current_state = "IDLE"
+
+    def preview_isolated_block(
+        self,
+        backend: RobotBackend,
+        track_id: str,
+        channel: str,
+        block: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Runs a 50 Hz dynamic preview session for a single block while isolating all other channels at neutral defaults."""
+        self.stop_dance()
+        if track_id not in self.manifest:
+            raise KeyError(f"Fail-Fast Error: Track '{track_id}' not found in manifest")
+
+        track_meta = self.manifest[track_id]
+        if "analysis" not in track_meta:
+            raise KeyError(f"Fail-Fast Error: 'analysis' missing for track '{track_id}'")
+        analysis = track_meta["analysis"]
+        if "wav_path" not in track_meta:
+            raise KeyError(f"Fail-Fast Error: 'wav_path' missing in manifest for track '{track_id}'")
+        wav_path = track_meta["wav_path"]
+        if not os.path.exists(wav_path):
+            raise FileNotFoundError(f"Fail-Fast Error: WAV audio file not found at '{wav_path}' for track '{track_id}'")
+
+        if "start_sec" not in block or "end_sec" not in block:
+            raise KeyError("Fail-Fast Error: 'start_sec' and 'end_sec' required in preview block payload")
+
+        st = max(0.0, float(block["start_sec"]))
+        et = float(block["end_sec"])
+        if et <= st:
+            et = st + 1.0
+
+        poses = load_dance_presets()
+        probs = load_choreography_probabilities()
+
+        if "neck_pitch_s4" not in probs or "pitch_level_rom" not in probs["neck_pitch_s4"]:
+            raise KeyError("Fail-Fast Error: 'neck_pitch_s4.pitch_level_rom' missing in choreography probabilities")
+        neutral_neck_pitch = float(probs["neck_pitch_s4"]["pitch_level_rom"])
+
+        if "pedestal_s7" not in probs or "target_rom" not in probs["pedestal_s7"] or "center" not in probs["pedestal_s7"]["target_rom"]:
+            raise KeyError("Fail-Fast Error: 'pedestal_s7.target_rom.center' missing in choreography probabilities")
+        neutral_s7_center = float(probs["pedestal_s7"]["target_rom"]["center"])
+
+        if "head_tilt_s5" not in probs or "center_rom" not in probs["head_tilt_s5"]:
+            raise KeyError("Fail-Fast Error: 'head_tilt_s5.center_rom' missing in choreography probabilities")
+        neutral_s5_center = float(probs["head_tilt_s5"]["center_rom"])
+
+        # Dynamically load Auxiliary Servo 8 Calibration from calibration_aux.json
+        calib_aux_file = Path(__file__).resolve().parent.parent / "calibration_aux.json"
+        if not calib_aux_file.exists():
+            calib_aux_file = Path.home() / "so101/calibration_aux.json"
+        if not calib_aux_file.exists():
+            raise FileNotFoundError("Fail-Fast Error: 'calibration_aux.json' not found on system")
+        with open(calib_aux_file, "r", encoding="utf-8") as f:
+            calib_aux = json.load(f)
+        if "8" not in calib_aux or "min_ticks" not in calib_aux["8"] or "max_ticks" not in calib_aux["8"] or "center_ticks" not in calib_aux["8"]:
+            raise KeyError("Fail-Fast Error: Servo 8 calibration parameters missing in calibration_aux.json")
+        min_8 = float(calib_aux["8"]["min_ticks"])
+        max_8 = float(calib_aux["8"]["max_ticks"])
+        center_8 = float(calib_aux["8"]["center_ticks"])
+        neutral_s8_center = round(((center_8 - min_8) / (max_8 - min_8)) * 100.0, 2)
+
+        isolated_tracks: Dict[str, List[Dict[str, Any]]] = {
+            "lyrics": [],
+            "spine_gaze": [],
+            "s8_gantry": [],
+            "s7_pedestal": [],
+            "s1_torso": [],
+            "s5_head_tilt": [],
+            "s6_jaw": [],
+        }
+
+        # Normalize channel name aliases
+        target_channel = channel
+        if channel == "body_pose":
+            target_channel = "spine_gaze"
+        elif channel == "head_jaw":
+            target_channel = "s6_jaw"
+
+        if target_channel not in isolated_tracks:
+            raise KeyError(f"Fail-Fast Error: Unsupported preview channel '{channel}'")
+
+        # Copy block to target channel
+        isolated_tracks[target_channel] = [dict(block)]
+
+        # Fill default neutral blocks for other channels across [st, et]
+        if target_channel != "spine_gaze":
+            isolated_tracks["spine_gaze"] = [{
+                "id": "neutral_spine",
+                "start_sec": st,
+                "end_sec": et,
+                "pose_name": "stand",
+                "pattern": "hold_stand",
+                "transition_sec": 0.3,
+                "neck_pitch_rom": neutral_neck_pitch,
+                "bounce_modifier": {"enabled": False, "intensity": 0.0, "target": "body_bounce"}
+            }]
+
+        if target_channel != "s7_pedestal":
+            isolated_tracks["s7_pedestal"] = [{
+                "id": "neutral_s7",
+                "start_sec": st,
+                "end_sec": et,
+                "mode": "center_hold",
+                "target_pos_rom": neutral_s7_center,
+                "transition_sec": 0.3
+            }]
+
+        if target_channel != "s8_gantry":
+            isolated_tracks["s8_gantry"] = [{
+                "id": "neutral_s8",
+                "start_sec": st,
+                "end_sec": et,
+                "mode": "hold",
+                "target_pos_rom": neutral_s8_center,
+                "speed": 500
+            }]
+
+        if target_channel != "s1_torso":
+            isolated_tracks["s1_torso"] = [{
+                "id": "neutral_s1",
+                "start_sec": st,
+                "end_sec": et,
+                "facing_mode": "base_aligned"
+            }]
+
+        if target_channel != "s5_head_tilt":
+            isolated_tracks["s5_head_tilt"] = [{
+                "id": "neutral_s5",
+                "start_sec": st,
+                "end_sec": et,
+                "tilt_mode": "center",
+                "tilt_rom": neutral_s5_center
+            }]
+
+        if target_channel != "s6_jaw":
+            isolated_tracks["s6_jaw"] = [{
+                "id": "neutral_s6",
+                "start_sec": st,
+                "end_sec": et,
+                "jaw_mode": "closed"
+            }]
+
+        isolated_choreo = {
+            "version": "3.3.0",
+            "title": f"Preview: {block.get('name', target_channel)}",
+            "duration": et,
+            "poses": poses,
+            "probabilities": probs,
+            "blocks": [dict(block)],
+            "tracks": isolated_tracks,
+        }
+
+        self.active_track = track_meta
+        self.active_analysis = analysis
+
+        def _on_finish():
+            self.current_state = "IDLE"
+            self.audio_client.stop_playback()
+
+        # Dispatch Audio Slice to Pi 4B if available
+        if wav_path and os.path.exists(wav_path):
+            self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
+
+        # Start 50 Hz Player for exact block duration [st, et]
+        self.player = ChoreographyPlayer(
+            backend=backend,
+            choreography=isolated_choreo,
+            analysis=analysis,
+            start_sec=st,
+            end_sec=et,
+            loop=False,
+            on_finish_callback=_on_finish,
+        )
+        self.current_state = "PREVIEWING"
+        self.player.start()
+
+        return {
+            "status": "ok",
+            "mode": "block_preview",
+            "channel": target_channel,
+            "start_sec": st,
+            "end_sec": et,
+            "duration": et - st,
+        }
+

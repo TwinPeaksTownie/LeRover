@@ -193,6 +193,14 @@ export function previewBeatBanditMovement(channel, target) {
     }, 2500);
 }
 
+export function previewBeatBanditBlock(trackId, channel, block) {
+    return safeFetch('/api/apps/beat_bandit/preview_block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_id: trackId, channel, block })
+    }, 3000);
+}
+
 export function sendArmMoveNorm(target, duration = 1.5, steps = 40) {
     return safeFetch('/api/arm/move_norm', {
         method: 'POST',

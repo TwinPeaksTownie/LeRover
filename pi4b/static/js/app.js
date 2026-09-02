@@ -1161,20 +1161,25 @@ function bindEventListeners() {
     });
 
     if (inspPreviewBtn) inspPreviewBtn.addEventListener('click', () => {
-        if (!selectedMoveBlock || !activeChoreoData) return;
-        if (selectedMoveChannel === 'body_pose' || selectedMoveChannel === 'spine_gaze') {
-            const poses = activeChoreoData.poses;
-            if (!poses || !poses[selectedMoveBlock.pose_name]) {
-                ui.setHeaderAlert(`POSE '${selectedMoveBlock.pose_name}' NOT FOUND`);
-                return;
-            }
-            const p = poses[selectedMoveBlock.pose_name];
-            api.previewBeatBanditPose(p).catch(() => {});
-        } else if (selectedMoveChannel === 's7_pedestal') {
-            api.previewBeatBanditMovement('s7_pedestal', selectedMoveBlock.target_deg).catch(() => {});
-        } else if (selectedMoveChannel === 's8_gantry') {
-            api.previewBeatBanditMovement('s8_gantry', selectedMoveBlock.target_pos).catch(() => {});
-        }
+        if (!selectedMoveBlock || !activeTrackId) return;
+        setTimelineIsPlaying(true);
+        setTimelinePlayheadTime(selectedMoveBlock.start_sec);
+        ui.renderTimeline();
+        api.previewBeatBanditBlock(activeTrackId, selectedMoveChannel, selectedMoveBlock)
+            .then(d => {
+                if (d && d.status === 'error') {
+                    console.error('[BEAT BANDIT] Preview error:', d.message);
+                    ui.setHeaderAlert(d.message || 'PREVIEW ERROR');
+                    api.sendPlaySound({ kind: 'incorrect' }).catch(e => console.error('[AUDIO] Chime error:', e));
+                    setTimelineIsPlaying(false);
+                }
+            })
+            .catch(err => {
+                console.error('[BEAT BANDIT] Preview network failure:', err);
+                ui.setHeaderAlert('PREVIEW FAILED: ' + (err.message || err));
+                api.sendPlaySound({ kind: 'incorrect' }).catch(e => console.error('[AUDIO] Chime error:', e));
+                setTimelineIsPlaying(false);
+            });
     });
 
     if (inspDupBtn) inspDupBtn.addEventListener('click', () => {

@@ -708,6 +708,33 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 self._send_json(res)
             except Exception as e:
                 self._send_json({"status": "error", "message": str(e)}, 500)
+
+        elif parsed.path == "/api/apps/beat_bandit/preview_block":
+            if not self.backend:
+                return self._send_json({"error": "Backend uninitialized"}, 500)
+            if "track_id" not in body or "channel" not in body or "block" not in body:
+                return self._send_json({"status": "error", "message": "Missing 'track_id', 'channel', or 'block' in request body"}, 400)
+
+            track_id = body["track_id"]
+            channel = body["channel"]
+            block = body["block"]
+
+            # Auto-engage beat_bandit_app session if not already active
+            if self.app_manager.current_app_name != "beat_bandit_app":
+                ok = self.app_manager.start_app_by_name("beat_bandit_app")
+                if not ok:
+                    return self._send_json({"status": "error", "message": "Failed to activate Beat Bandit application session."}, 500)
+
+            bb_app = self.app_manager.active_app
+            if bb_app and hasattr(bb_app, "preview_isolated_block"):
+                try:
+                    res = bb_app.preview_isolated_block(self.backend, track_id, channel, block)
+                    self._send_json(res)
+                except Exception as e:
+                    self._send_json({"status": "error", "message": str(e)}, 500)
+            else:
+                self._send_json({"status": "error", "message": "Failed to access BeatBanditApp"}, 500)
+
         elif parsed.path == "/api/arm/torque":
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
