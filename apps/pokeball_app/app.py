@@ -382,12 +382,12 @@ class PokeballService:
 class PokeballApp(BaseApp):
     """Managed Poké Ball Plus Teleoperation Application with Dual Aux/Rover Mode."""
     metadata = AppMetadata(
-        name="pokeball_teleop_app",
-        title="Poké Ball Teleop",
-        description="BLE Poké Ball Plus teleoperation for pedestal, gantry, and rover drive",
-        version="2.1.0",
-        tags=["teleop", "ble", "pokeball", "rover"],
-        icon="🔴"
+        name=_CONFIG["name"],
+        title=_CONFIG["title"],
+        description=_CONFIG["description"],
+        version=_CONFIG["version"],
+        tags=_CONFIG["tags"],
+        icon=_CONFIG["icon"]
     )
 
     def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL, rover_ctrl: Optional[Any] = None) -> None:

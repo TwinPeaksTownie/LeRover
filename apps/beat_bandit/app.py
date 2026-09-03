@@ -43,8 +43,9 @@ def load_beat_bandit_config() -> dict:
 
 _CONFIG = load_beat_bandit_config()
 
-LIBRARY_DIR = Path.home() / "so101/beat_bandit/library"
-LOCAL_LIBRARY_DIR = Path(__file__).resolve().parent.parent / "library" / "beat_bandit"
+LIBRARY_SUBDIR = _CONFIG["library_subdir"]
+LIBRARY_DIR = Path.home() / "so101" / LIBRARY_SUBDIR
+LOCAL_LIBRARY_DIR = Path(__file__).resolve().parent.parent.parent / LIBRARY_SUBDIR
 
 
 def get_library_path() -> Path:
@@ -56,13 +57,14 @@ def get_library_path() -> Path:
 
 
 class BeatBanditApp(BaseApp):
+    _config = load_beat_bandit_config()
     metadata = AppMetadata(
-        name="beat_bandit_app",
-        title="Beat Bandit",
-        description="Character Kinematics & Audio-Synchronized Choreographer",
-        version="3.2.0",
-        icon="music",
-        tags=["audio", "youtube", "choreography", "music", "singing", "dance"],
+        name=_config["name"],
+        title=_config["title"],
+        description=_config["description"],
+        version=_config["version"],
+        icon=_config["icon"],
+        tags=_config["tags"],
     )
 
     def __init__(self, running_on_pi: bool = True) -> None:
@@ -351,6 +353,9 @@ class BeatBanditApp(BaseApp):
             choreo = self.studio_manager.get_track_choreography(track_id)
             self.active_track["choreography"] = choreo
 
+        if "probabilities" not in choreo or not isinstance(choreo["probabilities"], dict):
+            choreo["probabilities"] = load_choreography_probabilities()
+
         wav_path = self.active_track["wav_path"]
 
         def _on_loop(st: float, et: Optional[float]):
@@ -359,10 +364,7 @@ class BeatBanditApp(BaseApp):
         def _on_finish():
             self.current_state = "IDLE"
 
-        # Dispatch Audio to Pi 4B
-        self.audio_client.dispatch_playback(wav_path, start_sec=start_sec, end_sec=end_sec)
-
-        # Start Playback Engine
+        # 1. Instantiate and strictly validate ChoreographyPlayer BEFORE dispatching audio
         self.player = ChoreographyPlayer(
             backend=backend,
             choreography=choreo,
@@ -373,6 +375,10 @@ class BeatBanditApp(BaseApp):
             on_loop_callback=_on_loop,
             on_finish_callback=_on_finish,
         )
+
+        # 2. Dispatch Audio to Pi 4B only after player initialization succeeds
+        self.audio_client.dispatch_playback(wav_path, start_sec=start_sec, end_sec=end_sec)
+
         self.current_state = "DANCING"
         self.player.start()
 
@@ -429,9 +435,9 @@ class BeatBanditApp(BaseApp):
         neutral_s5_center = float(probs["head_tilt_s5"]["center_rom"])
 
         # Dynamically load Auxiliary Servo 8 Calibration from calibration_aux.json
-        calib_aux_file = Path(__file__).resolve().parent.parent / "calibration_aux.json"
+        calib_aux_file = Path(__file__).resolve().parent.parent.parent / "calibration_aux.json"
         if not calib_aux_file.exists():
-            calib_aux_file = Path.home() / "so101/calibration_aux.json"
+            calib_aux_file = Path.home() / "so101" / "calibration_aux.json"
         if not calib_aux_file.exists():
             raise FileNotFoundError("Fail-Fast Error: 'calibration_aux.json' not found on system")
         with open(calib_aux_file, "r", encoding="utf-8") as f:

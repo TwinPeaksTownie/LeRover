@@ -195,7 +195,7 @@ export function renderButtonStates() {
     // Apps status readout
     const appsStatus = document.getElementById('appsStatus');
     if (appsStatus) {
-        if (data && data.ornith_state && data.ornith_state !== 'IDLE') {
+        if (typeof data !== 'undefined' && data && data.ornith_state && data.ornith_state !== 'IDLE') {
             const ost = data.ornith_state;
             if (ost === 'LISTENING') {
                 appsStatus.innerText = '🎙️ ORNITH LISTENING...';

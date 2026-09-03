@@ -95,6 +95,13 @@ class BeatStudioManager:
             manifest[track_id] = track_meta
             self._save_manifest(manifest)
 
+        # Ensure probabilities is hydrated for fail-fast ChoreographyPlayer contract
+        if "probabilities" not in choreo or not isinstance(choreo["probabilities"], dict):
+            choreo["probabilities"] = load_choreography_probabilities()
+            track_meta["choreography"] = choreo
+            manifest[track_id] = track_meta
+            self._save_manifest(manifest)
+
         # Merge in beat grid metadata for UI ruler
         choreo["track_id"] = track_id
         choreo["title"] = track_meta.get("title", track_id)
@@ -118,12 +125,14 @@ class BeatStudioManager:
 
         track_meta = manifest[track_id]
         poses = choreo_data.get("poses") or load_dance_presets()
+        probs = choreo_data.get("probabilities") or self.get_probabilities()
 
         clean_choreo = {
             "version": CHOREO_SCHEMA_VERSION,
             "duration": float(choreo_data.get("duration", track_meta.get("duration", 0.0))),
             "settings": choreo_data.get("settings", DEFAULT_CHOREO_SETTINGS),
             "poses": poses,
+            "probabilities": probs,
             "sections": choreo_data.get("sections", []),
             "blocks": choreo_data.get("blocks", []),
             "tracks": choreo_data.get("tracks", {
@@ -278,7 +287,7 @@ def get_global_studio_manager() -> BeatStudioManager:
         if os.name == "nt":
             lib_dir = Path(__file__).resolve().parent.parent / "library" / "beat_bandit"
         else:
-            lib_dir = Path.home() / "so101/beat_bandit/library"
+            lib_dir = Path.home() / "so101" / "library" / "beat_bandit"
         lib_dir.mkdir(parents=True, exist_ok=True)
         manifest_file = lib_dir / "manifest.json"
         _GLOBAL_STUDIO_MANAGER = BeatStudioManager(lib_dir, manifest_file)

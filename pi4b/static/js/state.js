@@ -14,15 +14,14 @@ export let isBeatBanditAppRunning = false;
 export let isBeatBanditDancing = false;
 export let isBeatBanditRunning = false;
 export let beatBanditTrackPage = 0;
-export let selectedBeatBanditTrackId = 'BfVY9-tejX4';
+export let selectedBeatBanditTrackId = 'F0N7aNy-9tg';
 export let cachedBeatBanditTracks = [
-    { track_id: "BfVY9-tejX4", title: "Stay The Night", artist: "Zedd ft. Hayley Williams", duration: 217.3, tempo: 129.2, total_beats: 468 },
+    { track_id: "F0N7aNy-9tg", title: "Dracula", artist: "Tame Impala, JENNIE", duration: 209.8, tempo: 114.8, total_beats: 401 },
+    { track_id: "Sv1dxHCW2-I", title: "People Pleaser", artist: "BLACK PONTIAC", duration: 260.2, tempo: 92.3, total_beats: 400 },
     { track_id: "y9Wxl9Q9lUQ", title: "Red Wine Supernova", artist: "Chappell Roan", duration: 192.7, tempo: 123.0, total_beats: 395 },
     { track_id: "OlQJ2zy5DE8", title: "Peaches", artist: "Jack Black", duration: 95.4, tempo: 184.6, total_beats: 293 },
     { track_id: "_uu_izpVSEc", title: "Soda Pop", artist: "Saja Boys", duration: 150.8, tempo: 126.0, total_beats: 316 },
-    { track_id: "Y3jq_WIHP9k", title: "Dai Dai World Cup Song 2026", artist: "Shakira & Burna Boy", duration: 222.3, tempo: 117.5, total_beats: 435 },
-    { track_id: "F0N7aNy-9tg", title: "Dracula", artist: "Tame Impala, JENNIE", duration: 209.8, tempo: 114.8, total_beats: 401 },
-    { track_id: "Sv1dxHCW2-I", title: "People Pleaser", artist: "BLACK PONTIAC", duration: 260.2, tempo: 92.3, total_beats: 400 }
+    { track_id: "Y3jq_WIHP9k", title: "Dai Dai World Cup Song 2026", artist: "Shakira & Burna Boy", duration: 222.3, tempo: 117.5, total_beats: 435 }
 ];
 
 export let currentAppsMode = 'controls';

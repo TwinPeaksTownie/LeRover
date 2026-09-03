@@ -747,12 +747,12 @@ class StudioHandler(BaseHTTPRequestHandler):
 class ServoStudioApp(BaseApp):
     """Managed Servo Studio Calibration Application."""
     metadata = AppMetadata(
-        name="servo_studio_app",
-        title="Servo Studio",
-        description="Web dashboard for visual joint calibration and torque management",
-        version="1.0.0",
-        tags=["calibration", "web", "studio"],
-        icon="🛠️"
+        name=_CONFIG["name"],
+        title=_CONFIG["title"],
+        description=_CONFIG["description"],
+        version=_CONFIG["version"],
+        tags=_CONFIG["tags"],
+        icon=_CONFIG["icon"]
     )
 
     def __init__(self, port: int = PORT_WEB) -> None:

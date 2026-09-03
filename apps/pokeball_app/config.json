@@ -1,8 +1,8 @@
 {
-  "name": "pokeball_app",
-  "title": "Pokeball Teleop & Rover",
-  "description": "BLE Pokeball Plus teleoperation for AUX actuators and Overlander-4 rover",
-  "version": "1.0.0",
+  "name": "pokeball_teleop_app",
+  "title": "Poké Ball Teleop",
+  "description": "BLE Poké Ball Plus teleoperation for pedestal, gantry, and rover drive",
+  "version": "2.1.0",
   "icon": "🔴",
   "tags": ["teleop", "ble", "rover", "aux", "pokeball"],
   "ble": {
