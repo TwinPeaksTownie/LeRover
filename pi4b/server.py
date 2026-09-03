@@ -44,6 +44,7 @@ STATUS_CACHE = {
     "follower": {"running": False, "pid": ""},
     "leader": {"running": False, "pid": ""},
     "clack_pose": {"running": False},
+    "ornith_state": "IDLE",
     "pi500_online": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0,
@@ -447,6 +448,16 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 "bytes": len(wav_data),
                 "dispatched": dispatched
             }).encode())
+            return
+
+        if path == "/api/ornith/state":
+            state = req_data.get("state", "IDLE")
+            STATUS_CACHE["ornith_state"] = state
+            print(f"[ORNITH STATE] Kiosk state transitioned to: {state}", flush=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "state": state}).encode('utf-8'))
             return
 
         if path == "/api/set_volume":

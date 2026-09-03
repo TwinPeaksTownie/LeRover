@@ -195,7 +195,22 @@ export function renderButtonStates() {
     // Apps status readout
     const appsStatus = document.getElementById('appsStatus');
     if (appsStatus) {
-        if (isBeatBanditDancing) {
+        if (data && data.ornith_state && data.ornith_state !== 'IDLE') {
+            const ost = data.ornith_state;
+            if (ost === 'LISTENING') {
+                appsStatus.innerText = '🎙️ ORNITH LISTENING...';
+                appsStatus.style.color = '#00ff66';
+            } else if (ost === 'THINKING') {
+                appsStatus.innerText = '💭 ORNITH THINKING...';
+                appsStatus.style.color = '#ffaa00';
+            } else if (ost === 'SPEAKING') {
+                appsStatus.innerText = '🔊 ORNITH SPEAKING...';
+                appsStatus.style.color = '#ff00cc';
+            } else {
+                appsStatus.innerText = `🎙️ ORNITH ${ost}`;
+                appsStatus.style.color = '#00e5ff';
+            }
+        } else if (isBeatBanditDancing) {
             appsStatus.innerText = 'BEAT BANDIT DANCING';
             appsStatus.style.color = '#ff00cc';
         } else if (isBeatBanditAppRunning) {
@@ -802,6 +817,10 @@ export function updateTelemetryUI(data) {
     } else if (currentApp === 'pokeball_teleop_app') {
         teleopStatusStr = 'POKEBALL ACTIVE';
         teleopStatusColor = '#ff3344';
+    } else if (currentApp === 'ornith_voice') {
+        const ost = data.ornith_state || 'STANDBY';
+        teleopStatusStr = `ORNITH ${ost.toUpperCase()}`;
+        teleopStatusColor = (ost === 'LISTENING') ? '#00ff66' : (ost === 'THINKING' ? '#ffaa00' : (ost === 'SPEAKING' ? '#ff00cc' : '#00e5ff'));
     } else if (data.daemon_running) {
         teleopStatusStr = 'DAEMON READY';
         teleopStatusColor = '#00e5ff';

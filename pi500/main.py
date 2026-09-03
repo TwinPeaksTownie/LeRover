@@ -22,6 +22,7 @@ from servo_studio_app import ServoStudioApp
 from pokeball_app import PokeballApp, PokeballService
 from clack_pose_app import PiranhaPoseApp, ClackPoseApp
 from beat_bandit_app import BeatBanditApp
+from ornith_app import OrnithVoiceApp
 from api_server import create_master_http_server
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -52,12 +53,14 @@ def main() -> None:
 
     logging.info("Initializing AppManager & registering applications...")
     app_manager = AppManager(backend)
+    pokeball_service.app_manager = app_manager
     app_manager.register_app(TeleopControlApp)
     app_manager.register_app(ServoStudioApp)
     app_manager.register_app(PokeballApp)
     app_manager.register_app(PiranhaPoseApp)
     app_manager.register_app(ClackPoseApp)
     app_manager.register_app(BeatBanditApp)
+    app_manager.register_app(OrnithVoiceApp)
 
     logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
 

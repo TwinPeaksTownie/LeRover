@@ -80,15 +80,40 @@ def get_active_conversation_transcript(
     latest_assistant_response = ""
     latest_user_request = ""
     
+    # 1. First pass: find latest substantive assistant response and user input
     for step in reversed(steps):
         st_type = step.get("type")
         content = step.get("content", "")
-        if st_type == "PLANNER_RESPONSE" and not latest_assistant_response and content:
-            latest_assistant_response = content
-        elif st_type == "USER_INPUT" and not latest_user_request and content:
-            latest_user_request = content
+        if st_type == "PLANNER_RESPONSE" and not latest_assistant_response and content and content.strip():
+            latest_assistant_response = content.strip()
+        elif st_type == "USER_INPUT" and not latest_user_request and content and content.strip():
+            latest_user_request = content.strip()
         if latest_assistant_response and latest_user_request:
             break
+
+    # 2. Check transcript_full.jsonl if content was truncated or empty
+    transcript_full = os.path.join(os.path.dirname(latest_transcript), "transcript_full.jsonl")
+    if os.path.exists(transcript_full) and (not latest_assistant_response or len(latest_assistant_response) < 100):
+        try:
+            with open(transcript_full, "r", encoding="utf-8") as f_full:
+                full_steps = [json.loads(l) for l in f_full if l.strip()]
+                for s in reversed(full_steps):
+                    if s.get("type") == "PLANNER_RESPONSE" and s.get("content") and len(s.get("content", "").strip()) > 50:
+                        latest_assistant_response = s.get("content").strip()
+                        break
+        except Exception as full_err:
+            _log_debug(f"transcript_full lookup warning: {full_err}")
+
+    # 3. If latest user request is asking for a summary/distillation, ensure we target the PRIOR substantive response
+    meta_words = ["summarize", "simplify", "distill", "last answer", "last response", "what did you say"]
+    if latest_user_request and any(w in latest_user_request.lower() for w in meta_words):
+        seen_count = 0
+        for step in reversed(steps):
+            if step.get("type") == "PLANNER_RESPONSE" and step.get("content") and len(step.get("content", "").strip()) > 50:
+                seen_count += 1
+                if seen_count > 1:
+                    latest_assistant_response = step.get("content").strip()
+                    break
 
     has_handoff = False
     handoff_summary = ""

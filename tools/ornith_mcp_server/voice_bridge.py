@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import threading
+import time
 import urllib.request
 import urllib.parse
 from typing import Optional, Dict, Any
@@ -140,6 +141,19 @@ def transcribe_audio_bytes(wav_bytes: bytes, timeout_sec: int = 15) -> str:
         logger.error(f"Transcription failed: {e}")
         raise RuntimeError(f"Failed to transcribe audio via CoHere ASR: {str(e)}")
 
+def dispatch_cue_to_pi4b(kind: str, delay_sec: float = 0.0) -> None:
+    """Dispatches Mario audio cue to Pi 4B speakers."""
+    def _work():
+        try:
+            url = "http://192.168.0.86:8082/api/play_sound"
+            payload = json.dumps({"kind": kind, "delay_sec": delay_sec}).encode("utf-8")
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=2.0):
+                pass
+        except Exception as e:
+            logger.warning(f"Failed to dispatch cue '{kind}' to Pi 4B: {e}")
+    threading.Thread(target=_work, daemon=True).start()
+
 def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> Dict[str, Any]:
     """
     Classifies user intent (Summary Request, Direct Clarification, or Action Directive).
@@ -171,6 +185,8 @@ def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> D
         feedback_prompt = f"Carson (via Pokéball Voice): {clean_prompt}\n\nPlease proceed and call signal_task_complete when finished."
         inject_res = tools_computer_use.send_feedback_to_antigravity(feedback_prompt, click_send=True)
         ack_text = "I dispatched your instruction to Antigravity. Standing by for task completion."
+        dispatch_cue_to_pi4b("smw_princess_help")
+        time.sleep(1.0)
         speech_res = tools_speech.speak_laura(text=ack_text, target=audio_target)
         return {
             "status": "success",
@@ -222,6 +238,8 @@ def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> D
         ans_clean = f"I received your inquiry regarding {clean_prompt[:30]}, but encountered an issue contacting the local model."
 
     logger.info(f"Ornith response: '{ans_clean}'")
+    dispatch_cue_to_pi4b("smw_princess_help")
+    time.sleep(1.0)
     speech_res = tools_speech.speak_laura(text=ans_clean, target=audio_target)
     return {
         "status": "success",
@@ -252,6 +270,8 @@ def execute_turn_summary(audio_target: str = "pi4b") -> Dict[str, Any]:
         return denoise_res
 
     distilled_text = denoise_res.get("distilled_text", "")
+    dispatch_cue_to_pi4b("smw_princess_help")
+    time.sleep(1.0)
     speech_res = tools_speech.speak_laura(text=distilled_text, target=audio_target)
 
     return {
@@ -307,6 +327,7 @@ async def process_audio_endpoint(request: Request, audio_target: str = "pi4b"):
         raise HTTPException(status_code=400, detail="Empty audio payload received")
 
     try:
+        dispatch_cue_to_pi4b("smw_chuck_whistle")
         transcription = transcribe_audio_bytes(wav_bytes)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
