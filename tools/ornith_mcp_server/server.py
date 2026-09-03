@@ -32,6 +32,7 @@ import tools_speech
 import tools_audit
 import tools_hardware
 import tools_computer_use
+import tools_denoise
 
 app = MCPServer(
     name="ornith-supervisor",
@@ -39,11 +40,12 @@ app = MCPServer(
 )
 
 def _reload_modules():
-    global tools_speech, tools_audit, tools_hardware, tools_computer_use
+    global tools_speech, tools_audit, tools_hardware, tools_computer_use, tools_denoise
     tools_speech = importlib.reload(tools_speech)
     tools_audit = importlib.reload(tools_audit)
     tools_hardware = importlib.reload(tools_hardware)
     tools_computer_use = importlib.reload(tools_computer_use)
+    tools_denoise = importlib.reload(tools_denoise)
 
 # -----------------------------------------------------------------------------
 # 1. Adversarial Review & Perception Tools
@@ -109,6 +111,15 @@ def read_workspace_file(file_path: str, start_line: int = 1, max_lines: int = 50
     """
     _reload_modules()
     res = tools_audit.read_workspace_file(file_path=file_path, start_line=start_line, max_lines=max_lines)
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def search_workspace_code(query: str, repo_path: str = r"i:\aux_servo_interface") -> str:
+    """
+    Performs a fast, read-only search across all workspace files for symbols, function names, or patterns.
+    """
+    _reload_modules()
+    res = tools_audit.search_workspace_code(query=query, repo_path=repo_path)
     return json.dumps(res, indent=2)
 
 # -----------------------------------------------------------------------------
@@ -207,6 +218,58 @@ def get_active_window() -> str:
     _reload_modules()
     res = tools_computer_use.get_active_window()
     return json.dumps(res, indent=2)
+
+# -----------------------------------------------------------------------------
+# 5. Denoising & Agent-to-Agent Handoff Tools
+# -----------------------------------------------------------------------------
+
+@app.tool()
+def summarize_latest_turn(
+    audio_target: str = "both",
+    brain_dir: str = r"C:\Users\carso\.gemini\antigravity\brain"
+) -> str:
+    """
+    Extracts Antigravity's latest response from active conversation transcript,
+    submits to Ornith 1.0 in LM Studio for executive denoising, and speaks a 35-60 word
+    BLUF summary via Pocket TTS (PC and Pi 4B kiosk).
+    """
+    _reload_modules()
+    trans = tools_audit.get_active_conversation_transcript(brain_dir=brain_dir, max_turns=2)
+    if trans.get("status") != "success":
+        return json.dumps({"status": "error", "error": "Could not read transcript", "details": trans})
+    
+    raw_response = trans.get("latest_assistant_response", "")
+    if not raw_response:
+        return json.dumps({"status": "error", "error": "No assistant response found in active transcript"})
+    
+    denoise_res = tools_denoise.distill_response(raw_text=raw_response)
+    if denoise_res.get("status") != "success":
+        return json.dumps(denoise_res)
+    
+    distilled_text = denoise_res.get("distilled_text", "")
+    speech_res = tools_speech.speak_laura(text=distilled_text, target=audio_target)
+    
+    return json.dumps({
+        "status": "success",
+        "distilled_text": distilled_text,
+        "word_count": denoise_res.get("word_count", 0),
+        "audio_dispatch": speech_res
+    }, indent=2)
+
+@app.tool()
+def signal_task_complete(summary: str, status: str = "success") -> str:
+    """
+    Explicit hand-off tool that Antigravity calls upon finishing an assigned task.
+    Signals to Ornith supervisor that execution is concluded and ready for verification.
+    """
+    _reload_modules()
+    logger.info(f"Antigravity signaled task completion: status={status}, summary={summary}")
+    return json.dumps({
+        "status": "handoff_acknowledged",
+        "task_status": status,
+        "summary": summary,
+        "message": "Ornith supervisor acknowledged task handoff."
+    }, indent=2)
 
 if __name__ == "__main__":
     logger.info("Starting Ornith MCP Server (stdio transport)...")

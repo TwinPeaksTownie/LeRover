@@ -121,8 +121,9 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 "button_a": False,
                 "button_b": False,
             }
-            is_pokeball_app_active = (self.app_manager.current_app_name == "pokeball_teleop_app")
-            if is_pokeball_app_active and os.path.exists("/tmp/pokeball_telemetry.json"):
+            if hasattr(self.backend, "pokeball_service") and self.backend.pokeball_service:
+                pokeball_data = self.backend.pokeball_service.get_telemetry()
+            elif os.path.exists("/tmp/pokeball_telemetry.json"):
                 try:
                     with open("/tmp/pokeball_telemetry.json", "r") as pf:
                         f_data = json.load(pf)

@@ -48,19 +48,45 @@ def _play_wav_bytes(wav_bytes: bytes) -> bool:
     _log_debug("Audio synthesized successfully (container mode).")
     return True
 
+DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
+DEFAULT_PI4B_PORT = int(os.environ.get("PI4B_PORT", 8082))
+
+def _send_wav_to_pi4b(wav_bytes: bytes, host: str = DEFAULT_PI4B_HOST, port: int = DEFAULT_PI4B_PORT) -> bool:
+    """Streams raw WAV binary payload to Pi 4B kiosk /api/play_sound endpoint."""
+    url = f"http://{host}:{port}/api/play_sound"
+    req = urllib.request.Request(
+        url,
+        data=wav_bytes,
+        headers={"Content-Type": "audio/wav"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as res:
+            return res.status == 200
+    except Exception as e:
+        _log_debug(f"Failed to stream WAV to Pi 4B on {url}: {e}")
+        return False
+
 def speak_laura(
     text: str,
     voice_url: str = "hf://laura",
+    target: str = "pi4b",
     host: str = None,
-    port: int = None
+    port: int = None,
+    pi4b_host: str = None,
+    pi4b_port: int = None
 ) -> dict:
     """
     Synthesizes and speaks text using Pocket TTS server in Laura's voice.
+    target can be: 'local' (PC speakers), 'pi4b' (Pi 4B kiosk), or 'both'.
     """
     if host is None:
         host = DEFAULT_TTS_HOST
     if port is None:
         port = DEFAULT_TTS_PORT
+    if pi4b_host is None:
+        pi4b_host = DEFAULT_PI4B_HOST
+    if pi4b_port is None:
+        pi4b_port = DEFAULT_PI4B_PORT
 
     if not text or not text.strip():
         return {"status": "error", "error": "Text argument cannot be empty"}
@@ -85,18 +111,32 @@ def speak_laura(
         _log_debug(f"Pocket TTS connection error: {e}")
         return {"status": "error", "error": f"Failed to reach Pocket TTS on {url}: {str(e)}"}
 
-    _log_debug(f"Received {len(wav_data)} WAV bytes.")
-    try:
-        _play_wav_bytes(wav_data)
-        return {
-            "status": "success",
-            "text": text,
-            "voice_url": voice_url,
-            "bytes_played": len(wav_data),
-            "message": "Audio played successfully through local speakers."
-        }
-    except Exception as e:
-        return {"status": "error", "error": f"Playback error: {str(e)}"}
+    _log_debug(f"Received {len(wav_data)} WAV bytes. Dispatching to target '{target}'.")
+    played_local = False
+    played_pi4b = False
+
+    if target in ("local", "both"):
+        try:
+            played_local = _play_wav_bytes(wav_data)
+        except Exception as e:
+            _log_debug(f"Local playback error: {e}")
+
+    if target in ("pi4b", "both"):
+        try:
+            played_pi4b = _send_wav_to_pi4b(wav_data, host=pi4b_host, port=pi4b_port)
+        except Exception as e:
+            _log_debug(f"Pi 4B audio stream error: {e}")
+
+    return {
+        "status": "success",
+        "text": text,
+        "voice_url": voice_url,
+        "target": target,
+        "bytes_played": len(wav_data),
+        "played_local": played_local,
+        "played_pi4b": played_pi4b,
+        "message": f"Audio dispatched (local={played_local}, pi4b={played_pi4b})."
+    }
 
 def notify_user_of_blocker(reason: str, host: str = None, port: int = None) -> dict:
     spoken_text = f"Attention Carson. Ornith supervisor has encountered a blocker that requires your input: {reason}"

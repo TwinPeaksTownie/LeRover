@@ -22,10 +22,11 @@ NODE_MAP = {
     "pi4b": "carson@192.168.0.86",
     "pi_4b": "carson@192.168.0.86",
     "192.168.0.86": "carson@192.168.0.86",
-    "mac_mini": "carson@192.168.0.149",
-    "macmini": "carson@192.168.0.149",
-    "192.168.0.149": "carson@192.168.0.149",
-    "192.168.0.2": "carson@192.168.0.2"
+    "mac_mini": "twinpeakstownie@192.168.0.149",
+    "macmini": "twinpeakstownie@192.168.0.149",
+    "mac": "twinpeakstownie@192.168.0.149",
+    "192.168.0.149": "twinpeakstownie@192.168.0.149",
+    "192.168.0.2": "twinpeakstownie@192.168.0.2"
 }
 
 def _log_debug(msg: str):
@@ -62,6 +63,8 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
             ssh_cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout_sec
         )
         return {

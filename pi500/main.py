@@ -19,7 +19,7 @@ from robot_backend import RobotBackend
 from app_manager import AppManager
 from teleop_control_loop import TeleopControlApp
 from servo_studio_app import ServoStudioApp
-from pokeball_app import PokeballApp
+from pokeball_app import PokeballApp, PokeballService
 from clack_pose_app import PiranhaPoseApp, ClackPoseApp
 from beat_bandit_app import BeatBanditApp
 from api_server import create_master_http_server
@@ -45,6 +45,11 @@ def main() -> None:
     backend = RobotBackend(port=args.port, robot_id=args.id)
     backend.connect()
 
+    logging.info("Initializing PokeballService (intrinsic daemon BLE manager)...")
+    pokeball_service = PokeballService(backend=backend)
+    backend.pokeball_service = pokeball_service
+    pokeball_service.start()
+
     logging.info("Initializing AppManager & registering applications...")
     app_manager = AppManager(backend)
     app_manager.register_app(TeleopControlApp)
@@ -65,6 +70,8 @@ def main() -> None:
             http_server.server_close()
         except Exception:
             pass
+        if pokeball_service:
+            pokeball_service.stop()
         app_manager.stop_all()
         backend.close()
         sys.exit(0)

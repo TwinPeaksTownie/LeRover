@@ -53,6 +53,9 @@ STATUS_CACHE = {
 TAP_DETECTOR = None
 TAP_DETECTOR_LOCK = threading.Lock()
 
+ROBOT_MIC_PROC = None
+ROBOT_MIC_LOCK = threading.Lock()
+
 MARIO_SOUNDS_DIR = "/home/carson/mario_sounds"
 PLANT_VINE_SOUNDS = [
     "nsmbwiiGiantPiranhaPlant.wav",
@@ -350,7 +353,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
-        global TAP_DETECTOR
+        global TAP_DETECTOR, ROBOT_MIC_PROC
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         content_type = self.headers.get("Content-Type", "")
@@ -374,6 +377,77 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             req_data = json.loads(body) if body else {}
         except Exception:
             req_data = {}
+
+        if path == "/api/microphone/start":
+            with ROBOT_MIC_LOCK:
+                if ROBOT_MIC_PROC is not None:
+                    try:
+                        ROBOT_MIC_PROC.terminate()
+                        ROBOT_MIC_PROC.wait(timeout=1.0)
+                    except Exception:
+                        pass
+                if os.path.exists("/tmp/robot_recording.wav"):
+                    try:
+                        os.remove("/tmp/robot_recording.wav")
+                    except Exception:
+                        pass
+                cmd = ["parecord", "--format=s16le", "--rate=16000", "--channels=1", "/tmp/robot_recording.wav"]
+                ROBOT_MIC_PROC = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print("[ROBOT MIC] Started onboard microphone recording to /tmp/robot_recording.wav", flush=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "recording_started"}).encode())
+            return
+
+        if path == "/api/microphone/stop":
+            with ROBOT_MIC_LOCK:
+                if ROBOT_MIC_PROC is not None:
+                    try:
+                        ROBOT_MIC_PROC.terminate()
+                        ROBOT_MIC_PROC.wait(timeout=1.5)
+                    except Exception:
+                        try:
+                            ROBOT_MIC_PROC.kill()
+                        except Exception:
+                            pass
+                    ROBOT_MIC_PROC = None
+
+            wav_data = b""
+            if os.path.exists("/tmp/robot_recording.wav"):
+                try:
+                    with open("/tmp/robot_recording.wav", "rb") as f:
+                        wav_data = f.read()
+                except Exception as e:
+                    print(f"[ROBOT MIC] Error reading /tmp/robot_recording.wav: {e}", flush=True)
+
+            voice_bridge_url = req_data.get("voice_bridge_url", "http://192.168.0.194:8058/api/voice/process_audio")
+            dispatched = False
+            if wav_data and voice_bridge_url:
+                def _post_audio():
+                    try:
+                        req = urllib.request.Request(
+                            voice_bridge_url,
+                            data=wav_data,
+                            headers={"Content-Type": "audio/wav"}
+                        )
+                        with urllib.request.urlopen(req, timeout=45) as resp:
+                            print(f"[ROBOT MIC] Dispatched {len(wav_data)} bytes to Voice Bridge: status {resp.status}", flush=True)
+                    except Exception as err:
+                        print(f"[ROBOT MIC] Failed to dispatch audio to Voice Bridge: {err}", flush=True)
+                threading.Thread(target=_post_audio, daemon=True).start()
+                dispatched = True
+
+            print(f"[ROBOT MIC] Stopped onboard recording: {len(wav_data)} bytes, dispatched={dispatched}", flush=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "recording_stopped",
+                "bytes": len(wav_data),
+                "dispatched": dispatched
+            }).encode())
+            return
 
         if path == "/api/set_volume":
             vol = req_data.get("volume", 100)

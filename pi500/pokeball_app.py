@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""PokeballApp module for Poké Ball Plus BLE teleoperation.
-Implements managed BaseApp interface matching Reachy Mini application standards.
-Supports dual-mode operation:
+"""PokeballApp and PokeballService module for Poké Ball Plus BLE teleoperation & voice interaction.
+Supports:
+- Intrinsic daemon BLE service (PokeballService) running 24/7 with auto-reconnection
+- Voice State Machine:
+  * 3-second hold of Button B (Top Red Button) -> starts listening + audio chime
+  * Single click of Button B while listening -> stops listening + audio chime + initiates transcription & thinking
 - AUX Manipulator Mode (Gantry & Pedestal control)
 - ROVER Drive Mode (Overlander-4 differential drive via GPIO UART to KB2040)
-Transitions between modes via 3-second Joystick Press (Button A) hold with Mario Kart audio sync.
 """
 
 import asyncio
@@ -49,27 +51,25 @@ MAC_ADDRESS = "58:2F:40:8D:50:71"
 INPUT_UUID = "6675e16c-f36d-4567-bb55-6b51e27a23e6"
 API_URL = "http://127.0.0.1:8085"
 TELEMETRY_FILE = "/tmp/pokeball_telemetry.json"
+
 try:
     import network_resolver
 except ImportError:
-    import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import network_resolver
 
 
-def get_pi4b_sound_url() -> str:
+def get_pi4b_base_url() -> str:
     pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
-    return f"http://{pi4b_ip}:8082/api/play_sound"
-MARIO_SOUNDS_DIR = "/home/carson/mario_sounds"
-PLANT_VINE_SOUNDS = [
-    "smw_vine.wav"
-]
+    return f"http://{pi4b_ip}:8082"
+
+
+def get_pi4b_sound_url() -> str:
+    return f"{get_pi4b_base_url()}/api/play_sound"
 
 
 def play_chime(kind="connect"):
-    """Dispatches requested sound event over HTTP to Pi 4B Touch UI audio server.
-    Logs explicit warnings if network or audio request fails.
-    """
+    """Dispatches requested sound event over HTTP to Pi 4B Touch UI audio server."""
     def _work():
         try:
             payload = json.dumps({"kind": kind}).encode('utf-8')
@@ -82,73 +82,67 @@ def play_chime(kind="connect"):
     threading.Thread(target=_work, daemon=True).start()
 
 
-class PokeballApp(BaseApp):
-    """Managed Poké Ball Plus Teleoperation Application with Dual Aux/Rover Mode."""
-    metadata = AppMetadata(
-        name="pokeball_teleop_app",
-        title="Poké Ball Teleop",
-        description="BLE Poké Ball Plus teleoperation for pedestal, gantry, and rover drive",
-        version="2.0.0",
-        tags=["teleop", "ble", "pokeball", "rover"],
-        icon="🔴"
-    )
+class PokeballService:
+    """Intrinsic daemon service managing persistent BLE connection and voice state machine for Poké Ball Plus."""
 
-    def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL, rover_ctrl: Optional[Any] = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        mac_address: str = MAC_ADDRESS,
+        api_url: str = API_URL,
+        backend: Optional[RobotBackend] = None,
+        voice_bridge_url: str = "http://192.168.0.194:8058"
+    ) -> None:
         self.mac_address = mac_address
         self.api_url = api_url
+        self.backend = backend
+        self.voice_bridge_url = voice_bridge_url
         self.client: Optional[BleakClient] = None
+        self.stop_event = threading.Event()
+        self.thread: Optional[threading.Thread] = None
+        self.logger = logging.getLogger("so101.pokeball_service")
 
-        # Mode state machine: 'AUX' (Manipulator) or 'ROVER' (Drivetrain)
-        self.control_mode: str = "AUX"
+        self.is_connected = False
+        self.is_listening = False
+        self.btn_b_press_start_time: Optional[float] = None
+        self.last_btn_b = False
+        self.connect_chime_played = False
+        self.counter = 0
+
+        # Teleoperation state
+        self.teleop_enabled = False
+        self.control_mode = "AUX"
         self.stick_press_start_time: Optional[float] = None
-        self.mode_switch_triggered: bool = False
-        self.last_btn_stick_press_time: float = 0.0
-
-        # Rover safety timing
-        self.rover_start_time: float = 0.0
-        self.rover_drive_active_time: float = 0.0  # Startup lockout (sound duration + 1.0s safety delay)
-        self.last_rover_interaction_time: float = 0.0  # 30-second inactivity timeout tracker
-
-        # Rover controller instance (prefer backend.rover_ctrl when run() is called)
-        self.rover_ctrl = rover_ctrl
-
-        self.preset_angles = [-165.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 165.0]
-        self.preset_index = 4
+        self.mode_switch_triggered = False
+        self.last_btn_stick_press_time = 0.0
+        self.last_rover_interaction_time = 0.0
+        self.rover_drive_active_time = 0.0
+        self.rover_ctrl = None
 
         self.is_busy = False
         self.busy_until = 0.0
-        self.last_buttons = 0
-        self.last_x_direction = "center"
         self.last_btn_top = False
         self.last_btn_stick = False
-        self.home_triggered = False
-        self.counter = 0
-        self.connect_chime_played = False
-        self.backend: Optional[RobotBackend] = None
+        self.last_x_direction = "center"
 
         self.telemetry = {
-            "running": False,
+            "running": True,
             "connected": False,
-            "status": "DISCONNECTED",
+            "status": "SEARCHING",
+            "is_listening": False,
             "control_mode": self.control_mode,
             "hold_progress": 0.0,
-            "rover_ready": False,
-            "ready_countdown": 0.0,
-            "inactivity_seconds": 0.0,
             "mac": self.mac_address,
             "last_seen": 0.0,
             "packet_count": 0,
             "norm_x": 0.0,
             "norm_y": 0.0,
-            "button_a": False,  # Stick Click
-            "button_b": False,  # Top Red Button
+            "button_a": False,
+            "button_b": False,
             "button_stick": False,
             "button_top": False,
             "last_error": None
         }
         self.write_telemetry()
-
 
     def write_telemetry(self) -> None:
         try:
@@ -159,30 +153,65 @@ class PokeballApp(BaseApp):
         except Exception as e:
             self.logger.debug("Telemetry write error: %s", e)
 
-    def _get_current_s7_angle(self) -> float:
-        """Retrieves live current angle of Servo 7 from backend or triggers live hardware sync."""
-        if hasattr(self, "backend") and self.backend:
-            pos = self.backend.aux_positions.get(7)
-            if pos is None and hasattr(self.backend, "sync_servo7_position"):
-                pos = self.backend.sync_servo7_position()
-            if pos is not None:
-                from robot_backend import ticks_to_degrees_s7
-                return ticks_to_degrees_s7(pos)
-        return 0.0
+    def get_telemetry(self) -> Dict[str, Any]:
+        return dict(self.telemetry)
 
-    def _calc_next_s7_preset(self, direction: str) -> float:
-        """Calculates next clean preset angle relative to current physical hardware position."""
-        curr_deg = self._get_current_s7_angle()
-        from robot_backend import calc_next_s7_preset
-        target_deg, _ = calc_next_s7_preset(curr_deg, direction)
-        return target_deg
+    def prompt_connect_announcement(self) -> None:
+        """Prompts Carson over TTS via Voice Bridge upon daemon startup."""
+        def _prompt():
+            time.sleep(2.0)
+            try:
+                url = f"{self.voice_bridge_url}/api/voice/prompt_connect"
+                req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    if resp.status == 200:
+                        self.logger.info("📢 Broadcast connection prompt to Carson over Laura TTS.")
+            except Exception as e:
+                self.logger.warning("Connection prompt broadcast to Voice Bridge failed: %s", e)
+        threading.Thread(target=_prompt, daemon=True).start()
+
+    def _notify_voice_bridge(self, event: str) -> None:
+        """Sends button event to Voice Bridge on the PC."""
+        def _post():
+            try:
+                url = f"{self.voice_bridge_url}/api/voice/button_event"
+                payload = json.dumps({"button": "B", "event": event}).encode("utf-8")
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    self.logger.info(f"Notified Voice Bridge of '{event}': status {resp.status}")
+            except Exception as e:
+                self.logger.warning(f"Failed to notify Voice Bridge of '{event}': {e}")
+        threading.Thread(target=_post, daemon=True).start()
+
+    def _start_robot_mic(self) -> None:
+        """Triggers onboard PulseAudio microphone capture on Pi 4B."""
+        def _work():
+            try:
+                url = f"{get_pi4b_base_url()}/api/microphone/start"
+                req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    self.logger.info("🎤 Robot onboard microphone capture STARTED.")
+            except Exception as e:
+                self.logger.warning(f"Failed to start robot microphone on Pi 4B: {e}")
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _stop_robot_mic(self) -> None:
+        """Stops Pi 4B microphone capture and dispatches recorded WAV to Voice Bridge."""
+        def _work():
+            try:
+                url = f"{get_pi4b_base_url()}/api/microphone/stop"
+                payload = json.dumps({"voice_bridge_url": f"{self.voice_bridge_url}/api/voice/process_audio"}).encode('utf-8')
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=4.0) as resp:
+                    self.logger.info("🎤 Robot onboard microphone capture STOPPED & dispatched to Voice Bridge.")
+            except Exception as e:
+                self.logger.warning(f"Failed to stop robot microphone on Pi 4B: {e}")
+        threading.Thread(target=_work, daemon=True).start()
 
     def _send_aux_request(self, endpoint: str, payload: dict, lock_duration: float = 0.6) -> None:
         now = time.time()
         if self.is_busy or now < self.busy_until:
-            self.logger.info("⚠️ Aux Request Ignored: Motor is currently executing a move.")
             return
-
         self.is_busy = True
         self.busy_until = now + lock_duration
 
@@ -191,7 +220,7 @@ class PokeballApp(BaseApp):
                 url = f"{self.api_url}{endpoint}"
                 data = json.dumps(payload).encode('utf-8')
                 req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                with urllib.request.urlopen(req, timeout=3.0):
                     pass
             except Exception as e:
                 self.logger.warning("Aux API HTTP Dispatch error: %s", e)
@@ -209,7 +238,7 @@ class PokeballApp(BaseApp):
 
             buttons = data[1]
 
-            # 12-Bit Joystick Decoding (X: steering, Y: throttle)
+            # 12-Bit Joystick Decoding
             raw_x_12 = data[2] | ((data[3] & 0x0F) << 8)
             raw_y_12 = (data[3] >> 4) | (data[4] << 4)
 
@@ -219,13 +248,11 @@ class PokeballApp(BaseApp):
             norm_x = max(-1.0, min(1.0, x_offset / 2048.0))
             norm_y = max(-1.0, min(1.0, y_offset / 2048.0))
 
-            # Deadzone filter
             if abs(norm_x) < 0.08:
                 norm_x = 0.0
             if abs(norm_y) < 0.08:
                 norm_y = 0.0
 
-            # Direction classification for discrete step gestures
             if norm_x < -0.35:
                 x_direction = "left"
             elif norm_x > 0.35:
@@ -233,254 +260,219 @@ class PokeballApp(BaseApp):
             else:
                 x_direction = "center"
 
-            # Button Mapping:
-            # Button A (Stick Click) = 0x02
-            # Button B (Top Red Button) = 0x01
-            btn_stick = bool(buttons & 0x02)  # Button A
-            btn_top = bool(buttons & 0x01)    # Button B
-
-            btn_a = btn_stick
-            btn_b = btn_top
+            btn_a = bool(buttons & 0x02)  # Button A (Stick Click)
+            btn_b = bool(buttons & 0x01)  # Button B (Top Red Button)
 
             now = time.time()
 
-            # --- 3-SECOND JOYSTICK PRESS (BUTTON A) HOLD LOGIC ---
-            hold_progress = 0.0
-            # Relaxed center deadzone (55%) so firm thumb pressure during stick click doesn't cancel hold
-            is_stick_centered = (abs(norm_x) < 0.55 and abs(norm_y) < 0.55)
+            # --- VOICE INTERACTION STATE MACHINE (Top Red Button B) ---
+            if not self.is_listening:
+                # 1. Start listening via 3-second hold of Button B
+                if btn_b:
+                    if self.btn_b_press_start_time is None:
+                        self.btn_b_press_start_time = now
+                    hold_duration = now - self.btn_b_press_start_time
+                    hold_progress = min(1.0, hold_duration / 3.0)
+                    self.telemetry["hold_progress"] = hold_progress
 
-            if btn_stick and is_stick_centered:
-                self.last_btn_stick_press_time = now
-                if self.stick_press_start_time is None:
-                    self.stick_press_start_time = now
-                
-                hold_duration = now - self.stick_press_start_time
-                hold_progress = min(1.0, hold_duration / 3.0)
-
-                if hold_duration >= 3.0 and not self.mode_switch_triggered:
-                    if self.control_mode == "AUX":
-                        self.control_mode = "ROVER"
-                        self.rover_start_time = now
-                        self.rover_drive_active_time = now + 4.25  # 3.25s audio + 1.0s safety delay = 4.25s lockout
-                        self.last_rover_interaction_time = now
-                        if self.rover_ctrl:
-                            self.rover_ctrl.stop()
-                        play_chime("mario_kart_start")
-                        self.logger.info("🏎️ [MODE SWITCH] Switched to ROVER DRIVE MODE! Mario Kart countdown active (drive output unlocks in 4.25s).")
-                    else:
-                        self.control_mode = "AUX"
-                        if self.rover_ctrl:
-                            self.rover_ctrl.stop()
-                        play_chime("disconnect")
-                        self.logger.info("🦾 [MODE SWITCH] Switched to AUX MANIPULATOR MODE! Zeroed rover motors.")
-                    
-                    self.mode_switch_triggered = True
-            elif not btn_stick:
-                # 250ms release debounce buffer: prevents packet drops / glitch / interleaving from resetting hold timer
-                if now - getattr(self, "last_btn_stick_press_time", 0.0) > 0.25:
-                    self.stick_press_start_time = None
-                    self.mode_switch_triggered = False
-
-
-            # --- ROVER DRIVE MODE EXECUTION ---
-            if self.control_mode == "ROVER":
-                # 1. Top Red Button (Button B) Cancel: Immediately cancels Rover Mode & returns to Aux
-                if btn_top and not self.last_btn_top:
-                    self.control_mode = "AUX"
-                    if self.rover_ctrl:
-                        self.rover_ctrl.stop()
-                    play_chime("disconnect")
-                    self.logger.info("🛑 [MODE CANCEL] Top Red Button (Button B) pressed -> Canceled Rover Mode & returned to Aux Mode.")
+                    if hold_duration >= 3.0:
+                        self.is_listening = True
+                        self.telemetry["is_listening"] = True
+                        self.btn_b_press_start_time = None
+                        self.telemetry["hold_progress"] = 0.0
+                        self.logger.info("🎙️ [VOICE] 3-second Button B hold detected! Listening mode STARTED.")
+                        play_chime("smw_save_menu")
+                        self._start_robot_mic()
                 else:
-                    # 2. 30-Second Inactivity Watchdog Timeout
-                    is_active_input = (abs(norm_x) > 0.08 or abs(norm_y) > 0.08 or btn_stick)
-                    if is_active_input:
-                        self.last_rover_interaction_time = now
+                    self.btn_b_press_start_time = None
+                    self.telemetry["hold_progress"] = 0.0
+            else:
+                # 2. Stop listening via single click of Button B (rising edge)
+                if btn_b and not self.last_btn_b:
+                    self.is_listening = False
+                    self.telemetry["is_listening"] = False
+                    self.btn_b_press_start_time = None
+                    self.logger.info("🛑 [VOICE] Single Button B click detected! Listening mode STOPPED.")
+                    play_chime("smw_stomp_bones")
+                    self._stop_robot_mic()
 
-                    inactivity_dur = now - self.last_rover_interaction_time
-                    if inactivity_dur >= 30.0:
+            # --- OPTIONAL TELEOP ACTUATION (If enabled via Kiosk / AppManager) ---
+            if self.teleop_enabled:
+                is_stick_centered = (abs(norm_x) < 0.55 and abs(norm_y) < 0.55)
+                if btn_a and is_stick_centered:
+                    self.last_btn_stick_press_time = now
+                    if self.stick_press_start_time is None:
+                        self.stick_press_start_time = now
+                    hold_duration = now - self.stick_press_start_time
+                    if hold_duration >= 3.0 and not self.mode_switch_triggered:
+                        if self.control_mode == "AUX":
+                            self.control_mode = "ROVER"
+                            self.rover_drive_active_time = now + 4.25
+                            self.last_rover_interaction_time = now
+                            if self.rover_ctrl:
+                                self.rover_ctrl.stop()
+                            play_chime("mario_kart_start")
+                            self.logger.info("🏎️ [MODE SWITCH] Switched to ROVER DRIVE MODE!")
+                        else:
+                            self.control_mode = "AUX"
+                            if self.rover_ctrl:
+                                self.rover_ctrl.stop()
+                            play_chime("disconnect")
+                            self.logger.info("🦾 [MODE SWITCH] Switched to AUX MANIPULATOR MODE!")
+                        self.mode_switch_triggered = True
+                elif not btn_a:
+                    if now - self.last_btn_stick_press_time > 0.25:
+                        self.stick_press_start_time = None
+                        self.mode_switch_triggered = False
+
+                if self.control_mode == "ROVER":
+                    if btn_b and not self.last_btn_top:
                         self.control_mode = "AUX"
                         if self.rover_ctrl:
                             self.rover_ctrl.stop()
                         play_chime("disconnect")
-                        self.logger.info("⏰ [INACTIVITY TIMEOUT] 30s elapsed with no drive input -> Auto-returned to Aux Mode.")
-                    elif self.rover_ctrl:
-                        # 3. 1.0s Post-Audio Safety Lockout Delay: Wheels strictly locked at 1500 during countdown + 1.0s buffer
-                        if now < self.rover_drive_active_time:
-                            self.rover_ctrl.stop()
-                        else:
-                            self.rover_ctrl.set_drive(norm_x, norm_y)
+                    elif self.rover_ctrl and now >= self.rover_drive_active_time:
+                        self.rover_ctrl.set_drive(norm_x, norm_y)
 
-
-            # --- AUX MANIPULATOR MODE EXECUTION ---
-            elif self.control_mode == "AUX":
-                # 1. Dual-edge trigger: Top Red Button (Button B) + Stick L/R -> Step Pedestal Spinner (Motor 7)
-                top_btn_triggered = (btn_top and not self.last_btn_top and x_direction in ("left", "right"))
-                x_dir_triggered = (btn_top and x_direction in ("left", "right") and x_direction != self.last_x_direction)
-
-                if top_btn_triggered or x_dir_triggered:
-                    if self.is_busy or now < self.busy_until:
-                        self.logger.info("⚠️ Top Red Button Ignored: Movement currently in progress.")
-                    else:
-                        self.logger.info("Joystick %s -> Stepping Pedestal Preset", x_direction.title())
+                elif self.control_mode == "AUX":
+                    top_btn_triggered = (btn_b and not self.last_btn_top and x_direction in ("left", "right"))
+                    if top_btn_triggered and not (self.is_busy or now < self.busy_until):
                         self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
-                elif btn_top and not self.last_btn_top and x_direction == "center":
-                    self.logger.info("🔴 Standalone Top Red Button clicked (joystick centered).")
 
-                # 2. Dual-edge trigger: Stick Click (Button A) + Stick L/R -> Nudge LeSlider Gantry (Motor 8)
-                # Only triggers if joystick was actively tilted left/right (canceling 3s hold mode toggle)
-                stick_btn_triggered = (btn_stick and not self.last_btn_stick and x_direction in ("left", "right"))
-                gantry_dir_triggered = (btn_stick and x_direction in ("left", "right") and x_direction != self.last_x_direction)
-
-                if (stick_btn_triggered or gantry_dir_triggered) and not self.mode_switch_triggered:
-                    self.stick_press_start_time = None  # Cancel mode switch hold
-                    aux_calib_8 = getattr(self.backend, "aux_calibration", {}).get("8", {}) if self.backend else {}
-                    gantry_min = aux_calib_8.get("min_ticks", 3)
-                    gantry_max = aux_calib_8.get("max_ticks", 4800)
-
-                    if not (self.is_busy or now < self.busy_until):
-                        curr_gantry = self.backend.gantry_position if (self.backend and hasattr(self.backend, "gantry_position")) else 2800
-
-                        if x_direction == "left":
-                            if curr_gantry <= gantry_min:
-                                self.logger.info("⚠️ Gantry Min Left Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
-                                play_chime("smw_shell_ricochet")
-                            else:
-                                target_pos = max(gantry_min, curr_gantry - 500)
-                                self.logger.info("Joystick Left -> Stick Clicked -> Nudging Gantry LEFT -> Target: %d ticks", target_pos)
-                                self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
-                                play_chime("smw_map_move_to_spot")
-                        elif x_direction == "right":
-                            if curr_gantry >= gantry_max:
-                                self.logger.info("⚠️ Gantry Max Right Limit Reached (%d ticks) - Playing Shell Ricochet", curr_gantry)
-                                play_chime("smw_shell_ricochet")
-                            else:
-                                target_pos = min(gantry_max, curr_gantry + 500)
-                                self.logger.info("Joystick Right -> Stick Clicked -> Nudging Gantry RIGHT -> Target: %d ticks", target_pos)
-                                self._send_aux_request("/api/move", {"id": 8, "target": target_pos}, lock_duration=0.6)
-                                play_chime("smw_map_move_to_spot")
-
+            self.last_btn_b = btn_b
+            self.last_btn_top = btn_b
+            self.last_btn_stick = btn_a
             self.last_x_direction = x_direction
-            self.last_btn_top = btn_top
-            self.last_btn_stick = btn_stick
-            self.last_buttons = buttons
-
-            rover_ready = (self.control_mode == "ROVER" and now >= self.rover_drive_active_time)
-            ready_countdown = max(0.0, self.rover_drive_active_time - now) if (self.control_mode == "ROVER" and not rover_ready) else 0.0
-            inactivity_seconds = max(0.0, now - self.last_rover_interaction_time) if self.control_mode == "ROVER" else 0.0
 
             self.telemetry.update({
-                "running": True,
-                "connected": True,
-                "status": "CONNECTED",
-                "control_mode": self.control_mode,
-                "hold_progress": hold_progress,
-                "rover_ready": rover_ready,
-                "ready_countdown": ready_countdown,
-                "inactivity_seconds": inactivity_seconds,
-                "last_seen": time.time(),
                 "packet_count": self.counter,
-                "raw_hex": data.hex(' '),
-                "raw_bytes": list(data),
-                "data_len": len(data),
-                "raw_x": raw_x_12,
-                "raw_y": raw_y_12,
-                "norm_x": norm_x,
-                "norm_y": norm_y,
-                "x_direction": x_direction,
-                "button_top": btn_top,
-                "button_stick": btn_stick,
+                "last_seen": now,
+                "control_mode": self.control_mode,
+                "norm_x": round(norm_x, 3),
+                "norm_y": round(norm_y, 3),
                 "button_a": btn_a,
                 "button_b": btn_b,
-                "last_error": None
+                "button_stick": btn_a,
+                "button_top": btn_b
             })
             self.write_telemetry()
-
         except Exception as e:
-            self.logger.error("Error processing Poké Ball packet in notification_handler: %s", e, exc_info=True)
-            self.telemetry["last_error"] = f"Notification parse error: {e}"
-            self.write_telemetry()
+            self.logger.error(f"Error in notification_handler: {e}")
 
     def _cleanup_bluez_device(self) -> None:
-        """Purges stale BlueZ D-Bus device locks."""
         try:
             subprocess.run(["bluetoothctl", "disconnect", self.mac_address], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             subprocess.run(["bluetoothctl", "remove", self.mac_address], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             time.sleep(0.5)
         except Exception as e:
-            self.logger.debug("BlueZ cleanup warning: %s", e)
+            self.logger.debug(f"BlueZ cleanup warning: {e}")
+
+    def _run_loop(self) -> None:
+        if not BLEAK_AVAILABLE:
+            self.logger.error("bleak package missing; Pokéball service cannot run.")
+            return
+
+        self.prompt_connect_announcement()
+
+        async def _async_loop():
+            self.logger.info(f"PokeballService background BLE loop started for {self.mac_address}...")
+            while not self.stop_event.is_set():
+                try:
+                    self._cleanup_bluez_device()
+                    self.logger.info(f"Searching for Poké Ball Plus ({self.mac_address})...")
+                    self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": None})
+                    self.write_telemetry()
+
+                    async with BleakClient(self.mac_address, timeout=6.0) as client:
+                        self.client = client
+                        self.is_connected = True
+                        self.logger.info("✅ Connected to Poké Ball Plus!")
+                        if not self.connect_chime_played:
+                            play_chime("connect")
+                            self.connect_chime_played = True
+
+                        self.telemetry.update({"connected": True, "status": "CONNECTED", "last_seen": time.time()})
+                        self.write_telemetry()
+
+                        await client.start_notify(INPUT_UUID, self.notification_handler)
+                        self.logger.info("Listening for Poké Ball Plus telemetry & button gestures...")
+
+                        while client.is_connected and not self.stop_event.is_set():
+                            await asyncio.sleep(0.5)
+                            self.telemetry["last_seen"] = time.time()
+                            self.write_telemetry()
+
+                except Exception as e:
+                    err_msg = str(e)
+                    self.is_connected = False
+                    self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": err_msg})
+                    self.write_telemetry()
+                    if self.connect_chime_played:
+                        play_chime("disconnect")
+                        self.connect_chime_played = False
+                    self.logger.info(f"Poké Ball BLE waiting for device... [{err_msg}]")
+                    await asyncio.sleep(3.0)
+
+            self.telemetry.update({"running": False, "connected": False, "status": "DISCONNECTED"})
+            self.write_telemetry()
+
+        asyncio.run(_async_loop())
+
+    def start(self) -> None:
+        if self.thread is None or not self.thread.is_alive():
+            self.stop_event.clear()
+            self.thread = threading.Thread(target=self._run_loop, daemon=True)
+            self.thread.start()
+            self.logger.info("PokeballService thread launched.")
+
+    def stop(self) -> None:
+        self.logger.info("Stopping PokeballService...")
+        self.stop_event.set()
+        if self.connect_chime_played:
+            play_chime("disconnect")
+            self.connect_chime_played = False
+
+
+class PokeballApp(BaseApp):
+    """Managed Poké Ball Plus Teleoperation Application with Dual Aux/Rover Mode."""
+    metadata = AppMetadata(
+        name="pokeball_teleop_app",
+        title="Poké Ball Teleop",
+        description="BLE Poké Ball Plus teleoperation for pedestal, gantry, and rover drive",
+        version="2.1.0",
+        tags=["teleop", "ble", "pokeball", "rover"],
+        icon="🔴"
+    )
+
+    def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL, rover_ctrl: Optional[Any] = None) -> None:
+        super().__init__()
+        self.mac_address = mac_address
+        self.api_url = api_url
+        self.rover_ctrl = rover_ctrl
+        self.backend: Optional[RobotBackend] = None
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         self.backend = backend
-        if backend and getattr(backend, "rover_ctrl", None) is not None:
-            self.rover_ctrl = backend.rover_ctrl
-        elif self.rover_ctrl is None and RoverController is not None:
-            self.rover_ctrl = RoverController()
-            self.rover_ctrl.start()
+        service: Optional[PokeballService] = getattr(backend, "pokeball_service", None)
+        if service:
+            service.teleop_enabled = True
+            if backend and getattr(backend, "rover_ctrl", None) is not None:
+                service.rover_ctrl = backend.rover_ctrl
+            elif service.rover_ctrl is None and RoverController is not None:
+                service.rover_ctrl = RoverController()
+                service.rover_ctrl.start()
 
-        if not BLEAK_AVAILABLE:
-            self.logger.error("bleak package not installed; Poké Ball App cannot run.")
-            self.error = "bleak package missing"
-            return
+            self.logger.info("PokeballApp enabled teleoperation on intrinsic PokeballService.")
+            while not stop_event.is_set():
+                time.sleep(0.5)
+            service.teleop_enabled = False
+            self.logger.info("PokeballApp disabled teleoperation on intrinsic PokeballService.")
+        else:
+            self.logger.error("No intrinsic PokeballService found on backend.")
+            while not stop_event.is_set():
+                time.sleep(0.5)
 
-        if backend and backend.ctrl and backend.hardware_active:
-            with backend.lock:
-                backend.torque_state[7] = True
-                backend.torque_state[8] = True
-                try:
-                    backend.ctrl.set_torque(7, True)
-                    backend.ctrl.set_torque(8, True)
-                except Exception as e:
-                    self.logger.warning(f"PokeballApp startup torque enable warning: {e}")
-
-        async def _async_run():
-            self.connect_chime_played = False
-            self.telemetry.update({"running": True, "connected": False, "status": "SEARCHING", "last_error": None})
-            self.write_telemetry()
-            try:
-                while not stop_event.is_set():
-                    try:
-                        self._cleanup_bluez_device()
-                        self.logger.info("Connecting to Poké Ball Plus at %s...", self.mac_address)
-                        self.telemetry.update({"running": True, "connected": False, "status": "SEARCHING", "last_error": None})
-                        self.write_telemetry()
-
-                        async with BleakClient(self.mac_address, timeout=6.0) as client:
-                            self.client = client
-                            self.logger.info("✅ Connected to Poké Ball Plus!")
-                            if not self.connect_chime_played:
-                                play_chime("connect")
-                                self.connect_chime_played = True
-
-                            self.telemetry.update({"running": True, "connected": True, "status": "CONNECTED", "last_seen": time.time()})
-                            self.write_telemetry()
-
-                            await client.start_notify(INPUT_UUID, self.notification_handler)
-                            self.logger.info("Listening for Poké Ball Plus telemetry...")
-
-                            while client.is_connected and not stop_event.is_set():
-                                await asyncio.sleep(0.5)
-                                self.telemetry["last_seen"] = time.time()
-                                self.write_telemetry()
-
-                    except Exception as e:
-                        err_msg = str(e)
-                        self.logger.info("Poké Ball BLE waiting for device... [%s]", err_msg)
-                        self.telemetry.update({
-                            "running": True,
-                            "connected": False,
-                            "status": "SEARCHING",
-                            "last_error": err_msg
-                        })
-                        self.write_telemetry()
-                        await asyncio.sleep(3.0)
-            finally:
-                if self.rover_ctrl:
-                    self.rover_ctrl.stop()
-                if self.connect_chime_played:
-                    play_chime("disconnect")
-                    self.connect_chime_played = False
-                self.telemetry.update({"running": False, "connected": False, "status": "DISCONNECTED"})
-                self.write_telemetry()
-
-        asyncio.run(_async_run())
+    def stop(self) -> None:
+        if self.backend and getattr(self.backend, "pokeball_service", None):
+            self.backend.pokeball_service.teleop_enabled = False
+        super().stop()

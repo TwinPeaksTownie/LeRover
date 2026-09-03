@@ -90,6 +90,21 @@ def get_active_conversation_transcript(
         if latest_assistant_response and latest_user_request:
             break
 
+    has_handoff = False
+    handoff_summary = ""
+    for step in reversed(steps[-10:]):
+        tool_calls = step.get("tool_calls", []) or []
+        for tc in tool_calls:
+            fn_name = ""
+            if isinstance(tc, dict):
+                fn_name = tc.get("function", {}).get("name", "") or tc.get("name", "")
+                if "signal_task_complete" in fn_name:
+                    has_handoff = True
+                    handoff_summary = str(tc.get("args", {}).get("summary", ""))
+                    break
+        if has_handoff:
+            break
+
     recent_history = []
     for step in steps[-max_turns * 2:]:
         recent_history.append({
@@ -104,6 +119,8 @@ def get_active_conversation_transcript(
         "conversation_id": conv_id,
         "transcript_path": latest_transcript,
         "is_turn_done": is_turn_done,
+        "has_handoff": has_handoff,
+        "handoff_summary": handoff_summary,
         "last_step_type": last_type,
         "last_step_status": last_status,
         "last_step_source": last_source,
@@ -514,3 +531,66 @@ def read_workspace_file(file_path: str, start_line: int = 1, max_lines: int = 50
         }
     except Exception as e:
         return {"status": "error", "error": f"Failed to read {file_path}: {str(e)}"}
+
+def search_workspace_code(
+    query: str,
+    extensions: list = None,
+    repo_path: str = None,
+    max_matches: int = 50
+) -> dict:
+    """
+    Fast, read-only search across workspace files.
+    Skips .git, __pycache__, .gemini, and binary files.
+    """
+    if repo_path is None:
+        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+
+    if not os.path.exists(repo_path):
+        return {"status": "error", "error": f"Repo path not found: {repo_path}"}
+
+    if not query or not query.strip():
+        return {"status": "error", "error": "Search query cannot be empty"}
+
+    if extensions is None:
+        extensions = [".py", ".json", ".js", ".html", ".md", ".sh", ".service"]
+
+    matches = []
+    ignored_dirs = {".git", "__pycache__", ".gemini", "node_modules", ".venv", "venv", ".idea"}
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+
+    try:
+        for root, dirs, files in os.walk(repo_path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
+            for file in files:
+                if any(file.endswith(ext) for ext in extensions):
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, repo_path)
+                    try:
+                        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                            for idx, line in enumerate(f, start=1):
+                                if pattern.search(line):
+                                    matches.append({
+                                        "file": rel_path,
+                                        "line": idx,
+                                        "content": line.strip()
+                                    })
+                                    if len(matches) >= max_matches:
+                                        return {
+                                            "status": "success",
+                                            "query": query,
+                                            "matches_count": len(matches),
+                                            "capped": True,
+                                            "matches": matches
+                                        }
+                    except Exception:
+                        continue
+
+        return {
+            "status": "success",
+            "query": query,
+            "matches_count": len(matches),
+            "capped": False,
+            "matches": matches
+        }
+    except Exception as e:
+        return {"status": "error", "error": f"Search failed: {str(e)}"}
