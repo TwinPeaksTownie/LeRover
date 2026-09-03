@@ -77,6 +77,54 @@ class PythonASTContractVisitor(ast.NodeVisitor):
                     "Forbidden default fallback in getattr(obj, attr, default). Must enforce schema attributes directly."
                 )
 
+        # 3. Check for hardcoded AppMetadata literals (CONFIG_PARITY)
+        elif (isinstance(node.func, ast.Name) and node.func.id == "AppMetadata") or \
+             (isinstance(node.func, ast.Attribute) and node.func.attr == "AppMetadata"):
+            norm_fn = self.filename.replace("\\", "/")
+            if "apps/" in norm_fn:
+                for kw in node.keywords:
+                    if kw.arg in ("name", "icon") and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                        self._add_violation(
+                            "CONFIG_PARITY",
+                            kw.value,
+                            f"AppMetadata parameter '{kw.arg}' hardcoded as '{kw.value.value}'. Must consume _CONFIG['{kw.arg}'] from config.json."
+                        )
+
+        self.generic_visit(node)
+
+    def visit_Dict(self, node: ast.Dict):
+        # Check for choreography dictionary schema completeness
+        key_names = [k.value for k in node.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)]
+        if "tracks" in key_names and "poses" in key_names:
+            if "probabilities" not in key_names:
+                self._add_violation(
+                    "SCHEMA_KEY_COMPLETENESS",
+                    node,
+                    "Choreography dictionary structure omits mandatory 'probabilities' schema key, causing downstream player crashes."
+                )
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        # Check execution order: dispatch_playback called before ChoreographyPlayer initialization
+        calls = []
+        for stmt in node.body:
+            for sub in ast.walk(stmt):
+                if isinstance(sub, ast.Call):
+                    fn_name = ""
+                    if isinstance(sub.func, ast.Attribute):
+                        fn_name = sub.func.attr
+                    elif isinstance(sub.func, ast.Name):
+                        fn_name = sub.func.id
+                    if fn_name in ("dispatch_playback", "ChoreographyPlayer"):
+                        calls.append((fn_name, stmt))
+        dispatch_stmt = next((stmt for fn, stmt in calls if fn == "dispatch_playback"), None)
+        player_stmt = next((stmt for fn, stmt in calls if fn == "ChoreographyPlayer"), None)
+        if dispatch_stmt and player_stmt and dispatch_stmt.lineno < player_stmt.lineno:
+            self._add_violation(
+                "EXECUTION_ORDER_GUARD",
+                dispatch_stmt,
+                "Audio dispatch ('dispatch_playback') called before 'ChoreographyPlayer' initialization. Preconditions must be validated before network side-effects."
+            )
         self.generic_visit(node)
 
     def visit_IfExp(self, node: ast.IfExp):
@@ -278,6 +326,32 @@ def scan_javascript_code(code: str, filename: str) -> List[Dict[str, Any]]:
                     "reason": "Hardcoded 2048/0x800 neutral detected in JavaScript. Offsets and bounds must load dynamically from JSON."
                 })
 
+    # 6. Check JS scope integrity: functions referencing undeclared `data` (runs once per file)
+    func_pattern = re.compile(r'function\s+([a-zA-Z0-9_$]+)\s*\(([^)]*)\)\s*\{', re.DOTALL)
+    for match in func_pattern.finditer(code):
+        fn_name = match.group(1)
+        params = [p.strip() for p in match.group(2).split(',') if p.strip()]
+        start_idx = match.end()
+        brace_count = 1
+        curr_idx = start_idx
+        while curr_idx < len(code) and brace_count > 0:
+            if code[curr_idx] == '{':
+                brace_count += 1
+            elif code[curr_idx] == '}':
+                brace_count -= 1
+            curr_idx += 1
+        body = code[start_idx:curr_idx]
+        if "data" not in params:
+            if re.search(r'\bdata\.[a-zA-Z0-9_$]+', body) and not re.search(r'\b(const|let|var)\s+data\b', body):
+                lineno = code[:match.start()].count('\n') + 1
+                violations.append({
+                    "rule": "JS_SCOPE_INTEGRITY",
+                    "file": filename,
+                    "line": lineno,
+                    "snippet": f"function {fn_name}({match.group(2)})",
+                    "reason": f"Function '{fn_name}' references undeclared identifier 'data'. Parameters are ({match.group(2)}). Causes runtime ReferenceError."
+                })
+
     return violations
 
 def scan_html_code(code: str, filename: str) -> List[Dict[str, Any]]:
@@ -314,7 +388,24 @@ def scan_source_file(file_path: str, repo_path: str = None) -> List[Dict[str, An
     if lower_name.endswith(".py"):
         return scan_python_code(content, file_path)
     elif lower_name.endswith(".js"):
-        return scan_javascript_code(content, file_path)
+        js_violations = scan_javascript_code(content, file_path)
+        try:
+            import subprocess
+            import shutil
+            node_bin = shutil.which("node")
+            if node_bin:
+                proc = subprocess.run([node_bin, "--check", full_path], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=5)
+                if proc.returncode != 0:
+                    js_violations.append({
+                        "rule": "JS_SYNTAX_ERROR",
+                        "file": file_path,
+                        "line": 1,
+                        "snippet": proc.stderr[:200],
+                        "reason": f"Node.js syntax check failed: {proc.stderr.strip()[:200]}"
+                    })
+        except Exception:
+            pass
+        return js_violations
     elif lower_name.endswith((".html", ".htm")):
         return scan_html_code(content, file_path)
     return []

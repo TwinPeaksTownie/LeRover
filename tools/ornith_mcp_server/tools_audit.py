@@ -321,6 +321,21 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deploy
         except Exception as e:
             _log_debug(f"Deployment parity check exception: {e}")
 
+    # 4. Target Path & Bifurcation Verification
+    if check_deployments:
+        try:
+            bifurcated_check = tools_hardware.verify_remote_directory_exists("pi500", "/home/user/so101/beat_bandit/library")
+            if bifurcated_check.get("exists"):
+                violations.append({
+                    "rule": "TARGET_PATH_EXISTS",
+                    "file": "apps/beat_bandit/config.json",
+                    "line": 1,
+                    "snippet": "/home/user/so101/beat_bandit/library",
+                    "reason": "Bifurcated legacy library directory '/home/user/so101/beat_bandit/library' exists on Pi 500. Canonical path is '/home/user/so101/library/beat_bandit'."
+                })
+        except Exception as e:
+            _log_debug(f"Target path check exception: {e}")
+
     # Deduplicate violations by (rule, file, line, reason)
     deduped = []
     seen = set()
@@ -405,6 +420,18 @@ def query_ornith_for_review(
         dep = contract_res["deployment_status"]
         deployment_info = f"Files checked: {dep.get('checked_files')}, Parity Mismatches: {dep.get('has_mismatch')}, All Verified: {dep.get('all_verified')}"
 
+    # State 4 Daemon Log Inspection
+    daemon_log_info = "Daemon logs clean."
+    try:
+        d_logs = tools_hardware.query_daemon_logs("pi500", "backend.service", lines=25)
+        if not d_logs.get("clean"):
+            daemon_log_info = f"Errors found ({d_logs.get('error_count')}): " + "; ".join(d_logs.get("detected_errors", [])[:3])
+            violations_detail += f"\n- [DAEMON_LOG_ERROR] pi500 backend.service logs:\n  " + "\n  ".join(d_logs.get("detected_errors", [])[:3])
+        else:
+            daemon_log_info = "0 exceptions or timeouts in recent journalctl."
+    except Exception as e:
+        _log_debug(f"Daemon log query warning: {e}")
+
     system_prompt = """You are Ornith, the adversarial code reviewer and hardware supervisor for the SO-101 robotic arm and touch UI system.
 Your job is to strictly enforce the following rules:
 1. FAIL-FAST SCHEMA: Zero tolerance for .get(key, default), .setdefault(), .pop(k, default), getattr(obj, k, default), or 'd[k] if k in d else default' fallbacks in internal payloads, motion blocks, track dictionaries, modes, speeds, envelopes, or calibration. All dictionaries and motion blocks must use direct bracket access (e.g. block["speed"]) and fail-fast schema validators. Raise KeyError immediately on missing or malformed keys.
@@ -415,6 +442,10 @@ Your job is to strictly enforce the following rules:
 6. TARGET DEPLOYMENT PARITY: Modified code under pi500/ or pi4b/ must be deployed and MD5-verified on physical targets.
 7. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
 8. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
+9. CONFIG PARITY & SINGLE SOURCE OF TRUTH: Modular apps under apps/ must consume their loaded _CONFIG values (name, title, icon, library_subdir) directly in AppMetadata and paths.
+10. SCHEMA KEY COMPLETENESS: Choreography dictionary structures, sanitization handlers, and save routines must retain mandatory schema keys, specifically 'probabilities' and 'tracks'.
+11. JS SCOPE INTEGRITY: JavaScript functions must not reference undeclared variables (e.g. referencing 'data' when 'data' is not in function scope). Use explicitly declared module state.
+12. EXECUTION ORDER & SIDE-EFFECT PRECONDITIONS: Irreversible network side-effects (e.g. audio playback dispatch) must occur only after worker and player instantiation has succeeded.
 
 Evaluate the git diff, contract violations, and deployment status against the task summary and these strict rules.
 
@@ -439,6 +470,7 @@ Contract Scan Result:
 - Clean: {contract_res.get('clean')}
 - Rule Violations: {len(contract_res.get('violations', []))}
 - Deployment Status: {deployment_info}
+- Pi 500 Daemon Logs: {daemon_log_info}
 
 Contract Violations Detail:
 {violations_detail}

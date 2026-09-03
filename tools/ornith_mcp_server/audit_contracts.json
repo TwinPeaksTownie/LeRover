@@ -43,6 +43,41 @@
       "engine": "deployment_md5",
       "file_patterns": ["pi500/**", "pi4b/**"],
       "description": "Modified hardware or UI code must be synced to physical target devices (Pi 500 @ 192.168.0.130 or Pi 4B @ 192.168.0.86) and MD5-verified before approval."
+    },
+    {
+      "id": "CONFIG_PARITY",
+      "severity": "VIOLATION",
+      "engine": "python_ast",
+      "file_patterns": ["apps/**/app.py"],
+      "description": "Modular apps must consume their _CONFIG values directly in AppMetadata and operational paths instead of hardcoded strings or divergent names."
+    },
+    {
+      "id": "SCHEMA_KEY_COMPLETENESS",
+      "severity": "VIOLATION",
+      "engine": "python_ast",
+      "file_patterns": ["pi500/beat_studio.py", "apps/beat_bandit/app.py"],
+      "description": "Choreography sanitization and save routines must preserve mandatory schema keys (specifically 'probabilities' and 'tracks')."
+    },
+    {
+      "id": "JS_SCOPE_INTEGRITY",
+      "severity": "VIOLATION",
+      "engine": "js_structural",
+      "file_patterns": ["*.js"],
+      "description": "JavaScript functions must not reference undeclared identifiers or rely on out-of-scope variables that cause ReferenceErrors at runtime."
+    },
+    {
+      "id": "EXECUTION_ORDER_GUARD",
+      "severity": "VIOLATION",
+      "engine": "python_ast",
+      "file_patterns": ["apps/beat_bandit/app.py"],
+      "description": "Network and audio playback dispatches must occur only after player or motion engine initialization has succeeded."
+    },
+    {
+      "id": "TARGET_PATH_EXISTS",
+      "severity": "VIOLATION",
+      "engine": "target_path",
+      "file_patterns": ["apps/**/config.json", "pi500/*.py"],
+      "description": "Configured storage paths and library subdirectories must resolve to valid, un-bifurcated directories on target host devices."
     }
   ]
 }

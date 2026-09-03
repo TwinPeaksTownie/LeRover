@@ -15,6 +15,8 @@ export let isBeatBanditDancing = false;
 export let isBeatBanditRunning = false;
 export let beatBanditTrackPage = 0;
 export let selectedBeatBanditTrackId = 'F0N7aNy-9tg';
+export let currentOrnithState = 'IDLE';
+export function setCurrentOrnithState(s) { currentOrnithState = s; }
 export let cachedBeatBanditTracks = [
     { track_id: "F0N7aNy-9tg", title: "Dracula", artist: "Tame Impala, JENNIE", duration: 209.8, tempo: 114.8, total_beats: 401 },
     { track_id: "Sv1dxHCW2-I", title: "People Pleaser", artist: "BLACK PONTIAC", duration: 260.2, tempo: 92.3, total_beats: 400 },

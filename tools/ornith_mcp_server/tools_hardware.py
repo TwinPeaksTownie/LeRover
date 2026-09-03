@@ -202,6 +202,9 @@ def query_daemon_logs(
     Returns:
         Dict with clean flag, detected errors, and log output.
     """
+    if service_name == "backend.service" and node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
+        service_name = "sewer-daemon.service"
+
     cmd = f"journalctl -u {service_name} -n {lines} --no-pager"
     res = ssh_run_command(node, cmd)
     if res.get("status") != "success":
@@ -239,10 +242,37 @@ def query_daemon_logs(
         "log_snippet": "\n".join(log_text.splitlines()[-20:])
     }
 
+def verify_remote_directory_exists(node: str = "pi500", remote_path: str = "/home/user/so101/library/beat_bandit") -> dict:
+    """Verifies that a directory exists on the remote node and returns file count."""
+    cmd = f"test -d '{remote_path}' && ls -1 '{remote_path}' | wc -l || echo 'NOT_FOUND'"
+    res = ssh_run_command(node, cmd)
+    out = res.get("stdout", "").strip()
+    if "NOT_FOUND" in out or res.get("exit_code") != 0:
+        return {
+            "status": "success",
+            "exists": False,
+            "node": node,
+            "remote_path": remote_path,
+            "file_count": 0,
+            "message": f"Directory '{remote_path}' does not exist on {node}"
+        }
+    try:
+        count = int(out.split()[0])
+    except Exception:
+        count = 0
+    return {
+        "status": "success",
+        "exists": True,
+        "node": node,
+        "remote_path": remote_path,
+        "file_count": count,
+        "message": f"Directory exists with {count} entries."
+    }
+
 def check_target_deployments(files: list, repo_path: str = None) -> dict:
     """
     Given a list of modified files, verifies that hardware-target files
-    (under pi500/ or pi4b/) match their remote deployed MD5 checksums.
+    (under pi500/, pi4b/, or apps/) match their remote deployed MD5 checksums.
     """
     if repo_path is None:
         repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
@@ -253,6 +283,13 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
     for rel_path in files:
         norm_path = rel_path.replace("\\", "/").strip()
         if norm_path.startswith("pi500/"):
+            target_node = "pi500"
+            remote_path = f"/home/user/so101/{norm_path}"
+            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
+            deployments.append(v_res)
+            if not v_res.get("match", False):
+                has_mismatch = True
+        elif norm_path.startswith("apps/"):
             target_node = "pi500"
             remote_path = f"/home/user/so101/{norm_path}"
             v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)

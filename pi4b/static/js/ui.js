@@ -18,6 +18,8 @@ import {
     selectedBeatBanditTrackId,
     cachedBeatBanditTracks,
     currentAppsMode,
+    currentOrnithState,
+    setCurrentOrnithState,
     currentPresetsPage,
     currentPresetMode,
     isOverwriteModeActive,
@@ -195,8 +197,8 @@ export function renderButtonStates() {
     // Apps status readout
     const appsStatus = document.getElementById('appsStatus');
     if (appsStatus) {
-        if (typeof data !== 'undefined' && data && data.ornith_state && data.ornith_state !== 'IDLE') {
-            const ost = data.ornith_state;
+        if (currentOrnithState && currentOrnithState !== 'IDLE') {
+            const ost = currentOrnithState;
             if (ost === 'LISTENING') {
                 appsStatus.innerText = '🎙️ ORNITH LISTENING...';
                 appsStatus.style.color = '#00ff66';
@@ -798,6 +800,9 @@ export function updateTelemetryUI(data) {
     setIsClackPoseRunning(currentApp === 'clack_pose_app' || currentApp === 'piranha_pose_app');
     setIsFollowerRunning(currentApp === 'teleop_app');
     setIsLeaderRunning(!!((data.leader && data.leader.running) || (telemLeader && telemLeader.running)));
+    if (data && data.ornith_state) {
+        setCurrentOrnithState(data.ornith_state);
+    }
     
     let teleopStatusStr = 'DAEMON OFF';
     let teleopStatusColor = '#ff3344';
