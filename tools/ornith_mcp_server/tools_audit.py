@@ -469,7 +469,7 @@ Provide your adversarial audit:"""
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=120) as res:
+        with urllib.request.urlopen(req, timeout=300) as res:
             data = json.loads(res.read())
             content = data["choices"][0]["message"].get("content", "")
             reasoning = data["choices"][0]["message"].get("reasoning_content", "")
