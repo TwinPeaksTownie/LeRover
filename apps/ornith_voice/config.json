@@ -20,7 +20,7 @@
     "temperature": 0.2,
     "default_speak_verdict": true,
     "max_diff_chars": 25000,
-    "uncommitted_fallback_commits": 3
+    "uncommitted_fallback_commits": 4
   },
   "voice_bridge": {
     "host": "0.0.0.0",
