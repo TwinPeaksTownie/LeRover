@@ -30,6 +30,11 @@ except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import network_resolver
 
+try:
+    import audio_resolver
+except ImportError:
+    audio_resolver = None
+
 
 def get_mac_api_url() -> str:
     mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
@@ -74,14 +79,22 @@ def ensure_leader_poller_started():
 
 def play_chime(kind: str = "incorrect") -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
+    sound_file = kind
+    event_name = kind
+    if audio_resolver is not None:
+        try:
+            sound_file = audio_resolver.get_audio_filename(kind)
+        except Exception:
+            sound_file = kind
+
     def _work():
         try:
-            payload = json.dumps({"kind": kind}).encode("utf-8")
+            payload = json.dumps({"kind": sound_file, "event": event_name}).encode("utf-8")
             req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass
         except Exception as e:
-            logging.warning("Failed to dispatch chime '%s' to Pi 4B: %s", kind, e)
+            logging.warning("Failed to dispatch chime '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
     threading.Thread(target=_work, daemon=True).start()
 
 
@@ -510,9 +523,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 play_chime("incorrect")
                 return self._send_json({"error": "Missing required 'name' parameter"}, 400)
             ok = self.app_manager.start_app_by_name(app_name)
-            if ok:
-                play_chime("connect")
-            else:
+            if not ok:
                 play_chime("incorrect")
             self._send_json({"status": "ok" if ok else "error", "app_name": app_name, "running": ok})
 
@@ -522,7 +533,6 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 self.app_manager.stop_app(app_name)
             else:
                 self.app_manager.stop_all()
-            play_chime("disconnect")
             self._send_json({"status": "ok", "message": f"Stopped app {app_name if app_name else 'all'}"})
 
         elif parsed.path == "/api/pokeball_teleop_toggle":
@@ -533,11 +543,11 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("pokeball_teleop_app")
-                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
                 ok = self.app_manager.start_app_by_name("pokeball_teleop_app")
-                play_chime("connect" if ok else "incorrect")
+                if not ok:
+                    play_chime("incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
         elif parsed.path == "/api/servo_studio_toggle":
@@ -548,11 +558,11 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("servo_studio_app")
-                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
                 ok = self.app_manager.start_app_by_name("servo_studio_app")
-                play_chime("connect" if ok else "incorrect")
+                if not ok:
+                    play_chime("incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
         elif parsed.path == "/api/clack_pose_toggle":
@@ -566,13 +576,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("piranha_pose_app")
                 self.app_manager.stop_app("clack_pose_app")
-                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             elif action == "start":
                 ok = self.app_manager.start_app_by_name("piranha_pose_app")
                 if not ok:
                     ok = self.app_manager.start_app_by_name("clack_pose_app")
-                play_chime("connect" if ok else "incorrect")
+                if not ok:
+                    play_chime("incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
             else:
                 self._send_json({"status": "error", "message": f"Unsupported action '{action}'"}, 400)
@@ -585,11 +595,11 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
             if action in ["stop", "kill"]:
                 self.app_manager.stop_app("beat_bandit_app")
-                play_chime("disconnect")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
                 ok = self.app_manager.start_app_by_name("beat_bandit_app")
-                play_chime("connect" if ok else "incorrect")
+                if not ok:
+                    play_chime("incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})
 
         elif parsed.path == "/api/apps/beat_bandit/start":

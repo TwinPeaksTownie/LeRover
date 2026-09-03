@@ -23,11 +23,13 @@ import time
 import urllib.request
 from typing import Optional, Dict, Any
 
-# Ensure rover package is importable
+# Ensure repo root and rover package are importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
-workspace_root = os.path.abspath(os.path.join(current_dir, ".."))
-if workspace_root not in sys.path:
-    sys.path.insert(0, workspace_root)
+workspace_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+config_dir = os.path.join(workspace_root, "config")
+for p in [workspace_root, config_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 try:
     from rover.rover_controller import RoverController
@@ -36,6 +38,11 @@ except ImportError:
         from rover_controller import RoverController
     except ImportError:
         RoverController = None
+
+try:
+    import audio_resolver
+except ImportError:
+    audio_resolver = None
 
 try:
     from bleak import BleakClient
@@ -78,17 +85,26 @@ def get_pi4b_sound_url() -> str:
     return f"{get_pi4b_base_url()}/api/play_sound"
 
 
-def play_chime(kind="connect"):
-    """Dispatches requested sound event over HTTP to Pi 4B Touch UI audio server."""
+def play_chime(event_name="device_connect"):
+    """Dispatches requested sound event over HTTP to Pi 4B Touch UI audio server.
+    Resolves event_name against config/audio_files.json.
+    """
+    sound_file = event_name
+    if audio_resolver is not None:
+        try:
+            sound_file = audio_resolver.get_audio_filename(event_name)
+        except Exception:
+            sound_file = event_name
+
     def _work():
         try:
-            payload = json.dumps({"kind": kind}).encode('utf-8')
+            payload = json.dumps({"kind": sound_file, "event": event_name}).encode('utf-8')
             req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={'Content-Type': 'application/json'})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status != 200:
-                    logging.warning(f"Audio request '{kind}' returned non-200 status: {resp.status}")
+                    logging.warning(f"Audio request '{event_name}' ({sound_file}) returned non-200 status: {resp.status}")
         except Exception as e:
-            logging.warning(f"Audio request '{kind}' to Pi 4B failed: {e}")
+            logging.warning(f"Audio request '{event_name}' ({sound_file}) to Pi 4B failed: {e}")
     threading.Thread(target=_work, daemon=True).start()
 
 
@@ -116,16 +132,20 @@ class PokeballService:
         self.is_connected = False
         self.app_manager = None
         self.button_b_click_event = threading.Event()
+        self.abort_audio_event = threading.Event()
         self.b_hold_triggered = False
-        self.a_hold_triggered = False
+        self.both_ab_press_start_time: Optional[float] = None
+        self.ab_hold_triggered = False
         self.btn_b_press_start_time: Optional[float] = None
         self.last_btn_b = False
         self.connect_chime_played = False
         self.counter = 0
 
-        # Teleoperation state
+        # Teleoperation and Rover state
         self.teleop_enabled = False
         self.control_mode = "ROVER"
+        self.is_armed = False
+        self.arm_lockout_until = 0.0
         self.stick_press_start_time: Optional[float] = None
         self.last_btn_stick_press_time = 0.0
         self.last_rover_interaction_time = 0.0
@@ -144,6 +164,7 @@ class PokeballService:
             "status": "SEARCHING",
             "is_listening": False,
             "control_mode": self.control_mode,
+            "is_armed": self.is_armed,
             "hold_progress": 0.0,
             "mac": self.mac_address,
             "last_seen": 0.0,
@@ -239,9 +260,21 @@ class PokeballService:
 
             now = time.time()
 
-            # --- OVERARCHING DAEMON TRIGGERS & BUTTON EVENT DISPATCH ---
-            # 1. Top Red Button (Button B): 3s Hold -> OrnithVoiceApp | Single Click -> button_b_click_event
-            if btn_b:
+            # --- 1. SIMULTANEOUS A + B CHORD (1.0s Hold) -> CANCEL AUDIO CAPTURE ---
+            if btn_a and btn_b:
+                if self.both_ab_press_start_time is None:
+                    self.both_ab_press_start_time = now
+                hold_duration_ab = now - self.both_ab_press_start_time
+                if hold_duration_ab >= 1.0 and not self.ab_hold_triggered:
+                    self.ab_hold_triggered = True
+                    self.logger.info("🛑 [CHORD] 1.0s A + B simultaneous hold detected! Triggering abort_audio_event...")
+                    self.abort_audio_event.set()
+            else:
+                self.both_ab_press_start_time = None
+                self.ab_hold_triggered = False
+
+            # --- 2. BUTTON B (TOP RED BUTTON) HANDLING (When not in chord) ---
+            if btn_b and not btn_a:
                 if self.btn_b_press_start_time is None:
                     self.btn_b_press_start_time = now
                 hold_duration_b = now - self.btn_b_press_start_time
@@ -251,37 +284,55 @@ class PokeballService:
                     self.logger.info("🎙️ [TRIGGER] 3-second Button B hold detected! Launching OrnithVoiceApp...")
                     if self.app_manager:
                         threading.Thread(target=self.app_manager.start_app_by_name, args=("ornith_voice",), daemon=True).start()
+                    else:
+                        play_chime("ornith_app_start")
             else:
                 if self.btn_b_press_start_time is not None:
                     duration = now - self.btn_b_press_start_time
                     if 0.05 <= duration < 2.0 and not self.b_hold_triggered:
                         self.logger.info("🔘 Button B single click detected.")
                         self.button_b_click_event.set()
+
+                        # In PokeballApp: Button B tap acts as Emergency Brake when armed
+                        if self.teleop_enabled and self.is_armed:
+                            self.is_armed = False
+                            self.arm_lockout_until = 0.0
+                            if self.rover_ctrl:
+                                self.rover_ctrl.stop()
+                            self.logger.info("🛑 Emergency brake engaged via Button B! Rover disarmed.")
+                            play_chime("rover_emergency_brake")
+
                     self.btn_b_press_start_time = None
                 self.b_hold_triggered = False
-                self.telemetry["hold_progress"] = 0.0
+                if not (btn_a and btn_b):
+                    self.telemetry["hold_progress"] = 0.0
 
-            # 2. Joystick Click (Button A): 3s Hold -> Universal Escape Hatch to PokeballApp (Rover/Teleop)
-            if btn_a:
+            # --- 3. BUTTON A (JOYSTICK CLICK) HANDLING (When not in chord) ---
+            if btn_a and not btn_b:
                 if self.stick_press_start_time is None:
                     self.stick_press_start_time = now
                 hold_duration_a = now - self.stick_press_start_time
-                if hold_duration_a >= 3.0 and not self.a_hold_triggered:
-                    self.a_hold_triggered = True
-                    self.logger.info("🏎️ [ESCAPE HATCH] 3-second Button A hold detected! Launching PokeballApp (Rover/Teleop)...")
-                    if self.app_manager:
-                        threading.Thread(target=self.app_manager.start_app_by_name, args=("pokeball_teleop_app",), daemon=True).start()
+
+                # When PokeballApp is active: 2.0s hold arms rover drivetrain
+                if self.teleop_enabled:
+                    if hold_duration_a >= 2.0 and not self.is_armed:
+                        self.is_armed = True
+                        self.arm_lockout_until = now + 4.25
+                        self.logger.info("🏎️ Drivetrain Arming triggered! Playing Mario Kart countdown (lockout until %.1f)...", self.arm_lockout_until)
+                        play_chime("rover_arm_drivetrain")
             else:
                 self.stick_press_start_time = None
-                self.a_hold_triggered = False
 
-            # --- TELEOPERATION ACTUATION (When PokeballApp is Active) ---
+            # --- 4. TELEOPERATION ACTUATION (When PokeballApp is Active) ---
             if self.teleop_enabled:
                 if self.rover_ctrl:
-                    self.rover_ctrl.set_drive(norm_x, norm_y)
+                    if self.is_armed and now >= self.arm_lockout_until:
+                        self.rover_ctrl.set_drive(norm_x, norm_y)
+                    else:
+                        self.rover_ctrl.set_drive(0.0, 0.0)
 
-                # Aux Manipulator (Gantry / Pedestal) on gestures
-                if btn_b and not self.last_btn_top and x_direction in ("left", "right"):
+                # Aux Manipulator (Gantry / Pedestal) gestures only when unarmed
+                if not self.is_armed and btn_b and not self.last_btn_top and x_direction in ("left", "right"):
                     if not (self.is_busy or now < self.busy_until):
                         self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
 
@@ -294,6 +345,7 @@ class PokeballService:
                 "packet_count": self.counter,
                 "last_seen": now,
                 "control_mode": self.control_mode,
+                "is_armed": self.is_armed,
                 "norm_x": round(norm_x, 3),
                 "norm_y": round(norm_y, 3),
                 "button_a": btn_a,
@@ -334,7 +386,7 @@ class PokeballService:
                         self.is_connected = True
                         self.logger.info("✅ Connected to Poké Ball Plus!")
                         if not self.connect_chime_played:
-                            play_chime("connect")
+                            play_chime("device_connect")
                             self.connect_chime_played = True
 
                         self.telemetry.update({"connected": True, "status": "CONNECTED", "last_seen": time.time()})
@@ -402,20 +454,26 @@ class PokeballApp(BaseApp):
         service: Optional[PokeballService] = getattr(backend, "pokeball_service", None)
         if service:
             service.teleop_enabled = True
-            play_chime("mario_kart_start")
+            service.is_armed = False
+            service.arm_lockout_until = 0.0
+
             if backend and getattr(backend, "rover_ctrl", None) is not None:
                 service.rover_ctrl = backend.rover_ctrl
             elif service.rover_ctrl is None and RoverController is not None:
-                service.rover_ctrl = RoverController()
-                service.rover_ctrl.start()
+                try:
+                    service.rover_ctrl = RoverController()
+                    service.rover_ctrl.start()
+                except Exception as e:
+                    self.logger.warning("Could not start fallback RoverController: %s", e)
 
-            self.logger.info("PokeballApp enabled teleoperation on intrinsic PokeballService.")
+            self.logger.info("PokeballApp enabled teleoperation on intrinsic PokeballService (Unarmed baseline).")
             while not stop_event.is_set():
                 time.sleep(0.5)
             service.teleop_enabled = False
+            service.is_armed = False
             if service.rover_ctrl:
                 service.rover_ctrl.stop()
-            play_chime("disconnect")
+            play_chime("app_exit_idle")
             self.logger.info("PokeballApp disabled teleoperation on intrinsic PokeballService.")
         else:
             self.logger.error("No intrinsic PokeballService found on backend.")

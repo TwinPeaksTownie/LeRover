@@ -58,6 +58,12 @@ except ImportError:
     import network_resolver
 
 
+try:
+    import audio_resolver
+except ImportError:
+    audio_resolver = None
+
+
 def get_pi4b_sound_url() -> str:
     pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
     return f"http://{pi4b_ip}:8082/api/play_sound"
@@ -65,12 +71,21 @@ def get_pi4b_sound_url() -> str:
 
 def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
+    sound_file = kind
+    event_name = kind
+    if audio_resolver is not None:
+        try:
+            sound_file = audio_resolver.get_audio_filename(kind)
+        except Exception:
+            sound_file = kind
+
     def _work():
         try:
             if delay_sec > 0:
                 time.sleep(delay_sec)
             payload = json.dumps({
-                "kind": kind,
+                "kind": sound_file,
+                "event": event_name,
                 "wav_path": wav_path,
                 "stop_previous": stop_previous
             }).encode("utf-8")
@@ -82,7 +97,7 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 pass
         except Exception as e:
-            logging.warning("Failed to dispatch audio event '%s' to Pi 4B: %s", kind, e)
+            logging.warning("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
     threading.Thread(target=_work, daemon=True).start()
 
 

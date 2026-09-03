@@ -20,11 +20,23 @@ from typing import Optional, Dict, Any
 from app_manager import BaseApp, AppMetadata
 from robot_backend import RobotBackend
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+config_dir = os.path.join(workspace_root, "config")
+pi500_dir = os.path.join(workspace_root, "pi500")
+for p in [workspace_root, config_dir, pi500_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 try:
     import network_resolver
 except ImportError:
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pi500"))
-    import network_resolver
+    network_resolver = None
+
+try:
+    import audio_resolver
+except ImportError:
+    audio_resolver = None
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
@@ -39,10 +51,12 @@ def load_ornith_app_config() -> dict:
     _ = cfg["name"]
     _ = cfg["speech"]["target"]
     _ = cfg["voice_bridge"]["port"]
+    _ = cfg["voice_bridge"]["chimes"]["app_start"]
     _ = cfg["voice_bridge"]["chimes"]["settle"]
     _ = cfg["voice_bridge"]["chimes"]["cancel"]
     _ = cfg["voice_bridge"]["chimes"]["action"]
-    _ = cfg["robot_app"]["cancel_window_sec"]
+    _ = cfg["voice_bridge"]["chimes"]["exit"]
+    _ = cfg["robot_app"]["double_click_window_sec"]
     _ = cfg["robot_app"]["auto_send_timeout_sec"]
     _ = cfg["robot_app"]["settle_delay_sec"]
     _ = cfg["robot_app"]["pending_audio_file"]
@@ -67,6 +81,7 @@ class OrnithVoiceApp(BaseApp):
         self.backend: Optional[RobotBackend] = None
         self.state = "IDLE"
         self.recording_start_time = 0.0
+        self.last_b_click_time = 0.0
 
     def _get_pi4b_url(self) -> str:
         ip = network_resolver.get_pi4b_ip(prefer_port=8082)
@@ -92,11 +107,19 @@ class OrnithVoiceApp(BaseApp):
 
     def _play_pi4b_sound(self, kind: str, stop_previous: bool = False, delay_sec: float = 0.0) -> None:
         """Dispatches audio cue playback over HTTP to Pi 4B speakers."""
+        sound_file = kind
+        if audio_resolver is not None:
+            try:
+                sound_file = audio_resolver.get_audio_filename(kind)
+            except Exception:
+                sound_file = kind
+
         def _post():
             try:
                 url = f"{self._get_pi4b_url()}/api/play_sound"
                 payload = json.dumps({
-                    "kind": kind,
+                    "kind": sound_file,
+                    "event": kind,
                     "stop_previous": stop_previous,
                     "delay_sec": delay_sec
                 }).encode("utf-8")
@@ -104,7 +127,7 @@ class OrnithVoiceApp(BaseApp):
                 with urllib.request.urlopen(req, timeout=2.0):
                     pass
             except Exception as e:
-                self.logger.warning("Sound dispatch '%s' to Pi 4B failed: %s", kind, e)
+                self.logger.warning("Sound dispatch '%s' (%s) to Pi 4B failed: %s", kind, sound_file, e)
         threading.Thread(target=_post, daemon=True).start()
 
     def _cancel_robot_mic(self) -> None:
@@ -140,6 +163,7 @@ class OrnithVoiceApp(BaseApp):
         self._play_pi4b_sound(kind=settle_cue)
         time.sleep(settle_delay)
         self.recording_start_time = time.time()
+        self.last_b_click_time = 0.0
         self._start_robot_mic()
 
     def _check_pending_audio_on_pi4b(self) -> bool:
@@ -172,6 +196,7 @@ class OrnithVoiceApp(BaseApp):
         """Pre-run setup hook: verifies motor torque and initializes state."""
         self.backend = backend
         self.recording_start_time = 0.0
+        self.last_b_click_time = 0.0
         pending_file = self.config["robot_app"]["pending_audio_file"]
         self.logger.info("Setting up OrnithVoiceApp on Pi 500...")
         try:
@@ -210,8 +235,8 @@ class OrnithVoiceApp(BaseApp):
         self._start_listening_turn()
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
-        """Main interaction loop implementing Option B cadence, 3s cancel window, and 30s auto-send."""
-        self.logger.info("OrnithVoiceApp Option B interaction loop running.")
+        """Main interaction loop implementing Option B cadence, double-click commit, and A+B chord cancel."""
+        self.logger.info("OrnithVoiceApp interaction loop running.")
         if not hasattr(backend, "pokeball_service") or backend.pokeball_service is None:
             raise AttributeError("RobotBackend is missing required 'pokeball_service' attribute")
         service = backend.pokeball_service
@@ -220,49 +245,61 @@ class OrnithVoiceApp(BaseApp):
             raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
         service.button_b_click_event.clear()
 
-        cancel_window = self.config["robot_app"]["cancel_window_sec"]
+        if hasattr(service, "abort_audio_event") and service.abort_audio_event is not None:
+            service.abort_audio_event.clear()
+
+        double_click_window = self.config["robot_app"]["double_click_window_sec"]
         auto_send_timeout = self.config["robot_app"]["auto_send_timeout_sec"]
-        cancel_cue = self.config["voice_bridge"]["chimes"]["cancel"]
+        self.last_b_click_time = 0.0
 
         while not stop_event.is_set():
             now = time.time()
 
-            # Check Button B single click event
+            # 1. Check A + B chord abort (1.0s simultaneous hold)
+            if hasattr(service, "abort_audio_event") and service.abort_audio_event.is_set():
+                service.abort_audio_event.clear()
+                self.logger.info("🛑 [CHORD ABORT] A + B simultaneous chord detected. Cancelling audio recording...")
+                self._cancel_robot_mic()
+                self._play_pi4b_sound(kind="ornith_abort_recording")
+                self.last_b_click_time = 0.0
+                self._set_kiosk_state("AWAITING_INPUT")
+
+            # 2. Check Button B click event
             if service.button_b_click_event.is_set():
                 service.button_b_click_event.clear()
 
                 if self.state == "AWAITING_INPUT":
-                    # Tap-to-Listen follow-up turn
+                    # Single click in AWAITING_INPUT starts a new listening turn
                     self.logger.info("Button B click in AWAITING_INPUT: Starting follow-up listening turn...")
                     self._start_listening_turn()
 
                 elif self.state == "LISTENING":
-                    elapsed = now - self.recording_start_time
-                    if elapsed < cancel_window:
-                        # Quick cancel (< cancel_window): abort and play cancellation chime
-                        self.logger.info("Button B clicked within %.2fs (< %.1fs). Cancelling turn with %s.", elapsed, cancel_window, cancel_cue)
-                        self._cancel_robot_mic()
-                        self._play_pi4b_sound(kind=cancel_cue)
-                        self._set_kiosk_state("AWAITING_INPUT")
-                    else:
-                        # Commit speech (>= cancel_window)
-                        self.logger.info("Button B clicked at %.2fs. Committing speech turn...", elapsed)
+                    # Double-click within double_click_window_sec (1.0s) commits speech turn to LLM
+                    if self.last_b_click_time > 0.0 and (now - self.last_b_click_time <= double_click_window):
+                        elapsed_between_clicks = now - self.last_b_click_time
+                        self.logger.info("Button B double-click detected (%.2fs <= %.2fs). Committing speech turn to LLM...",
+                                         elapsed_between_clicks, double_click_window)
+                        self.last_b_click_time = 0.0
                         self._handle_voice_turn(stop_event)
+                    else:
+                        self.last_b_click_time = now
+                        self.logger.info("Button B first click in LISTENING state. Waiting for second click within %.1fs to commit...",
+                                         double_click_window)
 
-            # Auto-send safety net: auto_send_timeout elapsed in LISTENING state without manual tap
+            # 3. Auto-send safety net: auto_send_timeout elapsed in LISTENING state without manual double-click
             if self.state == "LISTENING" and (now - self.recording_start_time >= auto_send_timeout):
                 self.logger.info("%.1f-second auto-send timeout reached. Finalizing voice turn...", auto_send_timeout)
+                self.last_b_click_time = 0.0
                 self._handle_voice_turn(stop_event)
 
             time.sleep(0.05)
 
     def _handle_voice_turn(self, stop_event: threading.Event) -> None:
         """Finalizes audio capture, dispatches midway gate cue, invokes Voice Bridge, and returns to AWAITING_INPUT."""
-        action_cue = self.config["voice_bridge"]["chimes"]["action"]
         wait_timeout = self.config["robot_app"]["playback_wait_timeout_sec"]
         
         # 1. Dispatch midway gate action chime immediately as recording stops
-        self._play_pi4b_sound(kind=action_cue)
+        self._play_pi4b_sound(kind="ornith_commit_speech")
         self._set_kiosk_state("THINKING")
 
         # 2. Stop microphone and command Pi 4B to forward WAV to Voice Bridge
@@ -284,7 +321,7 @@ class OrnithVoiceApp(BaseApp):
         start_wait = time.time()
         while time.time() - start_wait < wait_timeout:
             if stop_event.is_set():
-                self.logger.info("Turn aborted by stop_event (Button A escape hatch).")
+                self.logger.info("Turn aborted by stop_event.")
                 return
             time.sleep(0.5)
             break

@@ -1,0 +1,49 @@
+{
+  "events": {
+    "device_connect": {
+      "file": "smw_coin.wav",
+      "description": "BLE device or hardware peripheral connected"
+    },
+    "app_start": {
+      "file": "smw_riding_yoshi.wav",
+      "description": "Application successfully started up"
+    },
+    "ornith_app_start": {
+      "file": "smw_switch_activated.wav",
+      "description": "Ornith Voice App successfully started"
+    },
+    "ornith_listen_start": {
+      "file": "smw_whistle.wav",
+      "description": "Ornith Voice App begins listening turn"
+    },
+    "ornith_commit_speech": {
+      "file": "smw_midway_gate.wav",
+      "description": "Commit speech turn to LLM"
+    },
+    "ornith_abort_recording": {
+      "file": "smw_switch_timer_ending.wav",
+      "description": "Abort and discard audio capture"
+    },
+    "rover_arm_drivetrain": {
+      "file": "mario_kart_start",
+      "fallback_file": "mario_kart_start.wav",
+      "description": "Arm rover drivetrain with 4.25s audio countdown lockout"
+    },
+    "rover_emergency_brake": {
+      "file": "smw_yoshi_runs_away.wav",
+      "description": "Emergency brake and disarm rover wheels"
+    },
+    "app_exit_idle": {
+      "file": "smw_goal_iris-out.wav",
+      "description": "Application stopped and daemon in IDLE state"
+    },
+    "disconnect": {
+      "file": "smw_pause.wav",
+      "description": "Peripheral disconnected"
+    },
+    "incorrect": {
+      "file": "smw_incorrect.wav",
+      "description": "Action failed or invalid input"
+    }
+  }
+}

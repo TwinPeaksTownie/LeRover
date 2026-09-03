@@ -49,6 +49,7 @@ class TestSynchronizedStop(unittest.TestCase):
             "choreography": compile_choreography_tracks(self.mock_analysis, 5.0),
         }
         self.app.active_analysis = self.mock_analysis
+        self.app.studio_manager.get_track_choreography = MagicMock(return_value=self.app.active_track["choreography"])
 
     @patch("beat_bandit_audio.urllib.request.urlopen")
     def test_synchronized_stop_handshake(self, mock_urlopen):

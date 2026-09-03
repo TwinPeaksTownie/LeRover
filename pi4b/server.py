@@ -25,6 +25,11 @@ try:
 except ImportError:
     network_resolver = None
 
+try:
+    import audio_resolver
+except ImportError:
+    audio_resolver = None
+
 PORT = 8082
 
 
@@ -130,7 +135,7 @@ def sync_rover_speed_config(pct: int):
     except Exception as e:
         print(f"Error syncing rover speed: {e}", flush=True)
 
-def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, delay_sec=0.0):
+def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, delay_sec=0.0, event=None):
     def _work():
         try:
             if stop_previous or kind == "stop_audio" or kind in ("trex_roar", "trex_roar_isolated"):
@@ -150,7 +155,25 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
 
             target_wav = wav_path
             if not target_wav or not os.path.exists(target_wav):
-                if kind == "connect":
+                resolved_filename = None
+                if audio_resolver is not None:
+                    lookup_key = event or kind
+                    try:
+                        resolved_filename = audio_resolver.get_audio_filename(lookup_key)
+                    except (KeyError, Exception):
+                        resolved_filename = None
+
+                if resolved_filename:
+                    cand = os.path.join(MARIO_SOUNDS_DIR, resolved_filename)
+                    if os.path.exists(cand):
+                        target_wav = cand
+                    elif resolved_filename == "mario_kart_start":
+                        target_mp3 = "/home/carson/mario_kart_start.mp3"
+                        if os.path.exists(target_mp3):
+                            subprocess.run(["mpg123", "-q", target_mp3], env=PULSE_ENV, check=False)
+                            return
+                        target_wav = os.path.join(MARIO_SOUNDS_DIR, "mario_kart_start.wav")
+                elif kind == "connect":
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_coin.wav")
                 elif kind in ("incorrect", "error", "invalid", "fallback"):
                     target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
@@ -171,8 +194,10 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
                     if not os.path.exists(target_wav):
                         target_wav = "/home/carson/trex_roar_isolated.wav"
                 elif kind:
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, f"{kind}.wav")
-                    if not os.path.exists(target_wav):
+                    cand = os.path.join(MARIO_SOUNDS_DIR, kind if kind.endswith(".wav") else f"{kind}.wav")
+                    if os.path.exists(cand):
+                        target_wav = cand
+                    else:
                         target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
 
             if target_wav and os.path.exists(target_wav):
@@ -625,7 +650,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             wav_path = req_data.get("wav_path")
             stop_prev = bool(req_data.get("stop_previous", False))
             delay_s = float(req_data.get("delay_sec", 0.0))
-            play_sound_helper(kind=kind, wav_path=wav_path, stop_previous=stop_prev, delay_sec=delay_s)
+            event_name = req_data.get("event")
+            play_sound_helper(kind=kind, wav_path=wav_path, stop_previous=stop_prev, delay_sec=delay_s, event=event_name)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
