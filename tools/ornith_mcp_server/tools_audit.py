@@ -513,7 +513,7 @@ Provide your adversarial audit:"""
     spoken_status = "not_spoken"
     if speak_verdict and spoken_text:
         try:
-            tools_speech.speak_laura(spoken_text)
+            tools_speech.speak_laura(spoken_text, target="both")
             spoken_status = f"spoken_{verdict_str.lower()}"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")

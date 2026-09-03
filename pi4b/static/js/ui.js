@@ -206,6 +206,9 @@ export function renderButtonStates() {
             } else if (ost === 'SPEAKING') {
                 appsStatus.innerText = '🔊 ORNITH SPEAKING...';
                 appsStatus.style.color = '#ff00cc';
+            } else if (ost === 'AWAITING_INPUT') {
+                appsStatus.innerText = '🎙️ TAP B TO SPEAK';
+                appsStatus.style.color = '#00e5ff';
             } else {
                 appsStatus.innerText = `🎙️ ORNITH ${ost}`;
                 appsStatus.style.color = '#00e5ff';
@@ -819,7 +822,7 @@ export function updateTelemetryUI(data) {
         teleopStatusColor = '#ff3344';
     } else if (currentApp === 'ornith_voice') {
         const ost = data.ornith_state || 'STANDBY';
-        teleopStatusStr = `ORNITH ${ost.toUpperCase()}`;
+        teleopStatusStr = (ost === 'AWAITING_INPUT') ? 'TAP B TO SPEAK' : `ORNITH ${ost.toUpperCase()}`;
         teleopStatusColor = (ost === 'LISTENING') ? '#00ff66' : (ost === 'THINKING' ? '#ffaa00' : (ost === 'SPEAKING' ? '#ff00cc' : '#00e5ff'));
     } else if (data.daemon_running) {
         teleopStatusStr = 'DAEMON READY';

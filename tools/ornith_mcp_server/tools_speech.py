@@ -66,6 +66,41 @@ def _send_wav_to_pi4b(wav_bytes: bytes, host: str = DEFAULT_PI4B_HOST, port: int
         _log_debug(f"Failed to stream WAV to Pi 4B on {url}: {e}")
         return False
 
+def send_pending_wav_to_pi4b(wav_bytes: bytes, host: str = DEFAULT_PI4B_HOST, port: int = DEFAULT_PI4B_PORT) -> bool:
+    """Uploads raw WAV binary payload to Pi 4B kiosk /api/pending_audio endpoint for deferred playback."""
+    url = f"http://{host}:{port}/api/pending_audio"
+    req = urllib.request.Request(
+        url,
+        data=wav_bytes,
+        headers={"Content-Type": "audio/wav"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as res:
+            return res.status == 200
+    except Exception as e:
+        _log_debug(f"Failed to upload pending WAV to Pi 4B on {url}: {e}")
+        return False
+
+def synthesize_wav(
+    text: str,
+    voice_url: str = "hf://laura",
+    host: str = DEFAULT_TTS_HOST,
+    port: int = DEFAULT_TTS_PORT
+) -> bytes:
+    """Synthesizes text via Pocket TTS and returns raw WAV bytes without playing."""
+    if not text or not text.strip():
+        raise ValueError("Text argument cannot be empty")
+    words = text.strip().split()
+    if len(words) > 100:
+        text = " ".join(words[:100])
+    url = f"http://{host}:{port}/tts"
+    payload = urllib.parse.urlencode({"text": text.strip(), "voice_url": voice_url}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=15) as res:
+        if res.status != 200:
+            raise RuntimeError(f"Pocket TTS returned HTTP {res.status}")
+        return res.read()
+
 def speak_laura(
     text: str,
     voice_url: str = "hf://laura",

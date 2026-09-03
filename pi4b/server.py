@@ -333,6 +333,18 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
             return
 
+        if parsed.path == "/api/pending_audio":
+            tmp_path = "/home/carson/pending_audio.wav"
+            exists = os.path.exists(tmp_path)
+            size = 0
+            if exists:
+                size = os.path.getsize(tmp_path)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "exists": exists, "bytes": size}).encode('utf-8'))
+            return
+
         if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences", "/api/pokeball_reconnect"]:
             try:
                 p500_ip = get_current_pi500_ip(port=8085)
@@ -361,7 +373,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
 
         if path == "/api/play_sound" and (content_type.startswith("audio/") or content_type.startswith("application/octet-stream")):
-            raw_audio = self.rfile.read(content_length) if content_length > 0 else b""
+            raw_audio = b""
+            if content_length > 0:
+                raw_audio = self.rfile.read(content_length)
             if raw_audio:
                 tmp_path = "/tmp/incoming_stream.wav"
                 with open(tmp_path, "wb") as f:
@@ -373,11 +387,76 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "mode": "stream_audio", "bytes": len(raw_audio)}).encode('utf-8'))
                 return
 
+        if path == "/api/pending_audio" and (content_type.startswith("audio/") or content_type.startswith("application/octet-stream")):
+            raw_audio = b""
+            if content_length > 0:
+                raw_audio = self.rfile.read(content_length)
+            if raw_audio:
+                tmp_path = "/home/carson/pending_audio.wav"
+                with open(tmp_path, "wb") as f:
+                    f.write(raw_audio)
+                print(f"[PENDING AUDIO] Saved {len(raw_audio)} bytes to {tmp_path}", flush=True)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "bytes": len(raw_audio), "path": tmp_path}).encode('utf-8'))
+                return
+
         body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
         try:
             req_data = json.loads(body) if body else {}
         except Exception:
             req_data = {}
+
+        if path == "/api/pending_audio/play":
+            tmp_path = "/home/carson/pending_audio.wav"
+            if os.path.exists(tmp_path):
+                print(f"[PENDING AUDIO] Playing deferred audio from {tmp_path}", flush=True)
+                play_sound_helper(wav_path=tmp_path, stop_previous=True)
+                def _cleanup():
+                    time.sleep(1.0)
+                    try:
+                        if os.path.exists(tmp_path):
+                            os.remove(tmp_path)
+                    except Exception as ce:
+                        print(f"[PENDING AUDIO] Cleanup warning: {ce}", flush=True)
+                threading.Thread(target=_cleanup, daemon=True).start()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "playing_pending"}).encode('utf-8'))
+                return
+            else:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "not_found"}).encode('utf-8'))
+                return
+
+        if path == "/api/microphone/cancel":
+            with ROBOT_MIC_LOCK:
+                if ROBOT_MIC_PROC is not None:
+                    try:
+                        ROBOT_MIC_PROC.terminate()
+                        ROBOT_MIC_PROC.wait(timeout=1.0)
+                    except Exception as te:
+                        print(f"[ROBOT MIC] Terminate failed: {te}", flush=True)
+                        try:
+                            ROBOT_MIC_PROC.kill()
+                        except Exception as ke:
+                            print(f"[ROBOT MIC] Kill failed: {ke}", flush=True)
+                    ROBOT_MIC_PROC = None
+                if os.path.exists("/tmp/robot_recording.wav"):
+                    try:
+                        os.remove("/tmp/robot_recording.wav")
+                    except Exception as re:
+                        print(f"[ROBOT MIC] Remove recording file failed: {re}", flush=True)
+            print("[ROBOT MIC] Cancelled microphone recording and discarded audio buffer.", flush=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "cancelled"}).encode('utf-8'))
+            return
 
         if path == "/api/microphone/start":
             with ROBOT_MIC_LOCK:

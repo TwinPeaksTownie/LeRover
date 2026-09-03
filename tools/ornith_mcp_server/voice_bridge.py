@@ -154,6 +154,107 @@ def dispatch_cue_to_pi4b(kind: str, delay_sec: float = 0.0) -> None:
             logger.warning(f"Failed to dispatch cue '{kind}' to Pi 4B: {e}")
     threading.Thread(target=_work, daemon=True).start()
 
+def get_robot_identity_prompt() -> str:
+    """Loads the robot identity and conversational context document from disk."""
+    ctx_path = os.path.join(BASE_DIR, "context", "robot_identity.md")
+    if os.path.exists(ctx_path):
+        try:
+            with open(ctx_path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.warning(f"Failed to read robot_identity.md: {e}")
+    return (
+        "You are Ornith, Carson's direct, plain-spoken robotics AI assistant speaking in Laura's voice.\n"
+        "Provide a direct, conversational, and technically accurate answer in strictly 35 to 55 words.\n"
+        "Lead with the bottom line. Speak naturally in active voice.\n"
+        "Do NOT use markdown, code blocks, bullet points, headers, or quotes.\n"
+        "Do NOT explain your thinking process."
+    )
+
+class ConversationMemory:
+    def __init__(self, max_messages: int = 10, timeout_sec: float = 900.0):
+        self.max_messages = max_messages
+        self.timeout_sec = timeout_sec
+        self.history = []
+        self.last_activity = time.time()
+        self._lock = threading.Lock()
+
+    def add_turn(self, user_text: str, assistant_text: str):
+        with self._lock:
+            now = time.time()
+            if now - self.last_activity > self.timeout_sec:
+                self.history = []
+            self.last_activity = now
+            self.history.append({"role": "user", "content": user_text})
+            self.history.append({"role": "assistant", "content": assistant_text})
+            if len(self.history) > self.max_messages:
+                self.history = self.history[-self.max_messages:]
+
+    def get_messages(self, system_prompt: str, current_prompt: str):
+        with self._lock:
+            now = time.time()
+            if now - self.last_activity > self.timeout_sec:
+                self.history = []
+            self.last_activity = now
+            msgs = [{"role": "system", "content": system_prompt}]
+            msgs.extend(list(self.history))
+            msgs.append({"role": "user", "content": current_prompt})
+            return msgs
+
+    def clear(self):
+        with self._lock:
+            self.history = []
+            self.last_activity = time.time()
+
+CONVERSATION_MEMORY = ConversationMemory()
+
+def is_ornith_voice_active() -> bool:
+    """Queries Pi 500 master API to check if ornith_voice is currently the active application."""
+    try:
+        req = urllib.request.Request("http://192.168.0.130:8085/api/apps/status")
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                app_mgr = data.get("app_manager", {})
+                current_app = app_mgr.get("current_app")
+                return current_app == "ornith_voice"
+    except Exception as e:
+        logger.debug("Could not verify Pi 500 active app: %s", e)
+    return True
+
+def deliver_audio_response(text: str, audio_target: str = "pi4b") -> Dict[str, Any]:
+    """
+    Synthesizes audio via Pocket TTS and delivers based on Ornith's lifecycle state:
+    - State A (ornith_voice is active): Direct playback to Pi 4B speakers with ZERO chime.
+    - State B (ornith_voice is NOT active): Uploads to /api/pending_audio on Pi 4B, plays smw_princess_help.wav as pager chime.
+    """
+    try:
+        wav_bytes = tools_speech.synthesize_wav(text)
+    except Exception as e:
+        logger.error(f"Speech synthesis failed: {e}")
+        return {"status": "error", "error": f"Synthesis failed: {e}"}
+
+    active = is_ornith_voice_active()
+    if active:
+        logger.info("State A: ornith_voice is active. Streaming direct to Pi 4B speakers (zero chime).")
+        played = tools_speech._send_wav_to_pi4b(wav_bytes)
+        return {
+            "status": "delivered_direct",
+            "state": "STATE_A",
+            "bytes": len(wav_bytes),
+            "played_pi4b": played
+        }
+    else:
+        logger.info("State B: ornith_voice is NOT active. Caching pending audio on Pi 4B and sounding pager chime.")
+        uploaded = tools_speech.send_pending_wav_to_pi4b(wav_bytes)
+        dispatch_cue_to_pi4b("smw_princess_help")
+        return {
+            "status": "buffered_pending",
+            "state": "STATE_B",
+            "bytes": len(wav_bytes),
+            "uploaded_pending": uploaded
+        }
+
 def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> Dict[str, Any]:
     """
     Classifies user intent (Summary Request, Direct Clarification, or Action Directive).
@@ -185,36 +286,26 @@ def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> D
         feedback_prompt = f"Carson (via Pokéball Voice): {clean_prompt}\n\nPlease proceed and call signal_task_complete when finished."
         inject_res = tools_computer_use.send_feedback_to_antigravity(feedback_prompt, click_send=True)
         ack_text = "I dispatched your instruction to Antigravity. Standing by for task completion."
-        dispatch_cue_to_pi4b("smw_princess_help")
-        time.sleep(1.0)
-        speech_res = tools_speech.speak_laura(text=ack_text, target=audio_target)
+        delivery = deliver_audio_response(ack_text, audio_target=audio_target)
+        CONVERSATION_MEMORY.add_turn(clean_prompt, ack_text)
         return {
             "status": "success",
             "intent": "ACTION",
             "user_prompt": clean_prompt,
             "antigravity_injected": inject_res.get("status") == "success",
             "spoken_ack": ack_text,
-            "audio_dispatch": speech_res
+            "audio_delivery": delivery
         }
 
-    # 3. Direct conversational answer via Ornith in LM Studio
+    # 3. Direct conversational answer via Ornith in LM Studio with Identity Context & Multi-Turn Memory
     logger.info(f"Querying Ornith for direct answer to: '{clean_prompt}'")
-    system_prompt = (
-        "You are Ornith, Carson's direct, plain-spoken robotics AI assistant speaking in Laura's voice.\n"
-        "Carson is speaking to you directly through the robot's microphone.\n"
-        "Provide a direct, conversational, and technically accurate answer in strictly 35 to 55 words.\n"
-        "Lead with the bottom line. Speak naturally in active voice.\n"
-        "Do NOT use markdown, code blocks, bullet points, headers, or quotes.\n"
-        "Do NOT explain your thinking process."
-    )
+    system_prompt = get_robot_identity_prompt()
+    messages_payload = CONVERSATION_MEMORY.get_messages(system_prompt, clean_prompt)
 
     try:
         payload = {
             "model": "ornith-1.0-35b",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": clean_prompt}
-            ],
+            "messages": messages_payload,
             "max_tokens": 4096,
             "temperature": 0.3
         }
@@ -223,7 +314,7 @@ def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> D
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=90) as resp:
+        with urllib.request.urlopen(req, timeout=240) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             msg = data["choices"][0]["message"]
             ans_text = msg.get("content", "").strip()
@@ -238,15 +329,14 @@ def classify_intent_and_respond(user_text: str, audio_target: str = "pi4b") -> D
         ans_clean = f"I received your inquiry regarding {clean_prompt[:30]}, but encountered an issue contacting the local model."
 
     logger.info(f"Ornith response: '{ans_clean}'")
-    dispatch_cue_to_pi4b("smw_princess_help")
-    time.sleep(1.0)
-    speech_res = tools_speech.speak_laura(text=ans_clean, target=audio_target)
+    CONVERSATION_MEMORY.add_turn(clean_prompt, ans_clean)
+    delivery = deliver_audio_response(ans_clean, audio_target=audio_target)
     return {
         "status": "success",
         "intent": "QUERY",
         "user_prompt": clean_prompt,
         "spoken_response": ans_clean,
-        "audio_dispatch": speech_res
+        "audio_delivery": delivery
     }
 
 def execute_turn_summary(audio_target: str = "pi4b") -> Dict[str, Any]:
@@ -254,31 +344,30 @@ def execute_turn_summary(audio_target: str = "pi4b") -> Dict[str, Any]:
     trans = tools_audit.get_active_conversation_transcript(max_turns=2)
     if trans.get("status") != "success":
         err_msg = "Could not locate active conversation transcript to summarize."
-        tools_speech.speak_laura(err_msg, target=audio_target)
-        return {"status": "error", "error": err_msg, "details": trans}
+        delivery = deliver_audio_response(err_msg, audio_target=audio_target)
+        return {"status": "error", "error": err_msg, "details": trans, "audio_delivery": delivery}
 
     latest_resp = trans.get("latest_assistant_response", "")
     if not latest_resp:
         err_msg = "No recent assistant response found to summarize."
-        tools_speech.speak_laura(err_msg, target=audio_target)
-        return {"status": "error", "error": err_msg}
+        delivery = deliver_audio_response(err_msg, audio_target=audio_target)
+        return {"status": "error", "error": err_msg, "audio_delivery": delivery}
 
     denoise_res = tools_denoise.distill_response(raw_text=latest_resp)
     if denoise_res.get("status") != "success":
         err_msg = "Distillation model was unable to process the response."
-        tools_speech.speak_laura(err_msg, target=audio_target)
+        delivery = deliver_audio_response(err_msg, audio_target=audio_target)
         return denoise_res
 
     distilled_text = denoise_res.get("distilled_text", "")
-    dispatch_cue_to_pi4b("smw_princess_help")
-    time.sleep(1.0)
-    speech_res = tools_speech.speak_laura(text=distilled_text, target=audio_target)
+    delivery = deliver_audio_response(distilled_text, audio_target=audio_target)
+    CONVERSATION_MEMORY.add_turn("Summarize the last response", distilled_text)
 
     return {
         "status": "success",
         "distilled_text": distilled_text,
         "word_count": denoise_res.get("word_count", 0),
-        "audio_dispatch": speech_res
+        "audio_delivery": delivery
     }
 
 # -----------------------------------------------------------------------------
@@ -327,7 +416,6 @@ async def process_audio_endpoint(request: Request, audio_target: str = "pi4b"):
         raise HTTPException(status_code=400, detail="Empty audio payload received")
 
     try:
-        dispatch_cue_to_pi4b("smw_chuck_whistle")
         transcription = transcribe_audio_bytes(wav_bytes)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -339,6 +427,23 @@ async def process_audio_endpoint(request: Request, audio_target: str = "pi4b"):
     result = classify_intent_and_respond(transcription, audio_target=audio_target)
     result["transcription"] = transcription
     return JSONResponse(result)
+
+@app.post("/api/voice/history/clear")
+def clear_history_endpoint():
+    """Flushes active multi-turn conversation memory."""
+    CONVERSATION_MEMORY.clear()
+    logger.info("Cleared conversation history.")
+    return JSONResponse({"status": "cleared"})
+
+@app.get("/api/voice/history")
+def get_history_endpoint():
+    """Returns active multi-turn conversation memory."""
+    return JSONResponse({
+        "status": "ok",
+        "history": CONVERSATION_MEMORY.history,
+        "count": len(CONVERSATION_MEMORY.history),
+        "last_activity": CONVERSATION_MEMORY.last_activity
+    })
 
 @app.post("/api/voice/summarize")
 def summarize_endpoint(audio_target: str = "pi4b"):
