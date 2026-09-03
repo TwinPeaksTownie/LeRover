@@ -159,17 +159,14 @@ class PokeballService:
         return dict(self.telemetry)
 
     def prompt_connect_announcement(self) -> None:
-        """Prompts Carson over TTS via Voice Bridge upon daemon startup."""
+        """Plays startup blarg sound over Pi 4B audio service upon daemon startup."""
         def _prompt():
-            time.sleep(2.0)
+            time.sleep(1.0)
             try:
-                url = f"{self.voice_bridge_url}/api/voice/prompt_connect"
-                req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=5.0) as resp:
-                    if resp.status == 200:
-                        self.logger.info("📢 Broadcast connection prompt to Carson over Laura TTS.")
+                play_chime("smw_blargg")
+                self.logger.info("📢 Dispatched startup blarg sound (smw_blargg) to Pi 4B.")
             except Exception as e:
-                self.logger.warning("Connection prompt broadcast to Voice Bridge failed: %s", e)
+                self.logger.warning("Startup blarg sound dispatch failed: %s", e)
         threading.Thread(target=_prompt, daemon=True).start()
 
 
