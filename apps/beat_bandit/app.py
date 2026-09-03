@@ -98,16 +98,37 @@ class BeatBanditApp(BaseApp):
     def list_tracks(self) -> List[Dict[str, Any]]:
         tracks = []
         for tid, meta in self.manifest.items():
-            wav_path = meta.get("wav_path", "")
+            if "wav_path" not in meta:
+                continue
+            wav_path = meta["wav_path"]
             if os.path.exists(wav_path):
-                if "bpm" not in meta and "tempo" not in meta:
+                if "bpm" in meta and meta["bpm"] is not None:
+                    bpm_val = float(meta["bpm"])
+                elif "tempo" in meta and meta["tempo"] is not None:
+                    bpm_val = float(meta["tempo"])
+                else:
                     raise KeyError(f"Track '{tid}' missing 'bpm' in manifest.")
-                bpm_val = float(meta.get("bpm") or meta.get("tempo"))
+
+                if "title" in meta:
+                    title_val = meta["title"]
+                else:
+                    title_val = tid
+
+                if "artist" in meta:
+                    artist_val = meta["artist"]
+                else:
+                    artist_val = ""
+
+                if "duration" in meta:
+                    duration_val = float(meta["duration"])
+                else:
+                    duration_val = 0.0
+
                 tracks.append({
                     "track_id": tid,
-                    "title": meta.get("title", tid),
-                    "artist": meta.get("artist", ""),
-                    "duration": float(meta.get("duration", 0.0)),
+                    "title": title_val,
+                    "artist": artist_val,
+                    "duration": duration_val,
                     "bpm": bpm_val,
                     "is_ready": True
                 })
@@ -137,19 +158,27 @@ class BeatBanditApp(BaseApp):
                     tempo_val = float(self.active_track["tempo"])
 
             track_obj = None
+            active_title = None
+            active_artist = None
             if self.active_track:
+                title_str = self.active_track["title"] if "title" in self.active_track else ""
+                artist_str = self.active_track["artist"] if "artist" in self.active_track else ""
                 track_obj = {
-                    "title": self.active_track["title"] if "title" in self.active_track else "",
-                    "artist": self.active_track["artist"] if "artist" in self.active_track else ""
+                    "title": title_str,
+                    "artist": artist_str
                 }
+                if "title" in self.active_track:
+                    active_title = self.active_track["title"]
+                if "artist" in self.active_track:
+                    active_artist = self.active_track["artist"]
 
             return {
                 "app_name": "beat_bandit_app",
                 "state": p_stat["state"],
                 "is_dancing": True,
                 "is_playing": True,
-                "active_track": self.active_track["title"] if (self.active_track and "title" in self.active_track) else None,
-                "artist": self.active_track["artist"] if (self.active_track and "artist" in self.active_track) else None,
+                "active_track": active_title,
+                "artist": active_artist,
                 "track": track_obj,
                 "tempo": tempo_val,
                 "progress": p_stat["progress_pct"],
@@ -174,19 +203,27 @@ class BeatBanditApp(BaseApp):
                 tempo_val = float(self.active_track["tempo"])
 
         track_obj = None
+        active_title = None
+        active_artist = None
         if self.active_track:
+            title_str = self.active_track["title"] if "title" in self.active_track else ""
+            artist_str = self.active_track["artist"] if "artist" in self.active_track else ""
             track_obj = {
-                "title": self.active_track["title"] if "title" in self.active_track else "",
-                "artist": self.active_track["artist"] if "artist" in self.active_track else ""
+                "title": title_str,
+                "artist": artist_str
             }
+            if "title" in self.active_track:
+                active_title = self.active_track["title"]
+            if "artist" in self.active_track:
+                active_artist = self.active_track["artist"]
 
         return {
             "app_name": "beat_bandit_app",
             "state": self.current_state,
             "is_dancing": (self.current_state == "DANCING"),
             "is_playing": False,
-            "active_track": self.active_track["title"] if (self.active_track and "title" in self.active_track) else None,
-            "artist": self.active_track["artist"] if (self.active_track and "artist" in self.active_track) else None,
+            "active_track": active_title,
+            "artist": active_artist,
             "track": track_obj,
             "tempo": tempo_val,
             "progress": 0.0,
@@ -279,7 +316,10 @@ class BeatBanditApp(BaseApp):
             # 2. Download WAV from Mac Mini
             wav_path = self.audio_client.download_wav(track_id)
 
-            raw_title = analysis.get("title", track_id)
+            if "title" in analysis:
+                raw_title = analysis["title"]
+            else:
+                raw_title = track_id
             song_title, artist = sanitize_title_and_artist(raw_title)
 
             if "duration" not in analysis or float(analysis["duration"]) <= 0.0:
@@ -322,13 +362,13 @@ class BeatBanditApp(BaseApp):
         if not self.active_track or not self.active_analysis:
             return
 
-        track_id = self.active_track.get("track_id", "")
+        track_id = self.active_track["track_id"]
         choreo = self.active_track.get("choreography")
         if not choreo or not choreo.get("tracks"):
             choreo = self.studio_manager.get_track_choreography(track_id)
             self.active_track["choreography"] = choreo
 
-        wav_path = self.active_track.get("wav_path", "")
+        wav_path = self.active_track["wav_path"]
 
         def _on_loop(st: float, et: Optional[float]):
             self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
