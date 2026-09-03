@@ -288,7 +288,7 @@ export function sendMasterDaemonRestart(action) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
-    }, 5000);
+    }, 10000);
 }
 
 export function sendEmergencyKillAll() {

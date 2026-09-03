@@ -708,7 +708,10 @@ export function triggerPi500MasterDaemonRestart() {
         if (txt) txt.innerText = action === 'stop' ? '⌛ STOPPING SEWER DAEMON...' : '⌛ STARTING SEWER DAEMON...';
     }
     api.sendMasterDaemonRestart(action)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
         .then(() => {
             if (btn) btn.style.opacity = '1.0';
             setIsMasterDaemonRunning(action !== 'stop');

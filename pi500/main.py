@@ -65,30 +65,54 @@ def main() -> None:
     logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
 
     http_server = create_master_http_server("0.0.0.0", args.http_port, backend, app_manager)
+    server_thread = threading.Thread(target=http_server.serve_forever, daemon=True)
+    server_thread.start()
+    logging.info(f"Master API Web Server successfully bound on port {args.http_port}")
+
+    shutdown_event = threading.Event()
 
     def _sig_handler(signum, frame):
         logging.info(f"Received signal {signum}, initiating graceful shutdown...")
-        try:
-            http_server.shutdown()
-            http_server.server_close()
-        except Exception:
-            pass
-        if pokeball_service:
-            pokeball_service.stop()
-        app_manager.stop_all()
-        backend.close()
-        sys.exit(0)
+        shutdown_event.set()
 
     if hasattr(signal, "SIGHUP"):
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, _sig_handler)
     signal.signal(signal.SIGINT, _sig_handler)
 
-    logging.info(f"Master API Web Server successfully bound on port {args.http_port}")
     try:
-        http_server.serve_forever()
+        while not shutdown_event.is_set():
+            shutdown_event.wait(timeout=0.5)
     except (KeyboardInterrupt, SystemExit):
-        _sig_handler(0, None)
+        logging.info("Interrupted, shutting down...")
+
+    logging.info("Shutting down Master API HTTP server...")
+    try:
+        http_server.shutdown()
+        http_server.server_close()
+    except Exception as e:
+        logging.warning("Error during HTTP server shutdown: %s", e)
+
+    server_thread.join(timeout=2.0)
+
+    if pokeball_service:
+        try:
+            pokeball_service.stop()
+        except Exception as e:
+            logging.warning("Error stopping PokeballService: %s", e)
+
+    try:
+        app_manager.stop_all()
+    except Exception as e:
+        logging.warning("Error stopping applications: %s", e)
+
+    try:
+        backend.close()
+    except Exception as e:
+        logging.warning("Error closing RobotBackend: %s", e)
+
+    logging.info("SO-101 Master Daemon shutdown complete.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
