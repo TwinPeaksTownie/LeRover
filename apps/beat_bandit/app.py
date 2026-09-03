@@ -99,7 +99,7 @@ class BeatBanditApp(BaseApp):
         tracks = []
         for tid, meta in self.manifest.items():
             if "wav_path" not in meta:
-                continue
+                raise KeyError(f"Track '{tid}' missing required 'wav_path' in manifest.")
             wav_path = meta["wav_path"]
             if os.path.exists(wav_path):
                 if "bpm" in meta and meta["bpm"] is not None:
@@ -107,28 +107,20 @@ class BeatBanditApp(BaseApp):
                 elif "tempo" in meta and meta["tempo"] is not None:
                     bpm_val = float(meta["tempo"])
                 else:
-                    raise KeyError(f"Track '{tid}' missing 'bpm' in manifest.")
+                    raise KeyError(f"Track '{tid}' missing required 'bpm' or 'tempo' in manifest.")
 
-                if "title" in meta:
-                    title_val = meta["title"]
-                else:
-                    title_val = tid
-
-                if "artist" in meta:
-                    artist_val = meta["artist"]
-                else:
-                    artist_val = ""
-
-                if "duration" in meta:
-                    duration_val = float(meta["duration"])
-                else:
-                    duration_val = 0.0
+                if "title" not in meta:
+                    raise KeyError(f"Track '{tid}' missing required 'title' in manifest.")
+                if "artist" not in meta:
+                    raise KeyError(f"Track '{tid}' missing required 'artist' in manifest.")
+                if "duration" not in meta:
+                    raise KeyError(f"Track '{tid}' missing required 'duration' in manifest.")
 
                 tracks.append({
                     "track_id": tid,
-                    "title": title_val,
-                    "artist": artist_val,
-                    "duration": duration_val,
+                    "title": str(meta["title"]),
+                    "artist": str(meta["artist"]),
+                    "duration": float(meta["duration"]),
                     "bpm": bpm_val,
                     "is_ready": True
                 })
@@ -161,16 +153,12 @@ class BeatBanditApp(BaseApp):
             active_title = None
             active_artist = None
             if self.active_track:
-                title_str = self.active_track["title"] if "title" in self.active_track else ""
-                artist_str = self.active_track["artist"] if "artist" in self.active_track else ""
+                active_title = str(self.active_track["title"])
+                active_artist = str(self.active_track["artist"])
                 track_obj = {
-                    "title": title_str,
-                    "artist": artist_str
+                    "title": active_title,
+                    "artist": active_artist
                 }
-                if "title" in self.active_track:
-                    active_title = self.active_track["title"]
-                if "artist" in self.active_track:
-                    active_artist = self.active_track["artist"]
 
             return {
                 "app_name": "beat_bandit_app",
@@ -206,16 +194,12 @@ class BeatBanditApp(BaseApp):
         active_title = None
         active_artist = None
         if self.active_track:
-            title_str = self.active_track["title"] if "title" in self.active_track else ""
-            artist_str = self.active_track["artist"] if "artist" in self.active_track else ""
+            active_title = str(self.active_track["title"])
+            active_artist = str(self.active_track["artist"])
             track_obj = {
-                "title": title_str,
-                "artist": artist_str
+                "title": active_title,
+                "artist": active_artist
             }
-            if "title" in self.active_track:
-                active_title = self.active_track["title"]
-            if "artist" in self.active_track:
-                active_artist = self.active_track["artist"]
 
         return {
             "app_name": "beat_bandit_app",
@@ -316,10 +300,9 @@ class BeatBanditApp(BaseApp):
             # 2. Download WAV from Mac Mini
             wav_path = self.audio_client.download_wav(track_id)
 
-            if "title" in analysis:
-                raw_title = analysis["title"]
-            else:
-                raw_title = track_id
+            if "title" not in analysis or not analysis["title"]:
+                raise KeyError(f"Audio analysis for '{track_id}' missing required 'title' field.")
+            raw_title = str(analysis["title"])
             song_title, artist = sanitize_title_and_artist(raw_title)
 
             if "duration" not in analysis or float(analysis["duration"]) <= 0.0:
