@@ -65,12 +65,12 @@ DEFAULT_CONFIG = {
 def find_config_path() -> str:
     search_paths = [
         os.environ.get("NETWORK_CONFIG_PATH", ""),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_config.json"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "network_config.json"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "network_config.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "network_config.json"),
         "/home/carson/touch_ui/config/network_config.json",
-        "/home/carson/touch_ui/network_config.json",
         "/home/user/so101/config/network_config.json",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_config.json"),
+        "/home/carson/touch_ui/network_config.json",
         "/home/user/so101/pi500/network_config.json",
     ]
     for p in search_paths:
@@ -198,6 +198,19 @@ def get_mac_ip(prefer_port: Optional[int] = 8086) -> str:
         (wifi_ip, None)
     ]
     return resolve_target(candidates, "mac_ip")
+
+
+def get_pc_ip(prefer_port: Optional[int] = 8058) -> str:
+    cfg = load_network_config()
+    wifi_ip = cfg["wifi_defaults"]["pc_ip"]
+    m_host = cfg["wifi_defaults"]["pc_host"]
+
+    candidates: List[Tuple[str, Optional[int]]] = [
+        (wifi_ip, prefer_port),
+        (m_host, prefer_port),
+        (wifi_ip, None)
+    ]
+    return resolve_target(candidates, "pc_ip")
 
 
 def get_ports() -> Dict[str, int]:

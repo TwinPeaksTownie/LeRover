@@ -17,11 +17,17 @@ import urllib.error
 import tools_speech
 import tools_hardware
 import contract_scanner
+import ornith_config_loader
 
-DEFAULT_LM_STUDIO_URL = os.environ.get(
-    "LM_STUDIO_URL",
-    "http://127.0.0.1:1234/v1/chat/completions" if os.name == "nt" else "http://host.docker.internal:1234/v1/chat/completions"
-)
+_CONFIG = ornith_config_loader.get_ornith_config()
+
+DEFAULT_LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", _CONFIG["audit"]["lm_studio_url"])
+DEFAULT_MODEL = _CONFIG["audit"]["model"]
+DEFAULT_MAX_TOKENS = int(_CONFIG["audit"]["max_tokens"])
+DEFAULT_TEMPERATURE = float(_CONFIG["audit"]["temperature"])
+DEFAULT_SPEAK_VERDICT = bool(_CONFIG["audit"]["default_speak_verdict"])
+FALLBACK_COMMITS = int(_CONFIG["audit"]["uncommitted_fallback_commits"])
+MAX_DIFF_CHARS = int(_CONFIG["audit"]["max_diff_chars"])
 
 IGNORE_EXTENSIONS = {
     ".wav", ".mp3", ".ogg", ".flac", ".png", ".jpg", ".jpeg", ".gif",
@@ -200,17 +206,17 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
         )
         diff_text = diff_proc.stdout or ""
 
-        # If no uncommitted diffs, inspect recent code commits (HEAD~5..HEAD)
+        # If no uncommitted diffs, inspect recent code commits (HEAD~FALLBACK_COMMITS..HEAD)
         if not diff_text.strip() and not untracked_files:
             diff_proc_last = subprocess.run(
-                ["git", "diff", "HEAD~5..HEAD", "--", ".", ":!*manifest.json"],
+                ["git", "diff", f"HEAD~{FALLBACK_COMMITS}..HEAD", "--", ".", ":!*manifest.json"],
                 cwd=repo_path,
                 capture_output=True,
                 encoding="utf-8",
                 errors="replace"
             )
             if diff_proc_last.returncode == 0 and (diff_proc_last.stdout or "").strip():
-                diff_text = f"=== RECENT COMMITS DIFF (HEAD~5..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
+                diff_text = f"=== RECENT COMMITS DIFF (HEAD~{FALLBACK_COMMITS}..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
 
         untracked_diffs = []
         for ufile in untracked_files:
@@ -362,20 +368,12 @@ def extract_spoken_summary(verdict_text: str, verdict: str, contract_res: dict =
         if spoken:
             return spoken
 
-    # 3. Fallback synthesis if Ornith omitted the section
-    if verdict == "APPROVED":
-        return "I have approved Antigravity's implementation. All changes comply with project rules and verification requirements."
-    elif verdict == "BLOCKER":
-        return "Attention Carson. I encountered a blocker requiring your intervention on the current implementation."
-    elif verdict == "REJECTED":
-        if contract_res and contract_res.get("violations"):
-            first_v = contract_res["violations"][0]
-            rule = first_v.get("rule", "project rules")
-            f_name = os.path.basename(first_v.get("file", "unknown"))
-            return f"I am rejecting Antigravity's implementation for violating rule {rule} in {f_name}. I will not provide approval on the build until the implementation complies with project rules."
-        return "I am rejecting Antigravity's implementation for violating project rules. I will not provide approval on the build until the implementation complies."
+    # 3. Fail loudly if Ornith omitted the SPOKEN_SUMMARY section (Lesson 9)
+    raise RuntimeError(
+        f"Ornith model in LM Studio failed to provide a valid SPOKEN_SUMMARY section for verdict [{verdict}]. "
+        "Failing loudly without dummy fallback synthesis."
+    )
 
-    return "Ornith audit complete."
 
 def query_ornith_for_review(
     task_summary: str,
@@ -506,9 +504,10 @@ Provide your adversarial audit:"""
     if not contract_res.get("clean") and verdict_str == "APPROVED":
         _log_debug("Overriding LLM APPROVED verdict: code contract violations or deployment parity failures exist.")
         verdict_str = "REJECTED"
-        verdict_text = f"### VERDICT\n[REJECTED]\n\n### SPOKEN_SUMMARY\nI am rejecting Antigravity's implementation due to code contract violations and deployment requirements.\n\n### DETAILED_AUDIT\n{violations_detail}"
-
-    spoken_text = extract_spoken_summary(verdict_text, verdict_str, contract_res, task_summary)
+        spoken_text = "Attention Carson. I am rejecting the build because code contract violations or deployment parity checks failed."
+        verdict_text = f"### VERDICT\n[REJECTED]\n\n### CONTRACT_SCAN_OVERRIDE\nCode contracts failed:\n{violations_detail}\n\n### ORIGINAL_MODEL_OUTPUT\n{verdict_text}"
+    else:
+        spoken_text = extract_spoken_summary(verdict_text, verdict_str, contract_res, task_summary)
 
     spoken_status = "not_spoken"
     if speak_verdict and spoken_text:

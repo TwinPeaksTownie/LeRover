@@ -1,0 +1,19 @@
+{
+  "name": "pokeball_app",
+  "title": "Pokeball Teleop & Rover",
+  "description": "BLE Pokeball Plus teleoperation for AUX actuators and Overlander-4 rover",
+  "version": "1.0.0",
+  "icon": "🔴",
+  "tags": ["teleop", "ble", "rover", "aux", "pokeball"],
+  "ble": {
+    "mac_address": "58:2F:40:8D:50:71",
+    "input_uuid": "6675e16c-f36d-4567-bb55-6b51e27a23e6",
+    "reconnect_delay_sec": 3.0,
+    "telemetry_file": "/tmp/pokeball_telemetry.json"
+  },
+  "control": {
+    "deadzone": 0.15,
+    "speed_scale": 1.0,
+    "poll_rate_hz": 50
+  }
+}

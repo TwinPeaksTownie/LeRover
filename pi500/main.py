@@ -54,13 +54,23 @@ def main() -> None:
     logging.info("Initializing AppManager & registering applications...")
     app_manager = AppManager(backend)
     pokeball_service.app_manager = app_manager
-    app_manager.register_app(TeleopControlApp)
-    app_manager.register_app(ServoStudioApp)
-    app_manager.register_app(PokeballApp)
-    app_manager.register_app(PiranhaPoseApp)
-    app_manager.register_app(ClackPoseApp)
-    app_manager.register_app(BeatBanditApp)
-    app_manager.register_app(OrnithVoiceApp)
+
+    # 1. Auto-discover self-contained modular applications from apps/
+    discovered = app_manager.discover_apps()
+
+    # 2. Register fallback classes if not already discovered
+    fallback_apps = [
+        TeleopControlApp,
+        ServoStudioApp,
+        PokeballApp,
+        PiranhaPoseApp,
+        ClackPoseApp,
+        BeatBanditApp,
+        OrnithVoiceApp,
+    ]
+    for app_cls in fallback_apps:
+        if app_cls.metadata.name not in app_manager.registry:
+            app_manager.register_app(app_cls)
 
     logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
 

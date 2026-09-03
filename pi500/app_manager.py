@@ -95,6 +95,68 @@ class AppManager:
         self.registry[app_name] = app_cls
         self.logger.info(f"Registered app '{app_name}' ({app_cls.metadata.title})")
 
+    def discover_apps(self, apps_dir: Optional[str] = None) -> List[str]:
+        """Dynamically scans apps/ directory, discovers self-contained app packages,
+        and registers their BaseApp subclasses into the AppManager registry."""
+        import importlib
+        from pathlib import Path
+
+        if apps_dir is None:
+            possible = [
+                Path(__file__).resolve().parent.parent / "apps",
+                Path("/home/user/so101/apps"),
+                Path.cwd() / "apps",
+            ]
+            apps_path = None
+            for p in possible:
+                if p.is_dir():
+                    apps_path = p
+                    break
+            if apps_path is None:
+                self.logger.warning("No apps/ directory found for auto-discovery.")
+                return []
+        else:
+            apps_path = Path(apps_dir).resolve()
+
+        self.logger.info(f"Scanning for modular applications in: {apps_path}")
+        discovered = []
+
+        for item in sorted(apps_path.iterdir()):
+            if not item.is_dir() or item.name.startswith((".", "_")):
+                continue
+
+            app_py = item / "app.py"
+            config_json = item / "config.json"
+            manifest_json = item / "manifest.json"
+
+            if not app_py.exists():
+                continue
+
+            if not config_json.exists() and not manifest_json.exists():
+                self.logger.warning(f"Skipping app folder '{item.name}': missing config.json or manifest.json")
+                continue
+
+            try:
+                module_name = f"apps.{item.name}.app"
+                mod = importlib.import_module(module_name)
+
+                found = False
+                for attr_name in dir(mod):
+                    attr = getattr(mod, attr_name)
+                    if isinstance(attr, type) and issubclass(attr, BaseApp) and attr is not BaseApp:
+                        self.register_app(attr)
+                        discovered.append(attr.metadata.name)
+                        found = True
+
+                if not found:
+                    self.logger.warning(f"No BaseApp subclass found in {module_name}")
+            except Exception as e:
+                self.logger.error(f"Failed to auto-discover app from '{item.name}': {e}", exc_info=True)
+
+        self.logger.info(f"Auto-discovery registered {len(discovered)} app(s): {discovered}")
+        return discovered
+
+
     def list_apps(self) -> List[Dict[str, Any]]:
         """Returns catalog of all registered applications and their metadata."""
         apps_info = []

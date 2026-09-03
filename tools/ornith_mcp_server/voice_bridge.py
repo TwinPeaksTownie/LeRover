@@ -36,6 +36,11 @@ import tools_speech
 import tools_audit
 import tools_denoise
 import tools_computer_use
+import ornith_config_loader
+
+_CONFIG = ornith_config_loader.get_ornith_config()
+DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
+DEFAULT_PI500_HOST = os.environ.get("PI500_HOST", "192.168.0.130")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -142,10 +147,10 @@ def transcribe_audio_bytes(wav_bytes: bytes, timeout_sec: int = 15) -> str:
         raise RuntimeError(f"Failed to transcribe audio via CoHere ASR: {str(e)}")
 
 def dispatch_cue_to_pi4b(kind: str, delay_sec: float = 0.0) -> None:
-    """Dispatches Mario audio cue to Pi 4B speakers."""
+    """Dispatches audio cue to Pi 4B speakers."""
     def _work():
         try:
-            url = "http://192.168.0.86:8082/api/play_sound"
+            url = f"http://{DEFAULT_PI4B_HOST}:8082/api/play_sound"
             payload = json.dumps({"kind": kind, "delay_sec": delay_sec}).encode("utf-8")
             req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=2.0):
@@ -210,23 +215,21 @@ CONVERSATION_MEMORY = ConversationMemory()
 
 def is_ornith_voice_active() -> bool:
     """Queries Pi 500 master API to check if ornith_voice is currently the active application."""
-    try:
-        req = urllib.request.Request("http://192.168.0.130:8085/api/apps/status")
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            if resp.status == 200:
-                data = json.loads(resp.read().decode("utf-8"))
-                app_mgr = data.get("app_manager", {})
-                current_app = app_mgr.get("current_app")
-                return current_app == "ornith_voice"
-    except Exception as e:
-        logger.debug("Could not verify Pi 500 active app: %s", e)
-    return True
+    url = f"http://{DEFAULT_PI500_HOST}:8085/api/apps/status"
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=1.5) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"Pi 500 master API returned HTTP {resp.status}")
+        data = json.loads(resp.read().decode("utf-8"))
+        if "app_manager" not in data or "current_app" not in data["app_manager"]:
+            raise KeyError("Missing required 'app_manager' or 'current_app' in Pi 500 status payload")
+        return data["app_manager"]["current_app"] == "ornith_voice"
 
-def deliver_audio_response(text: str, audio_target: str = "pi4b") -> Dict[str, Any]:
+def deliver_audio_response(text: str, audio_target: str = "both") -> Dict[str, Any]:
     """
     Synthesizes audio via Pocket TTS and delivers based on Ornith's lifecycle state:
-    - State A (ornith_voice is active): Direct playback to Pi 4B speakers with ZERO chime.
-    - State B (ornith_voice is NOT active): Uploads to /api/pending_audio on Pi 4B, plays smw_princess_help.wav as pager chime.
+    - State A (ornith_voice is active): Direct playback to speakers with ZERO chime.
+    - State B (ornith_voice is NOT active): Uploads to /api/pending_audio on Pi 4B, plays configured pager chime.
     """
     try:
         wav_bytes = tools_speech.synthesize_wav(text)
@@ -235,8 +238,10 @@ def deliver_audio_response(text: str, audio_target: str = "pi4b") -> Dict[str, A
         return {"status": "error", "error": f"Synthesis failed: {e}"}
 
     active = is_ornith_voice_active()
+    pager_cue = _CONFIG["voice_bridge"]["chimes"]["pager"]
+
     if active:
-        logger.info("State A: ornith_voice is active. Streaming direct to Pi 4B speakers (zero chime).")
+        logger.info("State A: ornith_voice is active. Streaming direct to speakers (zero chime).")
         played = tools_speech._send_wav_to_pi4b(wav_bytes)
         return {
             "status": "delivered_direct",
@@ -247,7 +252,7 @@ def deliver_audio_response(text: str, audio_target: str = "pi4b") -> Dict[str, A
     else:
         logger.info("State B: ornith_voice is NOT active. Caching pending audio on Pi 4B and sounding pager chime.")
         uploaded = tools_speech.send_pending_wav_to_pi4b(wav_bytes)
-        dispatch_cue_to_pi4b("smw_princess_help")
+        dispatch_cue_to_pi4b(pager_cue)
         return {
             "status": "buffered_pending",
             "state": "STATE_B",

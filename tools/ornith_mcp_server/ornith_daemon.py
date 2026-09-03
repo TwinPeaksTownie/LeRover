@@ -33,19 +33,23 @@ import tools_audit
 import tools_hardware
 import tools_computer_use
 
+import ornith_config_loader
+
+_CONFIG = ornith_config_loader.get_ornith_config()
+
 class OrnithSupervisorDaemon:
     def __init__(
         self,
         brain_dir: str = r"C:\Users\carso\.gemini\antigravity\brain",
         repo_path: str = r"i:\aux_servo_interface",
-        poll_interval: float = 2.0,
-        max_retries: int = 3,
+        poll_interval: float = None,
+        max_retries: int = None,
         dry_run: bool = False
     ):
         self.brain_dir = brain_dir
         self.repo_path = repo_path
-        self.poll_interval = poll_interval
-        self.max_retries = max_retries
+        self.poll_interval = poll_interval if poll_interval is not None else float(_CONFIG["daemon"]["poll_interval_sec"])
+        self.max_retries = max_retries if max_retries is not None else int(_CONFIG["daemon"]["max_retries"])
         self.dry_run = dry_run
         
         self.last_reviewed_step = None

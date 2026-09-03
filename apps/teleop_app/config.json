@@ -1,0 +1,17 @@
+{
+  "name": "teleop_app",
+  "title": "Teleop Control Loop",
+  "description": "ZMQ leader-follower remote teleoperation control loop",
+  "version": "1.0.0",
+  "icon": "🎮",
+  "tags": ["teleop", "zmq", "so101"],
+  "teleop": {
+    "port_zmq_cmd": 5555,
+    "port_zmq_obs": 5556,
+    "watchdog_timeout_ms": 500,
+    "max_loop_freq_hz": 60,
+    "poll_leader_interval_sec": 1.0,
+    "gripper_bounds": [0.0, 100.0],
+    "arm_bounds": [-100.0, 100.0]
+  }
+}

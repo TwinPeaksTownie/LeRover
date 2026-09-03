@@ -8,9 +8,11 @@
     "pi500_ip": "192.168.0.130",
     "pi4b_ip": "192.168.0.86",
     "mac_ip": "192.168.0.149",
+    "pc_ip": "192.168.0.194",
     "pi500_host": "pi500.local",
     "pi4b_host": "raspberrypi.local",
-    "mac_host": "mac-mini.local"
+    "mac_host": "mac-mini.local",
+    "pc_host": "workstation.local"
   },
   "ports": {
     "pi4b_http": 8082,
@@ -18,6 +20,7 @@
     "pi4b_audio_udp": 5004,
     "pi500_http": 8085,
     "mac_http": 8086,
+    "voice_bridge_http": 8058,
     "teleop_zmq": 5555,
     "teleop_zmq_heartbeat": 5556
   },

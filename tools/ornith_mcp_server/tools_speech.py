@@ -1,7 +1,7 @@
 """
 tools_speech.py - Speech Output and Audio Alerts via Pocket TTS
-Synthesizes speech via Pocket TTS server on port 8057 using Laura's voice conditioning (hf://laura)
-and plays audio directly through PC speakers (or via HTTP in Docker).
+Synthesizes speech via Pocket TTS server using Laura's voice conditioning (hf://laura)
+and dispatches audio per declarative configuration in apps/ornith_voice/config.json.
 """
 
 import io
@@ -10,9 +10,21 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
+from typing import Optional
 
-DEFAULT_TTS_HOST = os.environ.get("POCKET_TTS_HOST", "127.0.0.1" if os.name == "nt" else "host.docker.internal")
-DEFAULT_TTS_PORT = int(os.environ.get("POCKET_TTS_PORT", 8057))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+import ornith_config_loader
+
+_CONFIG = ornith_config_loader.get_ornith_config()
+
+DEFAULT_TTS_HOST = os.environ.get("POCKET_TTS_HOST", _CONFIG["speech"]["pocket_tts_host"])
+DEFAULT_TTS_PORT = int(os.environ.get("POCKET_TTS_PORT", _CONFIG["speech"]["pocket_tts_port"]))
+DEFAULT_TARGET = _CONFIG["speech"]["target"]
+DEFAULT_VOICE_URL = _CONFIG["speech"]["voice_url"]
+MAX_WORDS = int(_CONFIG["speech"]["max_words"])
 
 def _log_debug(msg: str):
     sys.stderr.write(f"[SPEECH] {msg}\n")
@@ -41,12 +53,11 @@ def _play_wav_bytes(wav_bytes: bytes) -> bool:
         except Exception:
             pass
         return True
-    except Exception:
-        pass
+    except Exception as e:
+        _log_debug(f"winsound playback failed ({e})")
 
-    # If running inside Docker container without audio device, log completion
-    _log_debug("Audio synthesized successfully (container mode).")
-    return True
+    _log_debug("Audio playback failed on local device.")
+    return False
 
 DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
 DEFAULT_PI4B_PORT = int(os.environ.get("PI4B_PORT", 8082))
@@ -83,7 +94,7 @@ def send_pending_wav_to_pi4b(wav_bytes: bytes, host: str = DEFAULT_PI4B_HOST, po
 
 def synthesize_wav(
     text: str,
-    voice_url: str = "hf://laura",
+    voice_url: str = DEFAULT_VOICE_URL,
     host: str = DEFAULT_TTS_HOST,
     port: int = DEFAULT_TTS_PORT
 ) -> bytes:
@@ -91,8 +102,8 @@ def synthesize_wav(
     if not text or not text.strip():
         raise ValueError("Text argument cannot be empty")
     words = text.strip().split()
-    if len(words) > 100:
-        text = " ".join(words[:100])
+    if len(words) > MAX_WORDS:
+        raise ValueError(f"Speech text exceeded configured max word limit ({len(words)} > {MAX_WORDS} words).")
     url = f"http://{host}:{port}/tts"
     payload = urllib.parse.urlencode({"text": text.strip(), "voice_url": voice_url}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
@@ -103,8 +114,8 @@ def synthesize_wav(
 
 def speak_laura(
     text: str,
-    voice_url: str = "hf://laura",
-    target: str = "pi4b",
+    voice_url: str = None,
+    target: str = None,
     host: str = None,
     port: int = None,
     pi4b_host: str = None,
@@ -112,8 +123,12 @@ def speak_laura(
 ) -> dict:
     """
     Synthesizes and speaks text using Pocket TTS server in Laura's voice.
-    target can be: 'local' (PC speakers), 'pi4b' (Pi 4B kiosk), or 'both'.
+    target defaults to configured setting ("both", "local", or "pi4b").
     """
+    if voice_url is None:
+        voice_url = DEFAULT_VOICE_URL
+    if target is None:
+        target = DEFAULT_TARGET
     if host is None:
         host = DEFAULT_TTS_HOST
     if port is None:
@@ -126,10 +141,9 @@ def speak_laura(
     if not text or not text.strip():
         return {"status": "error", "error": "Text argument cannot be empty"}
 
-    # Enforce maximum 100 words limit on speech output
     words = text.strip().split()
-    if len(words) > 100:
-        text = " ".join(words[:100])
+    if len(words) > MAX_WORDS:
+        return {"status": "error", "error": f"Speech text exceeded limit ({len(words)} > {MAX_WORDS} words)"}
 
     _log_debug(f"Synthesizing {len(text)} chars ({len(words)} words) in voice '{voice_url}' on http://{host}:{port}/tts")
     url = f"http://{host}:{port}/tts"
@@ -173,13 +187,13 @@ def speak_laura(
         "message": f"Audio dispatched (local={played_local}, pi4b={played_pi4b})."
     }
 
-def notify_user_of_blocker(reason: str, host: str = None, port: int = None) -> dict:
+def notify_user_of_blocker(reason: str, target: str = None, host: str = None, port: int = None) -> dict:
     spoken_text = f"Attention Carson. Ornith supervisor has encountered a blocker that requires your input: {reason}"
-    return speak_laura(text=spoken_text, voice_url="hf://laura", host=host, port=port)
+    return speak_laura(text=spoken_text, target=target, host=host, port=port)
 
-def notify_task_verified(summary: str, telemetry_delta: str = "", host: str = None, port: int = None) -> dict:
+def notify_task_verified(summary: str, telemetry_delta: str = "", target: str = None, host: str = None, port: int = None) -> dict:
     if telemetry_delta:
         spoken_text = f"Ornith supervisor has verified task completion. {summary}. Physical telemetry confirmed {telemetry_delta}."
     else:
         spoken_text = f"Ornith supervisor has verified task completion. {summary}."
-    return speak_laura(text=spoken_text, voice_url="hf://laura", host=host, port=port)
+    return speak_laura(text=spoken_text, target=target, host=host, port=port)

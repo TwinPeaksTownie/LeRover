@@ -1,0 +1,45 @@
+{
+  "name": "ornith_voice",
+  "title": "Ornith Voice Assistant",
+  "description": "Autonomous Voice & Executive Simplification Assistant",
+  "version": "1.0.0",
+  "icon": "🎙️",
+  "tags": ["voice", "ai", "ornith", "cohere", "tts"],
+  "speech": {
+    "target": "both",
+    "voice_url": "hf://laura",
+    "pocket_tts_host": "127.0.0.1",
+    "pocket_tts_port": 8057,
+    "max_words": 100,
+    "enforce_word_limit_error": true
+  },
+  "audit": {
+    "model": "ornith-1.0-35b",
+    "lm_studio_url": "http://127.0.0.1:1234/v1/chat/completions",
+    "max_tokens": 8192,
+    "temperature": 0.2,
+    "default_speak_verdict": true,
+    "max_diff_chars": 25000,
+    "uncommitted_fallback_commits": 1
+  },
+  "voice_bridge": {
+    "host": "0.0.0.0",
+    "port": 8058,
+    "cohere_asr_url": "http://127.0.0.1:8001/transcribe",
+    "conversation_memory_max_messages": 10,
+    "conversation_memory_timeout_sec": 900.0,
+    "chimes": {
+      "pager": "smw_princess_help",
+      "cancel": "smw_shell_ricochet",
+      "settle": "smw_chuck_whistle",
+      "action": "smw_midway_gate"
+    }
+  },
+  "robot_app": {
+    "cancel_window_sec": 3.0,
+    "auto_send_timeout_sec": 30.0,
+    "settle_delay_sec": 0.65,
+    "playback_wait_timeout_sec": 12.0,
+    "pending_audio_file": "/tmp/pending_ornith_audio.wav"
+  }
+}

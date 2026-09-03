@@ -1,0 +1,10 @@
+{
+  "name": "piranha_pose_app",
+  "title": "Piranha Pose",
+  "description": "Multi-mode preset teaching, sequence execution, and acoustic clack control",
+  "version": "2.0.0",
+  "modes": ["normal", "demo", "angry", "dance"],
+  "default_mode": "normal",
+  "icon": "🪴",
+  "tags": ["teaching", "pose", "sequence", "audio", "so101"]
+}

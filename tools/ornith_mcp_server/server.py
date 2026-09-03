@@ -28,6 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger("ornith_mcp")
 
 from mcp.server.mcpserver import MCPServer
+import ornith_config_loader
 import tools_speech
 import tools_audit
 import tools_hardware
@@ -40,7 +41,8 @@ app = MCPServer(
 )
 
 def _reload_modules():
-    global tools_speech, tools_audit, tools_hardware, tools_computer_use, tools_denoise
+    global ornith_config_loader, tools_speech, tools_audit, tools_hardware, tools_computer_use, tools_denoise
+    ornith_config_loader = importlib.reload(ornith_config_loader)
     tools_speech = importlib.reload(tools_speech)
     tools_audit = importlib.reload(tools_audit)
     tools_hardware = importlib.reload(tools_hardware)
@@ -170,12 +172,13 @@ def query_daemon_logs(node: str = "pi500", service_name: str = "backend.service"
 # -----------------------------------------------------------------------------
 
 @app.tool()
-def speak_laura(text: str, voice_url: str = "hf://laura") -> str:
+def speak_laura(text: str, voice_url: str = None, target: str = None) -> str:
     """
-    Synthesizes and speaks text aloud through local speakers in Laura's voice using Pocket TTS (port 8057).
+    Synthesizes and speaks text aloud in Laura's voice using Pocket TTS (port 8057).
+    target defaults to configured setting ("both", "local", or "pi4b").
     """
     _reload_modules()
-    res = tools_speech.speak_laura(text=text, voice_url=voice_url)
+    res = tools_speech.speak_laura(text=text, voice_url=voice_url, target=target)
     return json.dumps(res, indent=2)
 
 @app.tool()
