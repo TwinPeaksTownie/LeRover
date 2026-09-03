@@ -204,8 +204,8 @@ async def test_mcp_server():
     print(f"Total Registered MCP Tools: {len(tools)}")
     for t in tools:
         print(f"  - {t.name}: {t.description.strip()[:60]}...")
-    assert len(tools) == 14, f"Expected 14 tools, found {len(tools)}"
-    print("  [PASS] All 14 MCP tools registered with valid schemas.")
+    assert len(tools) == 17, f"Expected 17 tools, found {len(tools)}"
+    print("  [PASS] All 17 MCP tools registered with valid schemas.")
 
 async def main():
     print("==================================================")

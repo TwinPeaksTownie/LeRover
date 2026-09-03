@@ -14,6 +14,8 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
+import requests
+import time
 import tools_speech
 import tools_hardware
 import contract_scanner
@@ -395,12 +397,29 @@ def query_ornith_for_review(
     diff_text: str = "",
     repo_path: str = None,
     speak_verdict: bool = True,
-    lm_studio_url: str = None
+    lm_studio_url: str = None,
+    active_backend: str = None
 ) -> dict:
     if repo_path is None:
         repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
-    if lm_studio_url is None:
-        lm_studio_url = DEFAULT_LM_STUDIO_URL
+
+    if active_backend is None:
+        active_backend = os.environ.get("ORNITH_AUDIT_BACKEND")
+        if not active_backend:
+            active_backend = _CONFIG["audit"]["active_backend"]
+
+    backends = _CONFIG["audit"]["backends"]
+    if active_backend not in backends:
+        raise KeyError(f"Invalid audit backend '{active_backend}'. Available backends: {list(backends.keys())}")
+
+    b_cfg = backends[active_backend]
+    invoke_url = b_cfg["url"]
+    if lm_studio_url is not None and active_backend == "local":
+        invoke_url = lm_studio_url
+
+    model_name = b_cfg["model"]
+    max_tokens = int(b_cfg["max_tokens"])
+    temperature = float(b_cfg["temperature"])
 
     if not diff_text:
         diff_res = get_git_diff(repo_path)
@@ -482,42 +501,92 @@ Repository Changes (Git Diff):
 
 Provide your adversarial audit:"""
 
+    headers = {"Content-Type": "application/json"}
+    if active_backend == "nim":
+        api_key = ornith_config_loader.get_secret("NVIDIA_API_KEY")
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    use_stream = bool(active_backend == "nim")
     payload = {
-        "model": "ornith-1.0-35b",
+        "model": model_name,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "max_tokens": 8192,
-        "temperature": 0.2
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": use_stream
     }
+    if "reasoning_effort" in b_cfg and b_cfg["reasoning_effort"] is not None:
+        payload["reasoning_effort"] = b_cfg["reasoning_effort"]
+    if "seed" in b_cfg and b_cfg["seed"] is not None:
+        payload["seed"] = b_cfg["seed"]
 
-    _log_debug(f"Querying Ornith 1.0 35B at {lm_studio_url} (payload chars: {len(user_prompt)})...")
+    _log_debug(f"Querying Ornith via {active_backend} ({model_name}) at {invoke_url} (stream={use_stream}, payload chars: {len(user_prompt)})...")
     try:
-        req = urllib.request.Request(
-            lm_studio_url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=300) as res:
-            data = json.loads(res.read())
-            content = data["choices"][0]["message"].get("content", "")
-            reasoning = data["choices"][0]["message"].get("reasoning_content", "")
-            if not content and reasoning:
-                content = reasoning
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        _log_debug(f"LM Studio HTTP {e.code}: {err_body}")
-        return {
-            "status": "error",
-            "error": f"LM Studio returned HTTP {e.code}: {err_body}",
-            "static_contracts": contract_res
-        }
+        resp = requests.post(invoke_url, headers=headers, json=payload, stream=use_stream, timeout=300)
+        if resp.status_code != 200:
+            err_body = resp.text
+            _log_debug(f"Inference HTTP {resp.status_code}: {err_body}")
+            return {
+                "status": "error",
+                "error": f"Inference backend ({active_backend}) returned HTTP {resp.status_code}: {err_body}",
+                "static_contracts": contract_res
+            }
+
+        content = ""
+        reasoning = ""
+
+        if use_stream:
+            content_parts = []
+            reasoning_parts = []
+            last_log_time = time.time()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                decoded = line.decode("utf-8")
+                if not decoded.startswith("data: "):
+                    continue
+                data_str = decoded[6:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                except Exception:
+                    continue
+                if "choices" not in chunk or not chunk["choices"]:
+                    continue
+                choice = chunk["choices"][0]
+                if "delta" not in choice:
+                    continue
+                delta = choice["delta"]
+                if "content" in delta and delta["content"]:
+                    content_parts.append(str(delta["content"]))
+                if "reasoning_content" in delta and delta["reasoning_content"]:
+                    reasoning_parts.append(str(delta["reasoning_content"]))
+
+                now = time.time()
+                if now - last_log_time > 10:
+                    _log_debug(f"Streaming from {active_backend}: {len(reasoning_parts)} reasoning chunks, {len(content_parts)} content chunks...")
+                    last_log_time = now
+
+            content = "".join(content_parts)
+            reasoning = "".join(reasoning_parts)
+        else:
+            data = resp.json()
+            msg_obj = data["choices"][0]["message"]
+            if "content" in msg_obj and msg_obj["content"] is not None:
+                content = str(msg_obj["content"])
+            if "reasoning_content" in msg_obj and msg_obj["reasoning_content"] is not None:
+                reasoning = str(msg_obj["reasoning_content"])
+
+        if not content and reasoning:
+            content = reasoning
     except Exception as e:
-        _log_debug(f"Failed to query LM Studio: {e}")
+        _log_debug(f"Failed to query inference backend ({active_backend}): {e}")
         return {
             "status": "error",
-            "error": f"Failed to communicate with Ornith in LM Studio ({lm_studio_url}): {str(e)}",
+            "error": f"Failed to communicate with Ornith inference backend ({active_backend} at {invoke_url}): {str(e)}",
             "static_contracts": contract_res
         }
 

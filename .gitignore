@@ -23,6 +23,8 @@ config/wifi_networks.json
 *wifi_secrets*
 *wifi_config*.json
 secrets/
+*secrets*.json
+**/secrets.json
 
 # Agent Metadata & Internal Docs
 .agents/
