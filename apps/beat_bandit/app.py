@@ -337,6 +337,13 @@ class BeatBanditApp(BaseApp):
             self.error = str(e)
             dispatch_audio_event(kind="incorrect")
 
+    def _handle_player_loop(self, wav_path: str, st: float, et: Optional[float]) -> None:
+        self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
+
+    def _handle_player_finish(self) -> None:
+        self.current_state = "IDLE"
+        self.audio_client.stop_playback()
+
     def _start_player_session(
         self,
         backend: RobotBackend,
@@ -348,21 +355,13 @@ class BeatBanditApp(BaseApp):
             return
 
         track_id = self.active_track["track_id"]
-        choreo = self.active_track.get("choreography")
-        if not choreo or not choreo.get("tracks"):
-            choreo = self.studio_manager.get_track_choreography(track_id)
-            self.active_track["choreography"] = choreo
+        choreo = self.studio_manager.get_track_choreography(track_id)
+        self.active_track["choreography"] = choreo
 
         if "probabilities" not in choreo or not isinstance(choreo["probabilities"], dict):
             choreo["probabilities"] = load_choreography_probabilities()
 
         wav_path = self.active_track["wav_path"]
-
-        def _on_loop(st: float, et: Optional[float]):
-            self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
-
-        def _on_finish():
-            self.current_state = "IDLE"
 
         # 1. Instantiate and strictly validate ChoreographyPlayer BEFORE dispatching audio
         self.player = ChoreographyPlayer(
@@ -372,8 +371,8 @@ class BeatBanditApp(BaseApp):
             start_sec=start_sec,
             end_sec=end_sec,
             loop=loop,
-            on_loop_callback=_on_loop,
-            on_finish_callback=_on_finish,
+            on_loop_callback=lambda st, et: self._handle_player_loop(wav_path, st, et),
+            on_finish_callback=self._handle_player_finish,
         )
 
         # 2. Dispatch Audio to Pi 4B only after player initialization succeeds
@@ -549,15 +548,7 @@ class BeatBanditApp(BaseApp):
         self.active_track = track_meta
         self.active_analysis = analysis
 
-        def _on_finish():
-            self.current_state = "IDLE"
-            self.audio_client.stop_playback()
-
-        # Dispatch Audio Slice to Pi 4B if available
-        if wav_path and os.path.exists(wav_path):
-            self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
-
-        # Start 50 Hz Player for exact block duration [st, et]
+        # 1. Instantiate and strictly validate 50 Hz Player for exact block duration [st, et]
         self.player = ChoreographyPlayer(
             backend=backend,
             choreography=isolated_choreo,
@@ -565,8 +556,13 @@ class BeatBanditApp(BaseApp):
             start_sec=st,
             end_sec=et,
             loop=False,
-            on_finish_callback=_on_finish,
+            on_finish_callback=self._handle_player_finish,
         )
+
+        # 2. Dispatch Audio Slice to Pi 4B only after player initialization succeeds
+        if wav_path and os.path.exists(wav_path):
+            self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
+
         self.current_state = "PREVIEWING"
         self.player.start()
 
