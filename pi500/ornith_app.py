@@ -127,7 +127,9 @@ class OrnithVoiceApp(BaseApp):
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
-                    return bool(data.get("exists"))
+                    if "exists" not in data:
+                        raise KeyError("Missing required 'exists' key in pending_audio response")
+                    return bool(data["exists"])
         except Exception as e:
             self.logger.debug("Could not check pending audio on Pi 4B: %s", e)
         return False
@@ -186,16 +188,19 @@ class OrnithVoiceApp(BaseApp):
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main interaction loop implementing Option B cadence, 3s cancel window, and 30s auto-send."""
         self.logger.info("OrnithVoiceApp Option B interaction loop running.")
-        service = getattr(backend, "pokeball_service", None)
+        if not hasattr(backend, "pokeball_service") or backend.pokeball_service is None:
+            raise AttributeError("RobotBackend is missing required 'pokeball_service' attribute")
+        service = backend.pokeball_service
 
-        if service and hasattr(service, "button_b_click_event"):
-            service.button_b_click_event.clear()
+        if not hasattr(service, "button_b_click_event") or service.button_b_click_event is None:
+            raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
+        service.button_b_click_event.clear()
 
         while not stop_event.is_set():
             now = time.time()
 
             # Check Button B single click event
-            if service and hasattr(service, "button_b_click_event") and service.button_b_click_event.is_set():
+            if service.button_b_click_event.is_set():
                 service.button_b_click_event.clear()
 
                 if self.state == "AWAITING_INPUT":

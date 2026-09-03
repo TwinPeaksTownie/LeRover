@@ -530,7 +530,13 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == "/api/ornith/state":
-            state = req_data.get("state", "IDLE")
+            if "state" not in req_data:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Missing required 'state' parameter"}).encode('utf-8'))
+                return
+            state = req_data["state"]
             STATUS_CACHE["ornith_state"] = state
             print(f"[ORNITH STATE] Kiosk state transitioned to: {state}", flush=True)
             self.send_response(200)
@@ -540,7 +546,13 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == "/api/set_volume":
-            vol = req_data.get("volume", 100)
+            if "volume" not in req_data:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Missing required 'volume' parameter"}).encode('utf-8'))
+                return
+            vol = int(req_data["volume"])
             set_system_volume(vol)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

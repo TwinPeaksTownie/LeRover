@@ -821,9 +821,14 @@ export function updateTelemetryUI(data) {
         teleopStatusStr = 'POKEBALL ACTIVE';
         teleopStatusColor = '#ff3344';
     } else if (currentApp === 'ornith_voice') {
-        const ost = data.ornith_state || 'STANDBY';
-        teleopStatusStr = (ost === 'AWAITING_INPUT') ? 'TAP B TO SPEAK' : `ORNITH ${ost.toUpperCase()}`;
-        teleopStatusColor = (ost === 'LISTENING') ? '#00ff66' : (ost === 'THINKING' ? '#ffaa00' : (ost === 'SPEAKING' ? '#ff00cc' : '#00e5ff'));
+        const ost = data.ornith_state;
+        if (!ost) {
+            teleopStatusStr = 'ORNITH --';
+            teleopStatusColor = '#00e5ff';
+        } else {
+            teleopStatusStr = (ost === 'AWAITING_INPUT') ? 'TAP B TO SPEAK' : `ORNITH ${ost.toUpperCase()}`;
+            teleopStatusColor = (ost === 'LISTENING') ? '#00ff66' : (ost === 'THINKING' ? '#ffaa00' : (ost === 'SPEAKING' ? '#ff00cc' : '#00e5ff'));
+        }
     } else if (data.daemon_running) {
         teleopStatusStr = 'DAEMON READY';
         teleopStatusColor = '#00e5ff';
