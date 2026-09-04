@@ -49,11 +49,11 @@
     "conversation_memory_max_messages": 10,
     "conversation_memory_timeout_sec": 900.0,
     "chimes": {
-      "app_start": "smw_switch_activated",
-      "settle": "smw_whistle",
-      "action": "smw_midway_gate",
-      "cancel": "smw_switch_timer_ending",
-      "exit": "smw_goal_iris-out"
+      "app_start": "ornith_app_start",
+      "settle": "ornith_listen_start",
+      "action": "ornith_commit_speech",
+      "cancel": "ornith_abort_recording",
+      "exit": "app_exit_idle"
     }
   },
   "robot_app": {

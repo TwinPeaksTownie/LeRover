@@ -152,51 +152,23 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
 
             target_wav = wav_path
             if not target_wav or not os.path.exists(target_wav):
-                lookup_key = event or kind
+                lookup_key = kind
+                if event:
+                    lookup_key = event
                 resolved_filename = audio_resolver.get_audio_filename(lookup_key)
-
-                if resolved_filename:
-                    cand = os.path.join(MARIO_SOUNDS_DIR, resolved_filename)
-                    if os.path.exists(cand):
-                        target_wav = cand
-                    elif resolved_filename == "mario_kart_start":
-                        target_mp3 = "/home/carson/mario_kart_start.mp3"
-                        if os.path.exists(target_mp3):
-                            subprocess.run(["mpg123", "-q", target_mp3], env=PULSE_ENV, check=False)
-                            return
-                        target_wav = os.path.join(MARIO_SOUNDS_DIR, "mario_kart_start.wav")
-                elif kind == "connect":
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_coin.wav")
-                elif kind in ("incorrect", "error", "invalid", "fallback"):
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
-                elif kind == "mario_kart_start":
-                    target_mp3 = "/home/carson/mario_kart_start.mp3"
-                    if os.path.exists(target_mp3):
-                        subprocess.run(["mpg123", "-q", target_mp3], env=PULSE_ENV, check=False)
-                        return
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "mario_kart_start.wav")
-                elif kind in ("red_button", "random_plant_vine", "plant_vine"):
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, random.choice(PLANT_VINE_SOUNDS))
-                elif kind == "disconnect":
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_pause.wav")
-                elif kind in ("smw_shell_ricochet", "smw_shell_richochet", "shell_ricochet"):
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_shell_ricochet.wav")
-                elif kind in ("trex_roar", "trex_roar_isolated"):
-                    target_wav = os.path.join(MARIO_SOUNDS_DIR, "trex_roar_isolated.wav")
-                    if not os.path.exists(target_wav):
-                        target_wav = "/home/carson/trex_roar_isolated.wav"
-                elif kind:
-                    cand = os.path.join(MARIO_SOUNDS_DIR, kind if kind.endswith(".wav") else f"{kind}.wav")
-                    if os.path.exists(cand):
-                        target_wav = cand
-                    else:
-                        target_wav = os.path.join(MARIO_SOUNDS_DIR, "smw_incorrect.wav")
+                cand = os.path.join(MARIO_SOUNDS_DIR, resolved_filename)
+                if not os.path.exists(cand):
+                    raise FileNotFoundError(f"Resolved audio asset '{cand}' does not exist on disk.")
+                target_wav = cand
 
             if target_wav and os.path.exists(target_wav):
                 res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
                 if res.returncode != 0:
-                    err_txt = res.stderr.decode('utf-8', errors='ignore') if res.stderr else "Unknown error"
+                    err_txt = "Unknown error"
+                    if res.stderr:
+                        err_txt = res.stderr.decode('utf-8', errors='ignore')
                     print(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}", flush=True)
+                return
         except Exception as e:
             print(f"Sound playback error: {e}", flush=True)
     threading.Thread(target=_work, daemon=True).start()
@@ -655,7 +627,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "sound": kind or wav_path}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or kind or wav_path}).encode('utf-8'))
             return
 
         if path == "/api/pi500_poweron":

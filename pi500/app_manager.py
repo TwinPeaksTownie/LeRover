@@ -237,10 +237,6 @@ class AppManager:
             self.current_app_name = None
             return False
 
-        # 4. Dispatch application startup audio cue
-        start_cue = "ornith_app_start" if app_name == "ornith_voice" else "app_start"
-        dispatch_audio_event(kind=start_cue)
-
         def _runner():
             try:
                 self.logger.info(f"Starting application loop '{app_name}'...")
@@ -265,6 +261,12 @@ class AppManager:
 
         app_instance.thread = threading.Thread(target=_runner, daemon=True)
         app_instance.thread.start()
+
+        # Dispatch application startup audio cue strictly AFTER worker thread starts
+        start_cue = "app_start"
+        if app_name == "ornith_voice":
+            start_cue = "ornith_app_start"
+        dispatch_audio_event(kind=start_cue)
         return True
 
     def stop_app(self, app_name: str) -> None:

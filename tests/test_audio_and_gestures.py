@@ -35,7 +35,7 @@ class TestAudioResolver(unittest.TestCase):
             ("ornith_listen_start", "smw_whistle.wav"),
             ("ornith_commit_speech", "smw_midway_gate.wav"),
             ("ornith_abort_recording", "smw_switch_timer_ending.wav"),
-            ("rover_arm_drivetrain", "mario_kart_start"),
+            ("rover_arm_drivetrain", "mario_kart_start.wav"),
             ("rover_emergency_brake", "smw_yoshi_runs_away.wav"),
             ("app_exit_idle", "smw_goal_iris-out.wav"),
         ]
@@ -116,59 +116,14 @@ class TestPokeballServiceGestures(unittest.TestCase):
             mock_play_chime.assert_called_with("rover_emergency_brake")
 
     def _simulate_input(self, buttons: int, now: float):
-        """Replicates input processing branch in PokeballService._input_handler."""
+        """Dispatches synthetic BLE report directly into production PokeballService.notification_handler."""
         center = self.service.joystick_center
-        raw_x_12 = center
-        raw_y_12 = center
-        x_offset = raw_x_12 - center
-        y_offset = raw_y_12 - center
-
-        btn_a = bool(buttons & 0x02)
-        btn_b = bool(buttons & 0x01)
-
-        # --- 1. SIMULTANEOUS A + B CHORD (1.0s Hold) ---
-        if btn_a and btn_b:
-            if self.service.both_ab_press_start_time is None:
-                self.service.both_ab_press_start_time = now
-            hold_duration_ab = now - self.service.both_ab_press_start_time
-            if hold_duration_ab >= 1.0 and not self.service.ab_hold_triggered:
-                self.service.ab_hold_triggered = True
-                self.service.abort_audio_event.set()
-        else:
-            self.service.both_ab_press_start_time = None
-            self.service.ab_hold_triggered = False
-
-        # --- 2. BUTTON B ---
-        if btn_b and not btn_a:
-            if self.service.btn_b_press_start_time is None:
-                self.service.btn_b_press_start_time = now
-        else:
-            if self.service.btn_b_press_start_time is not None:
-                duration = now - self.service.btn_b_press_start_time
-                if 0.05 <= duration < 2.0 and not self.service.b_hold_triggered:
-                    self.service.button_b_click_event.set()
-                    if self.service.teleop_enabled and self.service.is_armed:
-                        self.service.is_armed = False
-                        self.service.arm_lockout_until = 0.0
-                        if self.service.rover_ctrl:
-                            self.service.rover_ctrl.stop()
-                        from apps.pokeball_app.app import play_chime
-                        play_chime("rover_emergency_brake")
-                self.service.btn_b_press_start_time = None
-
-        # --- 3. BUTTON A ---
-        if btn_a and not btn_b:
-            if self.service.stick_press_start_time is None:
-                self.service.stick_press_start_time = now
-            hold_duration_a = now - self.service.stick_press_start_time
-            if self.service.teleop_enabled:
-                if hold_duration_a >= 2.0 and not self.service.is_armed:
-                    self.service.is_armed = True
-                    self.service.arm_lockout_until = now + 4.25
-                    from apps.pokeball_app.app import play_chime
-                    play_chime("rover_arm_drivetrain")
-        else:
-            self.service.stick_press_start_time = None
+        b2 = center & 0xFF
+        b3 = ((center >> 8) & 0x0F) | ((center & 0x0F) << 4)
+        b4 = (center >> 4) & 0xFF
+        data = bytearray([0x00, buttons, b2, b3, b4])
+        with patch("time.time", return_value=now):
+            self.service.notification_handler(None, data)
 
 
 class TestOrnithVoiceCadence(unittest.TestCase):

@@ -23,9 +23,9 @@
     "b_hold_sec": 3.0
   },
   "chimes": {
-    "app_start": "pokeball_start",
-    "ble_connect": "pokeball_ble_connected",
-    "arm_rover": "rover_arm_countdown",
+    "app_start": "app_start",
+    "ble_connect": "device_connect",
+    "arm_rover": "rover_arm_drivetrain",
     "emergency_brake": "rover_emergency_brake",
     "chord_abort": "ornith_abort_recording"
   }

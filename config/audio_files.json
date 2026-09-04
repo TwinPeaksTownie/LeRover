@@ -4,6 +4,10 @@
       "file": "smw_coin.wav",
       "description": "BLE device or hardware peripheral connected"
     },
+    "connect": {
+      "file": "smw_coin.wav",
+      "description": "Legacy alias for device_connect"
+    },
     "app_start": {
       "file": "smw_riding_yoshi.wav",
       "description": "Application successfully started up"
@@ -25,9 +29,12 @@
       "description": "Abort and discard audio capture"
     },
     "rover_arm_drivetrain": {
-      "file": "mario_kart_start",
-      "fallback_file": "mario_kart_start.wav",
+      "file": "mario_kart_start.wav",
       "description": "Arm rover drivetrain with 4.25s audio countdown lockout"
+    },
+    "mario_kart_start": {
+      "file": "mario_kart_start.wav",
+      "description": "Legacy alias for rover_arm_drivetrain"
     },
     "rover_emergency_brake": {
       "file": "smw_yoshi_runs_away.wav",
@@ -45,9 +52,37 @@
       "file": "smw_incorrect.wav",
       "description": "Action failed or invalid input"
     },
+    "error": {
+      "file": "smw_incorrect.wav",
+      "description": "Legacy alias for incorrect"
+    },
+    "invalid": {
+      "file": "smw_incorrect.wav",
+      "description": "Legacy alias for incorrect"
+    },
+    "fallback": {
+      "file": "smw_incorrect.wav",
+      "description": "Legacy alias for incorrect"
+    },
     "smw_blargg": {
       "file": "smw_blargg.wav",
       "description": "Daemon startup blarg announcement"
+    },
+    "smw_pipe": {
+      "file": "smw_pipe.wav",
+      "description": "Pipe sound effect"
+    },
+    "trex_roar": {
+      "file": "trex_roar_isolated.wav",
+      "description": "T-Rex roar"
+    },
+    "trex_roar_isolated": {
+      "file": "trex_roar_isolated.wav",
+      "description": "T-Rex roar isolated"
+    },
+    "stop_audio": {
+      "file": "smw_pause.wav",
+      "description": "Stop audio signal"
     }
   }
 }

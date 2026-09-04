@@ -485,7 +485,6 @@ class PokeballApp(BaseApp):
         service.is_armed = False
         if service.rover_ctrl:
             service.rover_ctrl.stop()
-        play_chime("app_exit_idle")
         self.logger.info("PokeballApp disabled teleoperation on intrinsic PokeballService.")
 
     def stop(self) -> None:
