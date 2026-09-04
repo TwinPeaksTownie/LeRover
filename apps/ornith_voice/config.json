@@ -53,11 +53,13 @@
       "settle": "smw_whistle",
       "action": "smw_midway_gate",
       "cancel": "smw_switch_timer_ending",
-      "exit": "smw_goal_iris-out"
+      "exit": "smw_goal_iris-out",
+      "pager": "smw_princess_help"
     }
   },
   "robot_app": {
     "double_click_window_sec": 1.0,
+    "cancel_window_sec": 1.0,
     "auto_send_timeout_sec": 30.0,
     "settle_delay_sec": 0.65,
     "playback_wait_timeout_sec": 12.0,
