@@ -208,17 +208,43 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
         )
         diff_text = diff_proc.stdout or ""
 
-        # If no uncommitted diffs, inspect recent code commits (HEAD~FALLBACK_COMMITS..HEAD)
+        # If no uncommitted diffs, inspect recent code commits (baseline..HEAD or HEAD~FALLBACK_COMMITS..HEAD)
         if not diff_text.strip() and not untracked_files:
+            base_ref = f"HEAD~{FALLBACK_COMMITS}"
+            try:
+                base_proc = subprocess.run(
+                    ["git", "log", "--grep=baseline:", "-n", "1", "--format=%H"],
+                    cwd=repo_path,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                if base_proc.returncode == 0 and base_proc.stdout.strip():
+                    base_ref = base_proc.stdout.strip()
+            except Exception:
+                pass
+
             diff_proc_last = subprocess.run(
-                ["git", "diff", f"HEAD~{FALLBACK_COMMITS}..HEAD", "--", ".", ":!*manifest.json"],
+                ["git", "diff", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
                 cwd=repo_path,
                 capture_output=True,
                 encoding="utf-8",
                 errors="replace"
             )
             if diff_proc_last.returncode == 0 and (diff_proc_last.stdout or "").strip():
-                diff_text = f"=== RECENT COMMITS DIFF (HEAD~{FALLBACK_COMMITS}..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
+                diff_text = f"=== RECENT COMMITS DIFF ({base_ref[:8]}..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
+                name_proc = subprocess.run(
+                    ["git", "diff", "--name-only", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
+                    cwd=repo_path,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                if name_proc.returncode == 0 and name_proc.stdout:
+                    for nf in name_proc.stdout.splitlines():
+                        nf = nf.strip()
+                        if nf and os.path.splitext(nf.lower())[1] not in IGNORE_EXTENSIONS:
+                            modified_files.append(nf)
 
         untracked_diffs = []
         for ufile in untracked_files:
