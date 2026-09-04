@@ -7,6 +7,7 @@
 
 ### 2. Instruction-Gated Execution Protocol
 - **Exploratory & Diagnostic Mode**: When asked exploratory, conceptual, or diagnostic questions, provide technical explanations in plain language.
+- **Planning Mode & Gate 1 Build Plan Audit**: When designing architectural changes or non-trivial implementations, formulate `implementation_plan.md` and submit it to **Gate 1 (Build Plan Audit)**. The plan must pass Gate 1 (verifying zero false tri-states, fail-fast schema compliance, and scope containment with deployment checks disabled) before requesting operator approval.
 - **Imperative Execution Mode**: Execute file writes, refactors, and deploy scripts only when given explicit commands (`fix`, `implement`, `edit`, `deploy`, `run`, `refactor`).
 
 ### 3. Single Source of Truth & Calibration Resolution
@@ -20,12 +21,14 @@
 - **Compile Upfront**: Pre-calculate choreography, beat-alignment, and motion curves during the compilation pass and save them into JSON sequence files.
 - **Deterministic 50 Hz Playback Engine**: Live playback executes keyframe interpolation, joint safety clamping, and serial dispatch to `/dev/ttyACM0`.
 
-### 5. Mandatory Verification State Machine
-Every task must transition sequentially through four explicit verification states before concluding:
-1. **State 1 (Pipeline Continuity)**: Trace and prove the downstream consumer explicitly reads and unmarshals the exact keys sent by the producer.
-2. **State 2 (Dynamic Variance)**: Verify that target coordinates dynamically vary across timestamps (e.g. proving stances transition across distinct poses rather than locking in place).
-3. **State 3 (Live Telemetry & Physical Sampling)**: Sample live hardware encoder telemetry at multiple timeline checkpoints (e.g. 5s, 25s, 50s) to prove physical servos reached commanded coordinates.
-4. **State 4 (Log Audit)**: Query daemon logs (`journalctl`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
+### 5. Mandatory Verification State Machine & Two-Gate Review
+Every task must transition sequentially through two audit gates and four verification states:
+- **Gate 1 (Build Plan Audit - Pre-Execution)**: Ornith audits `implementation_plan.md` against chronological operator directives for Rule 13 (Anti-Slop / False Tri-States), Rule 1 (Fail-Fast), and Rule 3 (Dynamic Calibration). Physical deployment checks are disabled (`check_deployments=False`).
+- **State 1 (Pipeline Continuity & Target Deployment)**: Trace pipeline continuity, sync modified files to physical target directory (`/home/user/so101/pi500/` or `/home/carson/touch_ui/`), and restart host processes.
+- **State 2 (Dynamic Variance & Motion Cycle)**: Execute a complete bidirectional motion/workload cycle ($Origin \rightarrow Target\,A \rightarrow Target\,B \rightarrow Origin$) under live application conditions, verifying target coordinates dynamically vary across timestamps.
+- **State 3 (Live Telemetry & Physical Sampling)**: Sample live encoder telemetry and socket streams across checkpoints (e.g. 5s, 25s, 50s) to prove physical servos reached commanded coordinates without serial timeouts.
+- **State 4 (Log Audit & Hardware Parity)**: Query daemon logs (`journalctl`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
+- **Gate 2 (Deployment Audit - Post-Execution)**: Ornith executes final adversarial review over the live git diff, remote MD5 parity (`check_deployments=True`), and daemon log cleanliness, announcing the spoken verdict aloud.
 
 ---
 
@@ -55,6 +58,10 @@ Every task must transition sequentially through four explicit verification state
 
 ### 7. Musical Choreography Terminology
 - Model and describe all choreography timelines strictly using concrete musical divisions: `measures`, `beats`, `4bars`, and `8bars`.
+
+### 8. Anti-Slop, False Tri-States & Aesthetic Symmetry (Rule 13)
+- Scrutinize state machines, options, and logic paths proposed in threes.
+- Reject synthetic third states fabricated to satisfy LLM "rule of three" aesthetic balance. If a binary condition (`APPROVED` vs `BLOCKER`, `True` vs `False`) solves the problem, proposing a third state is forbidden.
 
 ---
 

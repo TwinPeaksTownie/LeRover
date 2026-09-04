@@ -162,7 +162,7 @@ def get_active_conversation_transcript(
         "recent_history": recent_history
     }
 
-def get_git_diff(repo_path: str = None, max_chars: int = 250000, fallback_to_commits: bool = False) -> dict:
+def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
     """
     Captures complete git diff including untracked and modified text source files.
     """
@@ -207,45 +207,6 @@ def get_git_diff(repo_path: str = None, max_chars: int = 250000, fallback_to_com
             errors="replace"
         )
         diff_text = diff_proc.stdout or ""
-
-        # Only inspect recent code commits if explicitly requested
-        if fallback_to_commits and not diff_text.strip() and not untracked_files:
-            base_ref = f"HEAD~{FALLBACK_COMMITS}"
-            base_proc = subprocess.run(
-                ["git", "log", "--grep=baseline:", "-n", "1", "--format=%H"],
-                cwd=repo_path,
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace"
-            )
-            if base_proc.returncode != 0:
-                raise RuntimeError(f"Git baseline commit resolution failed: {base_proc.stderr}")
-            if base_proc.stdout.strip():
-                base_ref = base_proc.stdout.strip()
-            else:
-                _log_debug(f"No commit matching 'baseline:' found. Defaulting diff base to {base_ref}")
-
-            diff_proc_last = subprocess.run(
-                ["git", "diff", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
-                cwd=repo_path,
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace"
-            )
-            if diff_proc_last.returncode == 0 and (diff_proc_last.stdout or "").strip():
-                diff_text = f"=== RECENT COMMITS DIFF ({base_ref[:8]}..HEAD) ===\n\n" + (diff_proc_last.stdout or "")
-                name_proc = subprocess.run(
-                    ["git", "diff", "--name-only", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
-                    cwd=repo_path,
-                    capture_output=True,
-                    encoding="utf-8",
-                    errors="replace"
-                )
-                if name_proc.returncode == 0 and name_proc.stdout:
-                    for nf in name_proc.stdout.splitlines():
-                        nf = nf.strip()
-                        if nf and os.path.splitext(nf.lower())[1] not in IGNORE_EXTENSIONS:
-                            modified_files.append(nf)
 
         untracked_diffs = []
         for ufile in untracked_files:
@@ -484,9 +445,9 @@ def query_ornith_for_review(
 
     if not diff_text:
         diff_res = get_git_diff(repo_path)
-        if diff_res.get("status") != "success":
+        if diff_res["status"] != "success":
             return diff_res
-        diff_text = diff_res.get("diff", "")
+        diff_text = diff_res["diff"]
 
     contract_res = scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
 
@@ -526,6 +487,7 @@ Your job is to strictly enforce the following rules:
 10. SCHEMA KEY COMPLETENESS: Choreography dictionary structures, sanitization handlers, and save routines must retain mandatory schema keys, specifically 'probabilities' and 'tracks'.
 11. JS SCOPE INTEGRITY: JavaScript functions must not reference undeclared variables (e.g. referencing 'data' when 'data' is not in function scope). Use explicitly declared module state.
 12. EXECUTION ORDER & SIDE-EFFECT PRECONDITIONS: Irreversible network side-effects (e.g. audio playback dispatch) must occur only after worker and player instantiation has succeeded.
+13. ANTI-SLOP & FALSE TRI-STATES: Zero tolerance for logic padded to satisfy the LLM 'rule of three'. When diffs introduce three-state machines, three-way branching, or trios of options, rigorously verify that all three states are mutually exclusive and required. Reject synthetic third states fabricated for aesthetic balance.
 
 Evaluate the git diff, contract violations, and deployment status against the task summary and these strict rules.
 
@@ -780,3 +742,260 @@ def search_workspace_code(
         }
     except Exception as e:
         return {"status": "error", "error": f"Search failed: {str(e)}"}
+
+def get_operator_directives(brain_dir: str = None) -> list:
+    """
+    Extracts all chronological operator requests (USER_INPUT steps) from the active conversation transcript.
+    Strips out all assistant explanations, apologies, and internal tool execution logs.
+    """
+    if brain_dir is None:
+        if "BRAIN_DIR" in os.environ:
+            brain_dir = os.environ["BRAIN_DIR"]
+        elif os.name == "nt":
+            brain_dir = r"C:\Users\carso\.gemini\antigravity\brain"
+        else:
+            brain_dir = "/brain"
+
+    if not os.path.exists(brain_dir):
+        raise FileNotFoundError(f"Brain directory not found: {brain_dir}")
+
+    search_pattern = os.path.join(brain_dir, "*", ".system_generated", "logs", "transcript.jsonl")
+    transcript_files = glob.glob(search_pattern)
+    if not transcript_files:
+        raise FileNotFoundError(f"No transcript files found under {brain_dir}")
+
+    transcript_files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    latest_transcript = transcript_files[0]
+
+    directives = []
+    with open(latest_transcript, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                step = json.loads(line)
+            except Exception:
+                continue
+            if "type" in step and step["type"] == "USER_INPUT":
+                raw_content = ""
+                if "content" in step and step["content"]:
+                    raw_content = str(step["content"]).strip()
+                clean_content = re.sub(r"<USER_REQUEST>\s*", "", raw_content)
+                clean_content = re.sub(r"\s*</USER_REQUEST>", "", clean_content)
+                clean_content = re.sub(r"<ADDITIONAL_METADATA>[\s\S]*?</ADDITIONAL_METADATA>", "", clean_content)
+                clean_content = re.sub(r"<USER_SETTINGS_CHANGE>[\s\S]*?</USER_SETTINGS_CHANGE>", "", clean_content)
+                clean_content = clean_content.strip()
+                if clean_content:
+                    step_idx = None
+                    if "step_index" in step:
+                        step_idx = step["step_index"]
+                    directives.append({
+                        "step_index": step_idx,
+                        "text": clean_content
+                    })
+
+    return directives
+
+def query_ornith_for_plan_review(
+    plan_path: str = None,
+    task_summary: str = "",
+    brain_dir: str = None,
+    repo_path: str = None,
+    speak_verdict: bool = True
+) -> dict:
+    """
+    Gate 1: Performs an adversarial audit of implementation_plan.md before code execution.
+    Inspects proposed design against operator directives for:
+    - Rule 13: False tri-states and LLM aesthetic padding ('Rule of Three' bloat)
+    - Rule 1: Fail-fast schema violations in proposed code/data schemas
+    - Rule 3: Dynamic calibration bypasses or hardcoded ticks/ranges
+    - Scope containment against operator directives
+    Physical deployment checks are explicitly DISABLED (check_deployments=False).
+    """
+    if repo_path is None:
+        if "REPO_PATH" in os.environ:
+            repo_path = os.environ["REPO_PATH"]
+        elif os.name == "nt":
+            repo_path = r"i:\aux_servo_interface"
+        else:
+            repo_path = "/workspace"
+
+    if brain_dir is None:
+        if "BRAIN_DIR" in os.environ:
+            brain_dir = os.environ["BRAIN_DIR"]
+        elif os.name == "nt":
+            brain_dir = r"C:\Users\carso\.gemini\antigravity\brain"
+        else:
+            brain_dir = "/brain"
+
+    # 1. Resolve implementation plan
+    if not plan_path:
+        search_pattern = os.path.join(brain_dir, "*", "implementation_plan.md")
+        candidate_plans = glob.glob(search_pattern)
+        if candidate_plans:
+            candidate_plans.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            plan_path = candidate_plans[0]
+        else:
+            repo_plan = os.path.join(repo_path, "implementation_plan.md")
+            if os.path.exists(repo_plan):
+                plan_path = repo_plan
+            else:
+                raise FileNotFoundError("Could not locate implementation_plan.md in active brain session or workspace.")
+
+    if not os.path.exists(plan_path):
+        raise FileNotFoundError(f"Implementation plan not found at {plan_path}")
+
+    with open(plan_path, "r", encoding="utf-8", errors="replace") as f:
+        plan_content = f.read()
+
+    # 2. Extract operator-only directives
+    directives = get_operator_directives(brain_dir=brain_dir)
+    if directives:
+        directives_formatted = "\n".join(f"Turn {d['step_index']}: {d['text']}" for d in directives)
+    elif task_summary:
+        directives_formatted = task_summary
+    else:
+        directives_formatted = "No operator directives recorded."
+
+    # 3. Resolve active backend from config
+    if "ORNITH_AUDIT_BACKEND" in os.environ and os.environ["ORNITH_AUDIT_BACKEND"]:
+        active_backend = os.environ["ORNITH_AUDIT_BACKEND"]
+    else:
+        active_backend = _CONFIG["audit"]["active_backend"]
+
+    backends = _CONFIG["audit"]["backends"]
+    if active_backend not in backends:
+        raise KeyError(f"Invalid audit backend '{active_backend}'. Available backends: {list(backends.keys())}")
+
+    b_cfg = backends[active_backend]
+    invoke_url = b_cfg["url"]
+    model_name = b_cfg["model"]
+    max_tokens = int(b_cfg["max_tokens"])
+    temperature = float(b_cfg["temperature"])
+
+    system_prompt = """You are Ornith, the adversarial architecture supervisor for the SO-101 robotic arm system.
+Your job in this GATE 1 (BUILD PLAN AUDIT) pass is to rigorously audit the proposed implementation plan BEFORE code is written.
+
+You must strictly enforce the following rules:
+1. RULE 13 - ANTI-SLOP & FALSE TRI-STATES: Zero tolerance for logic padded to satisfy the LLM 'rule of three'. When plans propose three states, three flags, three-way branching, or trios of options, rigorously verify that all three states are mutually exclusive and required. If a third item is redundant, a duplicate of an existing branch, or fabricated for aesthetic balance, REJECT the plan.
+2. RULE 1 - FAIL-FAST SCHEMA: Zero tolerance for proposed snippets introducing .get(key, default), ternary defaults, setdefault(), or swallowed exceptions. Internal data pipelines and motion blocks must use direct bracket access and explicit validators.
+3. RULE 3 - DYNAMIC CALIBRATION: Zero tolerance for proposed hardcoded 2048 ticks, fixed limits, or arbitrary multipliers. Motor bounds and midpoints must resolve dynamically from follower.json or calibration_aux.json.
+4. SCOPE CONTAINMENT: The plan must directly satisfy the operator's directives without unrequested refactoring of unrelated subsystems.
+5. DEPLOYMENT CHECKS DISABLED: Physical deployment parity and daemon logs are not verified at this stage. Do NOT reject the plan for missing remote Pi files or undeployed states.
+
+Structure your response strictly using these exact markdown headers:
+
+### VERDICT
+State your verdict on a single line: [APPROVED], [REJECTED], or [BLOCKER].
+
+### SPOKEN_SUMMARY
+Provide a concise, 2-to-3 sentence spoken voice summary written in active first-person voice as Ornith addressing Carson:
+- If REJECTED: State clearly that you are rejecting the plan, cite the specific rule violated (e.g. Rule 13 False Tri-State or Rule 1 Schema), state what must be fixed, and confirm you will not approve execution until revised.
+- If BLOCKER: State clearly that an unresolved architectural dependency or missing credential blocks progress.
+- If APPROVED: State clearly that you have approved the implementation plan, confirming that the architecture complies with all project contracts.
+Keep the SPOKEN_SUMMARY strictly under 60 words, natural for text-to-speech, with zero markdown symbols or code formatting.
+
+### DETAILED_AUDIT
+Explain specific architectural violations, false tri-states, or contract risks in the proposed plan."""
+
+    user_prompt = f"""=== OPERATOR DIRECTIVES & CONSTRAINTS (Chronological) ===
+{directives_formatted}
+
+=== PROPOSED IMPLEMENTATION PLAN ===
+{plan_content}
+
+Evaluate this implementation plan against the operator directives and strict rules."""
+
+    headers = {"Content-Type": "application/json"}
+    if active_backend == "nim":
+        api_key = ornith_config_loader.get_secret("NVIDIA_API_KEY")
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    use_stream = bool(active_backend == "nim")
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": use_stream
+    }
+    if "reasoning_effort" in b_cfg and b_cfg["reasoning_effort"] is not None:
+        payload["reasoning_effort"] = b_cfg["reasoning_effort"]
+    if "seed" in b_cfg and b_cfg["seed"] is not None:
+        payload["seed"] = b_cfg["seed"]
+
+    _log_debug(f"Gate 1 Plan Audit querying Ornith via {active_backend} ({model_name}) at {invoke_url}...")
+    resp = requests.post(invoke_url, headers=headers, json=payload, stream=use_stream, timeout=120)
+    if resp.status_code != 200:
+        err_body = resp.text
+        return {
+            "status": "error",
+            "error": f"Inference backend ({active_backend}) returned HTTP {resp.status_code}: {err_body}"
+        }
+
+    content = ""
+    reasoning = ""
+    if use_stream:
+        content_parts = []
+        reasoning_parts = []
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            decoded = line.decode("utf-8")
+            if not decoded.startswith("data: "):
+                continue
+            data_str = decoded[6:].strip()
+            if data_str == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data_str)
+            except Exception:
+                continue
+            if "choices" not in chunk or not chunk["choices"]:
+                continue
+            choice = chunk["choices"][0]
+            if "delta" not in choice:
+                continue
+            delta = choice["delta"]
+            if "content" in delta and delta["content"]:
+                content_parts.append(str(delta["content"]))
+            if "reasoning_content" in delta and delta["reasoning_content"]:
+                reasoning_parts.append(str(delta["reasoning_content"]))
+        content = "".join(content_parts)
+        reasoning = "".join(reasoning_parts)
+    else:
+        data = resp.json()
+        content = str(data["choices"][0]["message"]["content"])
+
+    verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', content, re.IGNORECASE)
+    if verdict_match:
+        verdict_str = verdict_match.group(1).upper()
+    else:
+        verdict_str = "UNKNOWN"
+
+    spoken_text = extract_spoken_summary(content, verdict_str, None, task_summary or "Implementation Plan Audit")
+
+    spoken_status = "not_spoken"
+    if speak_verdict and spoken_text:
+        try:
+            tools_speech.speak_laura(spoken_text, target=_CONFIG["speech"]["target"])
+            spoken_status = f"spoken_{verdict_str.lower()}"
+        except Exception as e:
+            _log_debug(f"Speech notification error: {e}")
+
+    return {
+        "status": "success",
+        "audit_gate": "Gate 1 (Build Plan Audit)",
+        "plan_path": plan_path,
+        "operator_directives_count": len(directives),
+        "verdict": verdict_str,
+        "spoken_summary": spoken_text,
+        "verdict_text": content,
+        "reasoning_summary": reasoning[:400],
+        "spoken_status": spoken_status
+    }
+

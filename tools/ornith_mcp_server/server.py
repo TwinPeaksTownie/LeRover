@@ -54,14 +54,37 @@ def _reload_modules():
 # -----------------------------------------------------------------------------
 
 @app.tool()
+def audit_implementation_plan(
+    plan_path: str = None,
+    task_summary: str = "",
+    speak_verdict: bool = True
+) -> str:
+    """
+    Gate 1: Performs an adversarial audit of implementation_plan.md before code execution.
+    Ingests chronological operator directives (USER_INPUT steps) and verifies the plan against:
+    - Rule 13: False tri-states and LLM aesthetic padding ('Rule of Three' bloat)
+    - Rule 1: Fail-fast schema compliance
+    - Rule 3: Dynamic calibration
+    - Scope containment
+    Physical deployment checks are explicitly DISABLED. Speaks the verdict via Laura TTS.
+    """
+    _reload_modules()
+    res = tools_audit.query_ornith_for_plan_review(
+        plan_path=plan_path,
+        task_summary=task_summary,
+        speak_verdict=speak_verdict
+    )
+    return json.dumps(res, indent=2)
+
+@app.tool()
 def invoke_ornith_adversarial_review(
     task_summary: str,
     repo_path: str = r"i:\aux_servo_interface",
     speak_verdict: bool = True
 ) -> str:
     """
-    Invokes the Ornith 1.0 35B model in LM Studio to perform a rigorous adversarial audit
-    of the current codebase changes and git diffs against project rules.
+    Gate 2: Invokes Ornith to perform a rigorous adversarial deployment audit
+    of the codebase diffs and physical deployment status against project rules.
     If approved or blocked, announces the result to the user in Laura's voice via Pocket TTS.
     """
     _reload_modules()
