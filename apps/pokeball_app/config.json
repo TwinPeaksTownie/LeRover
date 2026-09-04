@@ -15,5 +15,18 @@
     "deadzone": 0.15,
     "speed_scale": 1.0,
     "poll_rate_hz": 50
+  },
+  "gestures": {
+    "chord_abort_sec": 1.0,
+    "arm_drivetrain_sec": 2.0,
+    "arm_lockout_sec": 4.25,
+    "b_hold_sec": 3.0
+  },
+  "chimes": {
+    "app_start": "pokeball_start",
+    "ble_connect": "pokeball_ble_connected",
+    "arm_rover": "rover_arm_countdown",
+    "emergency_brake": "rover_emergency_brake",
+    "chord_abort": "ornith_abort_recording"
   }
 }

@@ -44,6 +44,10 @@
     "incorrect": {
       "file": "smw_incorrect.wav",
       "description": "Action failed or invalid input"
+    },
+    "smw_blargg": {
+      "file": "smw_blargg.wav",
+      "description": "Daemon startup blarg announcement"
     }
   }
 }

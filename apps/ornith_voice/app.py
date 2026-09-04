@@ -33,10 +33,7 @@ try:
 except ImportError:
     network_resolver = None
 
-try:
-    import audio_resolver
-except ImportError:
-    audio_resolver = None
+import audio_resolver
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
@@ -107,12 +104,7 @@ class OrnithVoiceApp(BaseApp):
 
     def _play_pi4b_sound(self, kind: str, stop_previous: bool = False, delay_sec: float = 0.0) -> None:
         """Dispatches audio cue playback over HTTP to Pi 4B speakers."""
-        sound_file = kind
-        if audio_resolver is not None:
-            try:
-                sound_file = audio_resolver.get_audio_filename(kind)
-            except Exception:
-                sound_file = kind
+        sound_file = audio_resolver.get_audio_filename(kind)
 
         def _post():
             try:
@@ -245,8 +237,9 @@ class OrnithVoiceApp(BaseApp):
             raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
         service.button_b_click_event.clear()
 
-        if hasattr(service, "abort_audio_event") and service.abort_audio_event is not None:
-            service.abort_audio_event.clear()
+        if not hasattr(service, "abort_audio_event") or service.abort_audio_event is None:
+            raise AttributeError("PokeballService is missing required 'abort_audio_event' attribute")
+        service.abort_audio_event.clear()
 
         double_click_window = self.config["robot_app"]["double_click_window_sec"]
         auto_send_timeout = self.config["robot_app"]["auto_send_timeout_sec"]
@@ -256,11 +249,11 @@ class OrnithVoiceApp(BaseApp):
             now = time.time()
 
             # 1. Check A + B chord abort (1.0s simultaneous hold)
-            if hasattr(service, "abort_audio_event") and service.abort_audio_event.is_set():
+            if service.abort_audio_event.is_set():
                 service.abort_audio_event.clear()
                 self.logger.info("🛑 [CHORD ABORT] A + B simultaneous chord detected. Cancelling audio recording...")
                 self._cancel_robot_mic()
-                self._play_pi4b_sound(kind="ornith_abort_recording")
+                self._play_pi4b_sound(kind=self.config["voice_bridge"]["chimes"]["cancel"])
                 self.last_b_click_time = 0.0
                 self._set_kiosk_state("AWAITING_INPUT")
 
@@ -299,7 +292,7 @@ class OrnithVoiceApp(BaseApp):
         wait_timeout = self.config["robot_app"]["playback_wait_timeout_sec"]
         
         # 1. Dispatch midway gate action chime immediately as recording stops
-        self._play_pi4b_sound(kind="ornith_commit_speech")
+        self._play_pi4b_sound(kind=self.config["voice_bridge"]["chimes"]["action"])
         self._set_kiosk_state("THINKING")
 
         # 2. Stop microphone and command Pi 4B to forward WAV to Voice Bridge

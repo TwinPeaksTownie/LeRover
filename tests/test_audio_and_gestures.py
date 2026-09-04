@@ -117,10 +117,11 @@ class TestPokeballServiceGestures(unittest.TestCase):
 
     def _simulate_input(self, buttons: int, now: float):
         """Replicates input processing branch in PokeballService._input_handler."""
-        raw_x_12 = 2048
-        raw_y_12 = 2048
-        x_offset = raw_x_12 - 2048
-        y_offset = raw_y_12 - 2048
+        center = self.service.joystick_center
+        raw_x_12 = center
+        raw_y_12 = center
+        x_offset = raw_x_12 - center
+        y_offset = raw_y_12 - center
 
         btn_a = bool(buttons & 0x02)
         btn_b = bool(buttons & 0x01)

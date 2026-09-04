@@ -58,10 +58,7 @@ except ImportError:
     import network_resolver
 
 
-try:
-    import audio_resolver
-except ImportError:
-    audio_resolver = None
+import audio_resolver
 
 
 def get_pi4b_sound_url() -> str:
@@ -71,13 +68,8 @@ def get_pi4b_sound_url() -> str:
 
 def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
-    sound_file = kind
+    sound_file = audio_resolver.get_audio_filename(kind)
     event_name = kind
-    if audio_resolver is not None:
-        try:
-            sound_file = audio_resolver.get_audio_filename(kind)
-        except Exception:
-            sound_file = kind
 
     def _work():
         try:
@@ -146,8 +138,10 @@ def load_aux_calibration() -> Dict[str, Any]:
     return data
 
 
-def ticks_to_degrees_s7(ticks: int, center_ticks: int = 2048) -> float:
+def ticks_to_degrees_s7(ticks: int, center_ticks: Optional[int] = None) -> float:
     """Converts reported Motor 7 hardware ticks (0-4095) to intuitive degrees relative to calibrated center_ticks."""
+    if center_ticks is None:
+        center_ticks = int(load_aux_calibration()["7"]["center_ticks"])
     deg = (int(ticks) - int(center_ticks)) * 360.0 / 4096.0
     while deg > 180.0:
         deg -= 360.0
@@ -156,8 +150,10 @@ def ticks_to_degrees_s7(ticks: int, center_ticks: int = 2048) -> float:
     return round(deg, 1)
 
 
-def degrees_to_ticks_s7(deg: float, center_ticks: int = 2048) -> int:
+def degrees_to_ticks_s7(deg: float, center_ticks: Optional[int] = None) -> int:
     """Converts intuitive degrees to reported Motor 7 hardware ticks with a hard safety clamp of [-165.0, +165.0] degrees."""
+    if center_ticks is None:
+        center_ticks = int(load_aux_calibration()["7"]["center_ticks"])
     clamped_deg = max(-165.0, min(165.0, float(deg)))
     ticks = int(round(int(center_ticks) + (clamped_deg * 4096.0 / 360.0)))
     min_s7_ticks = int(round(int(center_ticks) - (165.0 * 4096.0 / 360.0)))

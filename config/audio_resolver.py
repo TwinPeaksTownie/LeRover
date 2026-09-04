@@ -16,19 +16,21 @@ _AUDIO_CONFIG_CACHE: Optional[Dict[str, Any]] = None
 
 def find_audio_config_path() -> str:
     """Discovers audio_files.json across standard repository and system paths."""
-    search_paths = [
-        os.environ.get("AUDIO_CONFIG_PATH", ""),
+    search_paths = []
+    if "AUDIO_CONFIG_PATH" in os.environ:
+        search_paths.append(os.environ["AUDIO_CONFIG_PATH"])
+    search_paths.extend([
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_files.json"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "audio_files.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "audio_files.json"),
         "/home/user/so101/config/audio_files.json",
         "/home/carson/touch_ui/config/audio_files.json",
         "i:/aux_servo_interface/config/audio_files.json",
-    ]
+    ])
     for p in search_paths:
         if p and os.path.exists(p):
             return os.path.abspath(p)
-    return ""
+    raise FileNotFoundError("Missing required audio configuration: audio_files.json not found in search paths.")
 
 
 def load_audio_config(force_reload: bool = False) -> Dict[str, Any]:
@@ -38,9 +40,6 @@ def load_audio_config(force_reload: bool = False) -> Dict[str, Any]:
         return _AUDIO_CONFIG_CACHE
 
     cfg_path = find_audio_config_path()
-    if not cfg_path or not os.path.exists(cfg_path):
-        raise FileNotFoundError("Missing required audio configuration: audio_files.json not found in search paths.")
-
     with open(cfg_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 

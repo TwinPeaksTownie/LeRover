@@ -162,7 +162,7 @@ def get_active_conversation_transcript(
         "recent_history": recent_history
     }
 
-def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
+def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
     """
     Captures complete git diff including untracked and modified text source files.
     """
@@ -181,13 +181,13 @@ def get_git_diff(repo_path: str = None, max_chars: int = 25000) -> dict:
             errors="replace",
             check=True
         )
-        status_output = (status_proc.stdout or "").strip()
+        status_output = status_proc.stdout or ""
         
         modified_files = []
         untracked_files = []
         for line in status_output.splitlines():
-            line = line.strip()
-            if not line:
+            line = line.rstrip("\r\n")
+            if not line.strip():
                 continue
             status_code = line[:2]
             filename = line[3:].strip()
@@ -321,13 +321,47 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deploy
             elif lower_f.endswith((".html", ".htm")):
                 violations.extend(contract_scanner.scan_html_code(code_block, f))
 
+    # Parse changed line ranges per file from diff_text
+    changed_lines = {}
+    if diff_text.strip():
+        curr_diff_file = None
+        for line in diff_text.splitlines():
+            if line.startswith("+++ b/"):
+                curr_diff_file = line[6:].strip().replace("\\", "/")
+                if curr_diff_file not in changed_lines:
+                    changed_lines[curr_diff_file] = set()
+            elif line.startswith("+++ "):
+                curr_diff_file = line[4:].strip().replace("\\", "/")
+                if curr_diff_file not in changed_lines:
+                    changed_lines[curr_diff_file] = set()
+            elif line.startswith("@@ ") and curr_diff_file:
+                m = re.search(r'\+(\d+)(?:,(\d+))?', line)
+                if m:
+                    start_l = int(m.group(1))
+                    cnt = 1
+                    if m.group(2):
+                        cnt = int(m.group(2))
+                    for ln in range(start_l, start_l + cnt):
+                        changed_lines[curr_diff_file].add(ln)
+
     # 2. Full-file AST / Structural checks for all modified and untracked files on disk
     for rel_file in all_changed_files:
+        norm_rel = rel_file.replace("\\", "/")
         full_path = os.path.join(repo_path, rel_file)
         if os.path.isfile(full_path):
             file_violations = contract_scanner.scan_source_file(full_path, repo_path=repo_path)
             for fv in file_violations:
                 fv["file"] = rel_file
+                # For modified tracked files, only report violations within changed/added lines
+                if rel_file in modified_files:
+                    lines_set = set()
+                    if norm_rel in changed_lines:
+                        lines_set = changed_lines[norm_rel]
+                    fv_line = 1
+                    if "line" in fv:
+                        fv_line = fv["line"]
+                    if fv_line not in lines_set:
+                        continue
                 violations.append(fv)
 
 

@@ -30,10 +30,7 @@ except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import network_resolver
 
-try:
-    import audio_resolver
-except ImportError:
-    audio_resolver = None
+import audio_resolver
 
 
 def get_mac_api_url() -> str:
@@ -79,13 +76,8 @@ def ensure_leader_poller_started():
 
 def play_chime(kind: str = "incorrect") -> None:
     """Dispatches sound playback event to Pi 4B audio service asynchronously."""
-    sound_file = kind
+    sound_file = audio_resolver.get_audio_filename(kind)
     event_name = kind
-    if audio_resolver is not None:
-        try:
-            sound_file = audio_resolver.get_audio_filename(kind)
-        except Exception:
-            sound_file = kind
 
     def _work():
         try:

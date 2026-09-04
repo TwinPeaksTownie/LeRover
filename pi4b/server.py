@@ -25,10 +25,7 @@ try:
 except ImportError:
     network_resolver = None
 
-try:
-    import audio_resolver
-except ImportError:
-    audio_resolver = None
+import audio_resolver
 
 PORT = 8082
 
@@ -155,13 +152,8 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
 
             target_wav = wav_path
             if not target_wav or not os.path.exists(target_wav):
-                resolved_filename = None
-                if audio_resolver is not None:
-                    lookup_key = event or kind
-                    try:
-                        resolved_filename = audio_resolver.get_audio_filename(lookup_key)
-                    except (KeyError, Exception):
-                        resolved_filename = None
+                lookup_key = event or kind
+                resolved_filename = audio_resolver.get_audio_filename(lookup_key)
 
                 if resolved_filename:
                     cand = os.path.join(MARIO_SOUNDS_DIR, resolved_filename)
