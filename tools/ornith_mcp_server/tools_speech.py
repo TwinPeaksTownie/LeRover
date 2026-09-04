@@ -188,10 +188,14 @@ def speak_laura(
     }
 
 def notify_user_of_blocker(reason: str, target: str = None, host: str = None, port: int = None) -> dict:
+    if target is None:
+        target = "local"
     spoken_text = f"Attention Carson. Ornith supervisor has encountered a blocker that requires your input: {reason}"
     return speak_laura(text=spoken_text, target=target, host=host, port=port)
 
 def notify_task_verified(summary: str, telemetry_delta: str = "", target: str = None, host: str = None, port: int = None) -> dict:
+    if target is None:
+        target = "pi4b"
     if telemetry_delta:
         spoken_text = f"Ornith supervisor has verified task completion. {summary}. Physical telemetry confirmed {telemetry_delta}."
     else:

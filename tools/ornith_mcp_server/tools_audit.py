@@ -636,8 +636,12 @@ Provide your adversarial audit:"""
     spoken_status = "not_spoken"
     if speak_verdict and spoken_text:
         try:
-            tools_speech.speak_laura(spoken_text, target=_CONFIG["speech"]["target"])
-            spoken_status = f"spoken_{verdict_str.lower()}"
+            if verdict_str == "APPROVED":
+                target_dest = "pi4b"
+            else:
+                target_dest = "local"
+            tools_speech.speak_laura(spoken_text, target=target_dest)
+            spoken_status = f"spoken_{verdict_str.lower()}_{target_dest}"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")
 
@@ -982,8 +986,8 @@ Evaluate this implementation plan against the operator directives and strict rul
     spoken_status = "not_spoken"
     if speak_verdict and spoken_text:
         try:
-            tools_speech.speak_laura(spoken_text, target=_CONFIG["speech"]["target"])
-            spoken_status = f"spoken_{verdict_str.lower()}"
+            tools_speech.speak_laura(spoken_text, target="local")
+            spoken_status = f"spoken_{verdict_str.lower()}_local"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")
 

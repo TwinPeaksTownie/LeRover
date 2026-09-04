@@ -125,13 +125,19 @@ class OrnithSupervisorDaemon:
         # 4. Actuate based on verdict
         if verdict == "APPROVED":
             self.retry_count = 0
-            logger.info("Changes approved by Ornith. Announcing completion.")
-            tools_speech.speak_laura(spoken_summary or "I have verified and approved Antigravity's implementation.")
+            logger.info("Changes approved by Ornith. Announcing completion on Pi 4B.")
+            tools_speech.speak_laura(
+                spoken_summary or "I have verified and approved Antigravity's implementation.",
+                target="pi4b"
+            )
             return {"status": "approved", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
 
         elif verdict == "BLOCKER":
-            logger.warning("Blocker detected by Ornith. Escalating to Carson.")
-            tools_speech.speak_laura(spoken_summary or "Attention Carson. I encountered a blocker requiring your input.")
+            logger.warning("Blocker detected by Ornith. Escalating to Carson on local PC.")
+            tools_speech.speak_laura(
+                spoken_summary or "Attention Carson. I encountered a blocker requiring your input.",
+                target="local"
+            )
             return {"status": "blocker", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
 
         elif verdict == "REJECTED":
@@ -139,17 +145,19 @@ class OrnithSupervisorDaemon:
             logger.warning(f"Changes rejected (Attempt {self.retry_count}/{self.max_retries}).")
 
             if self.retry_count >= self.max_retries:
-                logger.error(f"Maximum retries ({self.max_retries}) reached. Alerting Carson.")
+                logger.error(f"Maximum retries ({self.max_retries}) reached. Alerting Carson on local PC.")
                 tools_speech.speak_laura(
-                    spoken_summary or f"I reached the maximum retry limit of {self.max_retries} attempts on task '{task_summary[:50]}'."
+                    spoken_summary or f"I reached the maximum retry limit of {self.max_retries} attempts on task '{task_summary[:50]}'.",
+                    target="local"
                 )
                 return {"status": "max_retries_exceeded", "verdict_text": verdict_text, "spoken_summary": spoken_summary}
             else:
                 if spoken_summary:
-                    tools_speech.speak_laura(spoken_summary)
+                    tools_speech.speak_laura(spoken_summary, target="local")
                 else:
                     tools_speech.speak_laura(
-                        f"I am rejecting Antigravity's implementation. Dispatching correction prompt {self.retry_count} of {self.max_retries} to Antigravity."
+                        f"I am rejecting Antigravity's implementation. Dispatching correction prompt {self.retry_count} of {self.max_retries} to Antigravity.",
+                        target="local"
                     )
                 feedback_prompt = (
                     f"Ornith Adversarial Review (Attempt {self.retry_count}/{self.max_retries}):\n\n"
