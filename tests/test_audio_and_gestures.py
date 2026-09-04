@@ -229,5 +229,27 @@ class TestOrnithVoiceCadence(unittest.TestCase):
         self.assertFalse(mock_service.button_b_click_event.is_set())
 
 
+class TestJoystickCalibration(unittest.TestCase):
+    """Verifies fail-fast loading of Pokéball joystick calibration."""
+
+    def test_calibration_success(self):
+        from apps.pokeball_app.app import load_joystick_calibration
+        with open(REPO_ROOT / "calibration_aux.json", "r", encoding="utf-8") as f:
+            expected = json.load(f)["pokeball_joystick"]
+        cx, cy = load_joystick_calibration()
+        self.assertIsInstance(cx, int)
+        self.assertIsInstance(cy, int)
+        self.assertEqual(cx, expected["center_x"])
+        self.assertEqual(cy, expected["center_y"])
+
+    def test_calibration_missing_block_raises_keyerror(self):
+        from apps.pokeball_app.app import load_joystick_calibration
+        bad_calib = {"7": {"center_ticks": 2400}}
+        with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_calib))):
+            with patch("os.path.exists", return_value=True):
+                with self.assertRaises(KeyError):
+                    load_joystick_calibration()
+
+
 if __name__ == "__main__":
     unittest.main()

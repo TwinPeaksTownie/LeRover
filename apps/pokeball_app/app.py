@@ -21,7 +21,7 @@ import sys
 import threading
 import time
 import urllib.request
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 # Ensure repo root and rover package are importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -64,11 +64,13 @@ def load_pokeball_config() -> dict:
     _ = cfg["ble"]["input_uuid"]
     _ = cfg["ble"]["telemetry_file"]
     _ = cfg["gestures"]["chord_abort_sec"]
+    _ = cfg["gestures"]["chord_click_suppress_sec"]
     _ = cfg["gestures"]["arm_drivetrain_sec"]
     _ = cfg["gestures"]["arm_lockout_sec"]
     _ = cfg["gestures"]["b_hold_sec"]
     _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["ble_connect"]
+    _ = cfg["chimes"]["ble_disconnect"]
     _ = cfg["chimes"]["arm_rover"]
     _ = cfg["chimes"]["emergency_brake"]
     _ = cfg["chimes"]["chord_abort"]
@@ -96,21 +98,23 @@ def get_pi4b_sound_url() -> str:
     return f"{get_pi4b_base_url()}/api/play_sound"
 
 
-def load_joystick_calibration() -> int:
-    """Loads joystick neutral ticks dynamically from calibration_aux.json."""
+def load_joystick_calibration() -> Tuple[int, int]:
+    """Loads joystick neutral ticks dynamically from calibration_aux.json.
+    Fails fast by raising KeyError if 'pokeball_joystick', 'center_x', or 'center_y' are missing.
+    """
     aux_path = os.path.join(workspace_root, "calibration_aux.json")
     if not os.path.exists(aux_path):
         aux_path = "/home/user/so101/calibration_aux.json"
     if os.path.exists(aux_path):
         with open(aux_path, "r", encoding="utf-8") as f:
             calib = json.load(f)
-            if "pokeball_joystick" in calib:
-                return int(calib["pokeball_joystick"]["center_x"])
-            return int(calib["7"]["center_ticks"])
+        center_x = int(calib["pokeball_joystick"]["center_x"])
+        center_y = int(calib["pokeball_joystick"]["center_y"])
+        return center_x, center_y
     raise FileNotFoundError(f"Missing required calibration file: {aux_path}")
 
 
-def play_chime(event_name="device_connect"):
+def play_chime(event_name: str) -> None:
     """Dispatches requested sound event over HTTP to Pi 4B Touch UI audio server.
     Resolves event_name against config/audio_files.json.
     """
@@ -154,6 +158,7 @@ class PokeballService:
         self.stop_event = threading.Event()
         self.thread: Optional[threading.Thread] = None
         self.logger = logging.getLogger("so101.pokeball_service")
+        self.config = _CONFIG
 
         self.is_connected = False
         self.app_manager = None
@@ -176,12 +181,15 @@ class PokeballService:
         self.last_btn_stick_press_time = 0.0
         self.last_rover_interaction_time = 0.0
         self.rover_drive_active_time = 0.0
-        self.rover_ctrl = None
-        self.joystick_center = load_joystick_calibration()
-        self.joystick_range = float(self.joystick_center)
+        self.joystick_center_x, self.joystick_center_y = load_joystick_calibration()
+        self.joystick_center = self.joystick_center_x
+        self.joystick_range_x = float(self.joystick_center_x)
+        self.joystick_range_y = float(self.joystick_center_y)
+        self.joystick_range = self.joystick_range_x
 
         self.is_busy = False
         self.busy_until = 0.0
+        self.chord_click_suppress_sec = float(self.config["gestures"]["chord_click_suppress_sec"])
         self.chord_suppress_until = 0.0
         self.last_btn_top = False
         self.last_btn_stick = False
@@ -266,11 +274,11 @@ class PokeballService:
             raw_x_12 = data[2] | ((data[3] & 0x0F) << 8)
             raw_y_12 = (data[3] >> 4) | (data[4] << 4)
 
-            x_offset = raw_x_12 - self.joystick_center
-            y_offset = raw_y_12 - self.joystick_center
+            x_offset = raw_x_12 - self.joystick_center_x
+            y_offset = raw_y_12 - self.joystick_center_y
 
-            norm_x = max(-1.0, min(1.0, x_offset / self.joystick_range))
-            norm_y = max(-1.0, min(1.0, y_offset / self.joystick_range))
+            norm_x = max(-1.0, min(1.0, x_offset / self.joystick_range_x))
+            norm_y = max(-1.0, min(1.0, y_offset / self.joystick_range_y))
 
             if abs(norm_x) < 0.08:
                 norm_x = 0.0
@@ -300,7 +308,7 @@ class PokeballService:
                 hold_duration_ab = now - self.both_ab_press_start_time
                 if hold_duration_ab >= chord_abort_sec and not self.ab_hold_triggered:
                     self.ab_hold_triggered = True
-                    self.chord_suppress_until = now + 1.0
+                    self.chord_suppress_until = now + self.chord_click_suppress_sec
                     self.btn_b_press_start_time = None
                     self.button_b_click_event.clear()
                     self.logger.info("🛑 [CHORD] A + B simultaneous hold detected! Triggering abort_audio_event...")
@@ -324,7 +332,7 @@ class PokeballService:
                         if self.app_manager:
                             threading.Thread(target=self.app_manager.start_app_by_name, args=("ornith_voice",), daemon=True).start()
                         else:
-                            play_chime("ornith_app_start")
+                            play_chime(_CONFIG["chimes"]["app_start"])
             else:
                 if self.btn_b_press_start_time is not None:
                     duration = now - self.btn_b_press_start_time
@@ -426,7 +434,7 @@ class PokeballService:
                         self.is_connected = True
                         self.logger.info("✅ Connected to Poké Ball Plus!")
                         if not self.connect_chime_played:
-                            play_chime("device_connect")
+                            play_chime(_CONFIG["chimes"]["ble_connect"])
                             self.connect_chime_played = True
 
                         self.telemetry.update({"connected": True, "status": "CONNECTED", "last_seen": time.time()})
@@ -446,7 +454,7 @@ class PokeballService:
                     self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": err_msg})
                     self.write_telemetry()
                     if self.connect_chime_played:
-                        play_chime("disconnect")
+                        play_chime(_CONFIG["chimes"]["ble_disconnect"])
                         self.connect_chime_played = False
                     self.logger.info(f"Poké Ball BLE waiting for device... [{err_msg}]")
                     await asyncio.sleep(3.0)
@@ -467,7 +475,7 @@ class PokeballService:
         self.logger.info("Stopping PokeballService...")
         self.stop_event.set()
         if self.connect_chime_played:
-            play_chime("disconnect")
+            play_chime(_CONFIG["chimes"]["ble_disconnect"])
             self.connect_chime_played = False
 
 

@@ -18,6 +18,7 @@
   },
   "gestures": {
     "chord_abort_sec": 1.0,
+    "chord_click_suppress_sec": 1.0,
     "arm_drivetrain_sec": 2.0,
     "arm_lockout_sec": 4.25,
     "b_hold_sec": 3.0
@@ -25,6 +26,7 @@
   "chimes": {
     "app_start": "app_start",
     "ble_connect": "device_connect",
+    "ble_disconnect": "disconnect",
     "arm_rover": "rover_arm_drivetrain",
     "emergency_brake": "rover_emergency_brake",
     "chord_abort": "ornith_abort_recording"
