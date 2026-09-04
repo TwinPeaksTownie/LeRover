@@ -28,11 +28,7 @@ for p in [workspace_root, config_dir, pi500_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-try:
-    import network_resolver
-except ImportError:
-    network_resolver = None
-
+import network_resolver
 import audio_resolver
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +48,11 @@ def load_ornith_app_config() -> dict:
     _ = cfg["voice_bridge"]["chimes"]["settle"]
     _ = cfg["voice_bridge"]["chimes"]["cancel"]
     _ = cfg["voice_bridge"]["chimes"]["action"]
-    _ = cfg["voice_bridge"]["chimes"]["exit"]
+    _ = cfg["chimes"]["app_start"]
+    _ = cfg["chimes"]["settle"]
+    _ = cfg["chimes"]["cancel"]
+    _ = cfg["chimes"]["action"]
+    _ = cfg["chimes"]["exit"]
     _ = cfg["robot_app"]["double_click_window_sec"]
     _ = cfg["robot_app"]["auto_send_timeout_sec"]
     _ = cfg["robot_app"]["settle_delay_sec"]
@@ -112,6 +112,7 @@ class OrnithVoiceApp(BaseApp):
                 payload = json.dumps({
                     "kind": sound_file,
                     "event": kind,
+                    "wav_path": "",
                     "stop_previous": stop_previous,
                     "delay_sec": delay_sec
                 }).encode("utf-8")
@@ -226,6 +227,29 @@ class OrnithVoiceApp(BaseApp):
         # 2. First turn: Auto-listen on initial app launch (Whistle -> pause -> mic on)
         self._start_listening_turn()
 
+    def process_button_b_click(self, now: float, stop_event: threading.Event) -> bool:
+        """Processes Button B click event. Returns True if turn was committed, False otherwise."""
+        double_click_window = self.config["robot_app"]["double_click_window_sec"]
+        if self.state == "AWAITING_INPUT":
+            self.logger.info("Button B click in AWAITING_INPUT: Starting follow-up listening turn...")
+            self._start_listening_turn()
+            return False
+
+        if self.state == "LISTENING":
+            if self.last_b_click_time > 0.0 and (now - self.last_b_click_time <= double_click_window):
+                elapsed_between_clicks = now - self.last_b_click_time
+                self.logger.info("Button B double-click detected (%.2fs <= %.2fs). Committing speech turn to LLM...",
+                                 elapsed_between_clicks, double_click_window)
+                self.last_b_click_time = 0.0
+                self._handle_voice_turn(stop_event)
+                return True
+            else:
+                self.last_b_click_time = now
+                self.logger.info("Button B first click in LISTENING state. Waiting for second click within %.1fs to commit...",
+                                 double_click_window)
+                return False
+        return False
+
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main interaction loop implementing Option B cadence, double-click commit, and A+B chord cancel."""
         self.logger.info("OrnithVoiceApp interaction loop running.")
@@ -241,7 +265,6 @@ class OrnithVoiceApp(BaseApp):
             raise AttributeError("PokeballService is missing required 'abort_audio_event' attribute")
         service.abort_audio_event.clear()
 
-        double_click_window = self.config["robot_app"]["double_click_window_sec"]
         auto_send_timeout = self.config["robot_app"]["auto_send_timeout_sec"]
         self.last_b_click_time = 0.0
 
@@ -260,24 +283,7 @@ class OrnithVoiceApp(BaseApp):
             # 2. Check Button B click event
             if service.button_b_click_event.is_set():
                 service.button_b_click_event.clear()
-
-                if self.state == "AWAITING_INPUT":
-                    # Single click in AWAITING_INPUT starts a new listening turn
-                    self.logger.info("Button B click in AWAITING_INPUT: Starting follow-up listening turn...")
-                    self._start_listening_turn()
-
-                elif self.state == "LISTENING":
-                    # Double-click within double_click_window_sec (1.0s) commits speech turn to LLM
-                    if self.last_b_click_time > 0.0 and (now - self.last_b_click_time <= double_click_window):
-                        elapsed_between_clicks = now - self.last_b_click_time
-                        self.logger.info("Button B double-click detected (%.2fs <= %.2fs). Committing speech turn to LLM...",
-                                         elapsed_between_clicks, double_click_window)
-                        self.last_b_click_time = 0.0
-                        self._handle_voice_turn(stop_event)
-                    else:
-                        self.last_b_click_time = now
-                        self.logger.info("Button B first click in LISTENING state. Waiting for second click within %.1fs to commit...",
-                                         double_click_window)
+                self.process_button_b_click(now, stop_event)
 
             # 3. Auto-send safety net: auto_send_timeout elapsed in LISTENING state without manual double-click
             if self.state == "LISTENING" and (now - self.recording_start_time >= auto_send_timeout):

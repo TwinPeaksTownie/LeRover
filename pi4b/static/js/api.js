@@ -316,9 +316,16 @@ export function sendSetConfig(configObj) {
 }
 
 export function sendPlaySound(payload) {
+    const eventName = payload.event || payload.kind || 'incorrect';
     return safeFetch('/api/play_sound', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+            event: eventName,
+            kind: eventName,
+            stop_previous: !!payload.stop_previous,
+            delay_sec: payload.delay_sec ? Number(payload.delay_sec) : 0.0,
+            wav_path: payload.wav_path || ""
+        })
     }, 1000);
 }

@@ -102,7 +102,13 @@ def play_chime(event_name="device_connect"):
 
     def _work():
         try:
-            payload = json.dumps({"kind": sound_file, "event": event_name}).encode('utf-8')
+            payload = json.dumps({
+                "kind": sound_file,
+                "event": event_name,
+                "wav_path": "",
+                "stop_previous": False,
+                "delay_sec": 0.0
+            }).encode('utf-8')
             req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={'Content-Type': 'application/json'})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status != 200:
@@ -455,6 +461,7 @@ class PokeballApp(BaseApp):
 
     def __init__(self, mac_address: str = MAC_ADDRESS, api_url: str = API_URL, rover_ctrl: Optional[Any] = None) -> None:
         super().__init__()
+        self.config = _CONFIG
         self.mac_address = mac_address
         self.api_url = api_url
         self.rover_ctrl = rover_ctrl

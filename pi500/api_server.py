@@ -81,7 +81,13 @@ def play_chime(kind: str = "incorrect") -> None:
 
     def _work():
         try:
-            payload = json.dumps({"kind": sound_file, "event": event_name}).encode("utf-8")
+            payload = json.dumps({
+                "kind": sound_file,
+                "event": event_name,
+                "wav_path": "",
+                "stop_previous": False,
+                "delay_sec": 0.0
+            }).encode("utf-8")
             req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass

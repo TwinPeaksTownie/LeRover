@@ -56,6 +56,13 @@
       "exit": "app_exit_idle"
     }
   },
+  "chimes": {
+    "app_start": "ornith_app_start",
+    "settle": "ornith_listen_start",
+    "action": "ornith_commit_speech",
+    "cancel": "ornith_abort_recording",
+    "exit": "app_exit_idle"
+  },
   "robot_app": {
     "double_click_window_sec": 1.0,
     "auto_send_timeout_sec": 30.0,

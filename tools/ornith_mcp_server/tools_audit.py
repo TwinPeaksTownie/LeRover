@@ -211,18 +211,19 @@ def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
         # If no uncommitted diffs, inspect recent code commits (baseline..HEAD or HEAD~FALLBACK_COMMITS..HEAD)
         if not diff_text.strip() and not untracked_files:
             base_ref = f"HEAD~{FALLBACK_COMMITS}"
-            try:
-                base_proc = subprocess.run(
-                    ["git", "log", "--grep=baseline:", "-n", "1", "--format=%H"],
-                    cwd=repo_path,
-                    capture_output=True,
-                    encoding="utf-8",
-                    errors="replace"
-                )
-                if base_proc.returncode == 0 and base_proc.stdout.strip():
-                    base_ref = base_proc.stdout.strip()
-            except Exception as e:
-                _log_debug(f"Baseline commit resolution fallback: {e}")
+            base_proc = subprocess.run(
+                ["git", "log", "--grep=baseline:", "-n", "1", "--format=%H"],
+                cwd=repo_path,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            if base_proc.returncode != 0:
+                raise RuntimeError(f"Git baseline commit resolution failed: {base_proc.stderr}")
+            if base_proc.stdout.strip():
+                base_ref = base_proc.stdout.strip()
+            else:
+                _log_debug(f"No commit matching 'baseline:' found. Defaulting diff base to {base_ref}")
 
             diff_proc_last = subprocess.run(
                 ["git", "diff", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
@@ -326,12 +327,16 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deploy
     if diff_text.strip():
         curr_diff_file = None
         for line in diff_text.splitlines():
-            if line.startswith("+++ b/"):
-                curr_diff_file = line[6:].strip().replace("\\", "/")
-                if curr_diff_file not in changed_lines:
-                    changed_lines[curr_diff_file] = set()
+            if line.startswith("diff --git "):
+                parts = line.split()
+                if len(parts) >= 4:
+                    raw_b = parts[3]
+                    curr_diff_file = raw_b[2:].strip().replace("\\", "/") if raw_b.startswith("b/") else raw_b.strip().replace("\\", "/")
+                    if curr_diff_file not in changed_lines:
+                        changed_lines[curr_diff_file] = set()
             elif line.startswith("+++ "):
-                curr_diff_file = line[4:].strip().replace("\\", "/")
+                raw_target = line[4:].strip().replace("\\", "/")
+                curr_diff_file = raw_target[2:] if raw_target.startswith("b/") else raw_target
                 if curr_diff_file not in changed_lines:
                     changed_lines[curr_diff_file] = set()
             elif line.startswith("@@ ") and curr_diff_file:
@@ -346,22 +351,18 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deploy
 
     # 2. Full-file AST / Structural checks for all modified and untracked files on disk
     for rel_file in all_changed_files:
-        norm_rel = rel_file.replace("\\", "/")
+        norm_rel = rel_file.replace("\\", "/").lstrip("./")
         full_path = os.path.join(repo_path, rel_file)
         if os.path.isfile(full_path):
             file_violations = contract_scanner.scan_source_file(full_path, repo_path=repo_path)
             for fv in file_violations:
                 fv["file"] = rel_file
-                # For modified tracked files, only report violations within changed/added lines
-                if rel_file in modified_files:
-                    lines_set = set()
-                    if norm_rel in changed_lines:
-                        lines_set = changed_lines[norm_rel]
-                    fv_line = 1
-                    if "line" in fv:
-                        fv_line = fv["line"]
-                    if fv_line not in lines_set:
-                        continue
+                # For modified tracked files, only filter line-specific violations if changed line ranges were explicitly parsed for this file.
+                # If changed_lines was not populated for this file, or if the violation is a file-level violation lacking a line number, NEVER suppress it!
+                if rel_file in modified_files and norm_rel in changed_lines and len(changed_lines[norm_rel]) > 0:
+                    if "line" in fv and isinstance(fv["line"], int):
+                        if fv["line"] not in changed_lines[norm_rel]:
+                            continue
                 violations.append(fv)
 
 

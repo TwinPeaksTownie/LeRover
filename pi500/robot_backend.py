@@ -78,8 +78,9 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
             payload = json.dumps({
                 "kind": sound_file,
                 "event": event_name,
-                "wav_path": wav_path,
-                "stop_previous": stop_previous
+                "wav_path": wav_path or "",
+                "stop_previous": stop_previous,
+                "delay_sec": 0.0
             }).encode("utf-8")
             req = urllib.request.Request(
                 get_pi4b_sound_url(),

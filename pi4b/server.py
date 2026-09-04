@@ -15,6 +15,8 @@ import socket
 import urllib.request
 import random
 import sys
+import logging
+import traceback
 
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 if DIRECTORY not in sys.path:
@@ -132,14 +134,17 @@ def sync_rover_speed_config(pct: int):
     except Exception as e:
         print(f"Error syncing rover speed: {e}", flush=True)
 
-def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, delay_sec=0.0, event=None):
+def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = ""):
+    """Dispatches audio playback on Pi 4B PulseAudio daemon with fail-fast validation and full traceback logging."""
     def _work():
         try:
-            if stop_previous or kind == "stop_audio" or kind in ("trex_roar", "trex_roar_isolated"):
+            active_event = event if event else kind
+
+            if stop_previous or active_event == "stop_audio" or active_event in ("trex_roar", "trex_roar_isolated"):
                 subprocess.run(["pkill", "-9", "mpg123"], check=False)
                 subprocess.run(["pkill", "-9", "paplay"], check=False)
                 subprocess.run(["pkill", "-9", "aplay"], check=False)
-                if kind == "stop_audio":
+                if active_event == "stop_audio":
                     return
 
             if delay_sec > 0:
@@ -147,30 +152,30 @@ def play_sound_helper(kind="incorrect", wav_path=None, stop_previous=False, dela
 
             global TAP_DETECTOR
             if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
-                mute_dur = 5.0 if kind in ("trex_roar", "trex_roar_isolated", "mario_kart_start") else 2.0
+                mute_dur = 5.0 if active_event in ("trex_roar", "trex_roar_isolated", "mario_kart_start", "rover_arm_drivetrain") else 2.0
                 TAP_DETECTOR.mute(mute_dur)
 
-            target_wav = wav_path
-            if not target_wav or not os.path.exists(target_wav):
-                lookup_key = kind
-                if event:
-                    lookup_key = event
-                resolved_filename = audio_resolver.get_audio_filename(lookup_key)
+            if wav_path:
+                if not os.path.exists(wav_path):
+                    raise FileNotFoundError(f"Provided wav_path does not exist on disk: {wav_path}")
+                target_wav = wav_path
+            else:
+                if not active_event:
+                    raise ValueError("play_sound_helper requires either a non-empty 'event' identifier or 'wav_path'")
+                resolved_filename = audio_resolver.get_audio_filename(active_event)
                 cand = os.path.join(MARIO_SOUNDS_DIR, resolved_filename)
                 if not os.path.exists(cand):
                     raise FileNotFoundError(f"Resolved audio asset '{cand}' does not exist on disk.")
                 target_wav = cand
 
-            if target_wav and os.path.exists(target_wav):
-                res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
-                if res.returncode != 0:
-                    err_txt = "Unknown error"
-                    if res.stderr:
-                        err_txt = res.stderr.decode('utf-8', errors='ignore')
-                    print(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}", flush=True)
-                return
+            res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+            if res.returncode != 0:
+                err_txt = res.stderr.decode('utf-8', errors='replace')
+                raise RuntimeError(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}")
         except Exception as e:
-            print(f"Sound playback error: {e}", flush=True)
+            traceback.print_exc()
+            logging.exception("Sound playback failure for event='%s', wav_path='%s': %s", event, wav_path, e)
+            raise
     threading.Thread(target=_work, daemon=True).start()
 
 def poll_status_loop():
@@ -601,33 +606,50 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
         if path == "/api/play_sound":
-            action = req_data.get("action")
-            kind = req_data.get("kind", "incorrect")
-            if action in ["stop", "clear"] or kind in ["stop", "stop_audio"]:
-                play_sound_helper(kind="stop_audio", stop_previous=True)
-                self.send_response(200)
+            if not isinstance(req_data, dict):
+                self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "action": "stopped"}).encode('utf-8'))
+                self.wfile.write(json.dumps({"error": "Payload must be a JSON object"}).encode('utf-8'))
                 return
 
-            wav_path = None
-            if "wav_path" in req_data:
-                wav_path = req_data["wav_path"]
-            stop_prev = False
-            if "stop_previous" in req_data:
-                stop_prev = bool(req_data["stop_previous"])
-            delay_s = 0.0
-            if "delay_sec" in req_data:
-                delay_s = float(req_data["delay_sec"])
-            event_name = None
-            if "event" in req_data:
-                event_name = req_data["event"]
-            play_sound_helper(kind=kind, wav_path=wav_path, stop_previous=stop_prev, delay_sec=delay_s, event=event_name)
+            if "action" in req_data:
+                action = req_data["action"]
+                if action in ("stop", "clear"):
+                    play_sound_helper(event="stop_audio", wav_path="", stop_previous=True, delay_sec=0.0)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped"}).encode('utf-8'))
+                    return
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Invalid audio action '{action}'. Permitted: ['stop', 'clear']"}).encode('utf-8'))
+                return
+
+            # Strict schema validation: require exact contract keys
+            required_keys = ["event", "stop_previous", "delay_sec", "wav_path"]
+            missing_keys = [k for k in required_keys if k not in req_data]
+            if missing_keys:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": f"Schema contract violation on /api/play_sound: missing required keys {missing_keys}"
+                }).encode('utf-8'))
+                return
+
+            event_name = str(req_data["event"])
+            stop_prev = bool(req_data["stop_previous"])
+            delay_s = float(req_data["delay_sec"])
+            wav_p = str(req_data["wav_path"])
+
+            play_sound_helper(event=event_name, wav_path=wav_p, stop_previous=stop_prev, delay_sec=delay_s)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or kind or wav_path}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p}).encode('utf-8'))
             return
 
         if path == "/api/pi500_poweron":

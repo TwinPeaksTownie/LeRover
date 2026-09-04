@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -127,7 +128,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
 
 
 class TestOrnithVoiceCadence(unittest.TestCase):
-    """Tests double-click commit and chord abort in OrnithVoiceApp."""
+    """Tests double-click commit and chord abort in OrnithVoiceApp executing production code."""
 
     def setUp(self):
         self.app = OrnithVoiceApp(running_on_pi=False)
@@ -141,49 +142,91 @@ class TestOrnithVoiceCadence(unittest.TestCase):
     def test_double_click_commit_logic(self):
         """First click in LISTENING waits; second click within 1.0s commits speech turn."""
         self.app.state = "LISTENING"
-        double_click_window = 1.0
+        stop_ev = threading.Event()
         t0 = 500.0
 
-        # Click 1:
-        now = t0
-        if self.app.last_b_click_time > 0.0 and (now - self.app.last_b_click_time <= double_click_window):
-            self.app._handle_voice_turn(MagicMock())
-        else:
-            self.app.last_b_click_time = now
-
+        # Click 1: executes real production method process_button_b_click
+        committed = self.app.process_button_b_click(now=t0, stop_event=stop_ev)
+        self.assertFalse(committed)
         self.assertEqual(self.app.last_b_click_time, t0)
         self.app._handle_voice_turn.assert_not_called()
 
-        # Click 2 within 0.4s:
-        now = t0 + 0.4
-        if self.app.last_b_click_time > 0.0 and (now - self.app.last_b_click_time <= double_click_window):
-            self.app.last_b_click_time = 0.0
-            self.app._handle_voice_turn(MagicMock())
-        else:
-            self.app.last_b_click_time = now
-
+        # Click 2 within 0.4s: executes real production method process_button_b_click
+        committed = self.app.process_button_b_click(now=t0 + 0.4, stop_event=stop_ev)
+        self.assertTrue(committed)
         self.assertEqual(self.app.last_b_click_time, 0.0)
-        self.app._handle_voice_turn.assert_called_once()
+        self.app._handle_voice_turn.assert_called_once_with(stop_ev)
 
     def test_double_click_timeout_resets(self):
         """Click 2 after > 1.0s resets timer and does not commit."""
         self.app.state = "LISTENING"
-        double_click_window = 1.0
+        stop_ev = threading.Event()
         t0 = 500.0
 
-        # Click 1
-        self.app.last_b_click_time = t0
+        # Click 1: executes production code
+        committed = self.app.process_button_b_click(now=t0, stop_event=stop_ev)
+        self.assertFalse(committed)
+        self.assertEqual(self.app.last_b_click_time, t0)
 
-        # Click 2 after 1.5s
-        now = t0 + 1.5
-        if self.app.last_b_click_time > 0.0 and (now - self.app.last_b_click_time <= double_click_window):
-            self.app.last_b_click_time = 0.0
-            self.app._handle_voice_turn(MagicMock())
-        else:
-            self.app.last_b_click_time = now
-
+        # Click 2 after 1.5s (> double_click_window_sec): executes production code
+        committed = self.app.process_button_b_click(now=t0 + 1.5, stop_event=stop_ev)
+        self.assertFalse(committed)
         self.assertEqual(self.app.last_b_click_time, t0 + 1.5)
         self.app._handle_voice_turn.assert_not_called()
+
+    def test_button_b_click_in_awaiting_input(self):
+        """Click on Button B while in AWAITING_INPUT triggers a listening turn."""
+        self.app.state = "AWAITING_INPUT"
+        stop_ev = threading.Event()
+        self.app._start_listening_turn = MagicMock()
+
+        committed = self.app.process_button_b_click(now=100.0, stop_event=stop_ev)
+        self.assertFalse(committed)
+        self.app._start_listening_turn.assert_called_once()
+
+    def test_run_loop_drives_real_events(self):
+        """Tests that OrnithVoiceApp.run() loop processes abort_audio_event and button_b_click_event."""
+        mock_backend = MagicMock()
+        mock_service = MagicMock()
+        mock_service.button_b_click_event = threading.Event()
+        mock_service.abort_audio_event = threading.Event()
+        mock_backend.pokeball_service = mock_service
+
+        self.app.state = "LISTENING"
+        self.app.recording_start_time = 500.0
+        self.app.last_b_click_time = 500.0
+        stop_event = threading.Event()
+
+        def _mock_handle_turn(ev):
+            self.app.state = "THINKING"
+        self.app._handle_voice_turn.side_effect = _mock_handle_turn
+
+        # Sequence: Click 1 at 500.0, Click 2 at 500.3 (within 1.0s double click window)
+        timeline = [500.0, 500.0, 500.3, 500.3, 500.4, 500.5, 500.6, 500.7]
+        def _fake_time():
+            if timeline:
+                return timeline.pop(0)
+            return 500.8
+
+        def _event_feeder():
+            time.sleep(0.02)
+            # Click 1
+            mock_service.button_b_click_event.set()
+            time.sleep(0.06)
+            # Click 2
+            mock_service.button_b_click_event.set()
+            time.sleep(0.06)
+            stop_event.set()
+
+        with patch("time.time", side_effect=_fake_time):
+            t = threading.Thread(target=_event_feeder)
+            t.start()
+            self.app.run(mock_backend, stop_event)
+            t.join()
+
+        # Verify that double-click commit was executed through run()
+        self.app._handle_voice_turn.assert_called_once()
+        self.assertFalse(mock_service.button_b_click_event.is_set())
 
 
 if __name__ == "__main__":
