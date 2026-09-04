@@ -1066,6 +1066,30 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             preset_app.stop_sequence()
             self._send_json({"status": "ok", "action": "sequence_stopped"})
 
+        elif parsed.path == "/api/config/rover_speed":
+            if "max_speed_pct" not in body or "max_pulse_offset" not in body:
+                return self._send_json({"status": "error", "message": "Missing required keys 'max_speed_pct' or 'max_pulse_offset'"}, 400)
+            try:
+                pct = int(body["max_speed_pct"])
+                offset = int(body["max_pulse_offset"])
+            except (ValueError, TypeError) as val_err:
+                return self._send_json({"status": "error", "message": f"Invalid integer values: {val_err}"}, 400)
+
+            cfg_dict = {"max_speed_pct": pct, "max_pulse_offset": offset}
+            cfg_json = json.dumps(cfg_dict, indent=2)
+
+            for target_path in ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json"]:
+                try:
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    tmp_target = target_path + ".tmp"
+                    with open(tmp_target, "w") as f:
+                        f.write(cfg_json)
+                    os.replace(tmp_target, target_path)
+                except Exception as w_err:
+                    logging.warning(f"Error writing {target_path}: {w_err}")
+
+            self._send_json({"status": "ok", "config": cfg_dict})
+
         elif parsed.path == "/api/kill_all":
             try:
                 post_data = json.dumps({"action": "stop"}).encode("utf-8")

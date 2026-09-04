@@ -83,6 +83,10 @@
     "stop_audio": {
       "file": "smw_pause.wav",
       "description": "Stop audio signal"
+    },
+    "smw_save_menu": {
+      "file": "smw_save_menu.wav",
+      "description": "Menu save or timeline marker operation"
     }
   }
 }

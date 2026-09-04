@@ -33,15 +33,21 @@ PORT = 8082
 
 
 def get_current_pi500_ip(port=8085) -> str:
-    if network_resolver:
-        return network_resolver.get_pi500_ip(prefer_port=port)
-    return "10.0.0.1"
+    if not network_resolver:
+        raise RuntimeError("network_resolver module is not available")
+    return network_resolver.get_pi500_ip(prefer_port=port)
 
 
 def get_current_mac_ip(port=8086) -> str:
-    if network_resolver:
-        return network_resolver.get_mac_ip(prefer_port=port)
-    return "192.168.0.149"
+    if not network_resolver:
+        raise RuntimeError("network_resolver module is not available")
+    return network_resolver.get_mac_ip(prefer_port=port)
+
+
+def get_current_pc_ip(port=8058) -> str:
+    if not network_resolver:
+        raise RuntimeError("network_resolver module is not available")
+    return network_resolver.get_pc_ip(prefer_port=port)
 
 STATUS_CACHE = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
@@ -122,15 +128,23 @@ def sync_rover_speed_config(pct: int):
     STATUS_CACHE["config"] = UI_CONFIG
     save_ui_config(UI_CONFIG)
     try:
-        import base64
         cfg_dict = {"max_speed_pct": val, "max_pulse_offset": max_offset}
-        cfg_data = json.dumps(cfg_dict)
         with open("/tmp/rover_config.json", "w") as f:
-            f.write(cfg_data)
-        b64 = base64.b64encode(cfg_data.encode('utf-8')).decode('ascii')
-        p500_ip = get_current_pi500_ip(port=22)
-        cmd = f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 user@{p500_ip} \"echo {b64} | base64 -d > /tmp/rover_config.json\""
-        subprocess.Popen(cmd, shell=True)
+            json.dump(cfg_dict, f, indent=2)
+        p500_ip = get_current_pi500_ip(port=8085)
+        post_data = json.dumps(cfg_dict).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://{p500_ip}:8085/api/config/rover_speed",
+            data=post_data,
+            headers={"Content-Type": "application/json"}
+        )
+        def _post_cfg():
+            try:
+                with urllib.request.urlopen(req, timeout=1.5):
+                    pass
+            except Exception as p_err:
+                print(f"Error posting rover speed to Pi 500: {p_err}", flush=True)
+        threading.Thread(target=_post_cfg, daemon=True).start()
     except Exception as e:
         print(f"Error syncing rover speed: {e}", flush=True)
 
@@ -495,7 +509,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     print(f"[ROBOT MIC] Error reading /tmp/robot_recording.wav: {e}", flush=True)
 
-            voice_bridge_url = req_data.get("voice_bridge_url", "http://192.168.0.194:8058/api/voice/process_audio")
+            pc_ip = get_current_pc_ip(port=8058)
+            voice_bridge_url = f"http://{pc_ip}:8058/api/voice/process_audio"
             dispatched = False
             if wav_data and voice_bridge_url:
                 def _post_audio():
@@ -673,36 +688,14 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "message": "WOL magic packet sent"}).encode())
             return
 
-        if path in ["/api/pi500_master_daemon_restart", "/api/pi500_daemon_restart", "/api/pi500_daemon_toggle"]:
-            action = req_data.get("action", "restart")
-            if action == "toggle":
-                is_running = STATUS_CACHE.get("daemon_running", False)
-                action = "stop" if is_running else "start"
-
-            try:
-                script_path = os.path.join(DIRECTORY, "restart_daemon.py")
-                res = subprocess.run([sys.executable, script_path, action], capture_output=True, text=True, timeout=10)
-                print(f"[TouchUI] Daemon {action} executed: out='{res.stdout.strip()}', err='{res.stderr.strip()}'", flush=True)
-                if action == "stop":
-                    STATUS_CACHE["daemon_running"] = False
-                elif action in ["start", "restart"]:
-                    STATUS_CACHE["daemon_running"] = (res.returncode == 0)
-
-                self.send_response(200 if res.returncode == 0 else 500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok" if res.returncode == 0 else "error", "action": action, "message": f"Pi 500 sewer-daemon.service {action} executed", "stdout": res.stdout, "stderr": res.stderr}).encode())
-                return
-            except Exception as e:
-                print(f"[TouchUI] Daemon {action} failed: {e}", flush=True)
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
-                return
-
         if path == "/api/clack_pose_toggle":
-            action = req_data.get("action", "toggle")
+            if "action" not in req_data:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Schema contract violation: missing required 'action' key", "status": "failed"}).encode())
+                return
+            action = str(req_data["action"])
             with TAP_DETECTOR_LOCK:
                 is_running = bool(TAP_DETECTOR is not None and TAP_DETECTOR.is_alive())
                 if action == "toggle":
@@ -715,7 +708,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                             TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
                             TAP_DETECTOR.start()
                             STATUS_CACHE["clack_pose"] = {"running": True}
-                            play_sound_helper(kind="connect")
                         except Exception as e:
                             print(f"[ClackPose] Startup error: {e}", flush=True)
                             self.send_response(500)
@@ -747,7 +739,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                             print(f"[ClackPose] TAP_DETECTOR stop warning: {st_err}", flush=True)
                         TAP_DETECTOR = None
                     STATUS_CACHE["clack_pose"] = {"running": False}
-                    play_sound_helper(kind="disconnect")
 
                     try:
                         p500_ip = get_current_pi500_ip(port=8085)
@@ -827,13 +818,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 with urllib.request.urlopen(req, timeout=3.0) as resp:
                     resp_body = resp.read()
                     if path == "/api/kill_all":
-                        try:
-                            script_path = os.path.join(DIRECTORY, "restart_daemon.py")
-                            subprocess.run([sys.executable, script_path, "stop"], capture_output=True, timeout=6)
-                            STATUS_CACHE["daemon_running"] = False
-                            STATUS_CACHE["hardware_telemetry"] = None
-                        except Exception as stop_err:
-                            print(f"[KillAll] Service stop warning: {stop_err}", flush=True)
+                        STATUS_CACHE["hardware_telemetry"] = None
                     else:
                         try:
                             st_req = urllib.request.Request(f"http://{p500_ip}:8085/api/status")
@@ -849,13 +834,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     return
             except Exception as e:
                 if path == "/api/kill_all":
-                    try:
-                        script_path = os.path.join(DIRECTORY, "restart_daemon.py")
-                        subprocess.run([sys.executable, script_path, "stop"], capture_output=True, timeout=6)
-                        STATUS_CACHE["daemon_running"] = False
-                        STATUS_CACHE["hardware_telemetry"] = None
-                    except Exception:
-                        pass
+                    STATUS_CACHE["hardware_telemetry"] = None
                 play_sound_helper(kind="incorrect")
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
@@ -885,7 +864,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                                 TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
                                 TAP_DETECTOR.start()
                                 STATUS_CACHE["clack_pose"] = {"running": True}
-                                play_sound_helper(kind="connect")
                             except Exception as te:
                                 print(f"[ClackPose] AudioTapDetector start error: {te}", flush=True)
                 else:

@@ -77,6 +77,7 @@ class OrnithVoiceApp(BaseApp):
         self.config = config or load_ornith_app_config()
         self.backend: Optional[RobotBackend] = None
         self.state = "IDLE"
+        self.app_manager: Any = None
         self.recording_start_time = 0.0
         self.last_b_click_time = 0.0
 
@@ -253,7 +254,9 @@ class OrnithVoiceApp(BaseApp):
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main interaction loop implementing Option B cadence, double-click commit, and A+B chord cancel."""
         self.logger.info("OrnithVoiceApp interaction loop running.")
-        if not self.app_manager or not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
+        if self.app_manager is None:
+            raise AttributeError("OrnithVoiceApp requires authoritative app_manager injected by daemon host")
+        if not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
             raise AttributeError("OrnithVoiceApp requires authoritative app_manager.pokeball_service from daemon host")
         service = self.app_manager.pokeball_service
 

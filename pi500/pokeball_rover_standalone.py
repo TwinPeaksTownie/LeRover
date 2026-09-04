@@ -56,16 +56,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("pokeball_rover_standalone")
 
 
-def play_chime(kind: str = "connect") -> None:
-    """Dispatches sound event to Pi 4B Touch UI audio service."""
+def play_chime(event: str = "device_connect") -> None:
+    """Dispatches sound event to Pi 4B Touch UI audio service adhering to strict contract schema."""
     def _work():
         try:
-            payload = json.dumps({"kind": kind}).encode("utf-8")
+            payload = json.dumps({
+                "event": event,
+                "stop_previous": False,
+                "delay_sec": 0.0,
+                "wav_path": ""
+            }).encode("utf-8")
             req = urllib.request.Request(get_pi4b_sound_url(), data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass
         except Exception as e:
-            logger.debug("Audio request '%s' to Pi 4B failed: %s", kind, e)
+            logger.debug("Audio request '%s' to Pi 4B failed: %s", event, e)
 
     threading.Thread(target=_work, daemon=True).start()
 
@@ -139,7 +144,7 @@ class StandalonePokeballRover:
             self.rover_ctrl.set_steering_trim(self.steering_trim)
 
         self._save_rover_config()
-        play_chime("connect")  # On Pi 4B audio service, "connect" plays smw_coin.wav
+        play_chime("device_connect")
         logger.info("🎯 Steering Trim calibrated (%+.2f) -> New trim: %+.3f (Left: %+.1f%%, Right: %+.1f%%). Triggered coin feedback.",
                     delta, self.steering_trim, -self.steering_trim * 100, self.steering_trim * 100)
 
@@ -215,7 +220,7 @@ class StandalonePokeballRover:
                     self.is_armed = True
                     self.arm_lockout_until = now + 4.25
                     logger.info("🏎️ Drivetrain Arming triggered! Playing Mario Kart countdown (lockout until %.1f)...", self.arm_lockout_until)
-                    play_chime("mario_kart_start")
+                    play_chime("rover_arm_drivetrain")
                 else:
                     logger.info("🏎️ Drivetrain already armed.")
 
@@ -315,7 +320,7 @@ class StandalonePokeballRover:
                     self.arm_lockout_until = 0.0
                     self._write_telemetry()
                     # Litmus test: play coin sound on BLE handshake confirmation
-                    play_chime("connect")
+                    play_chime("device_connect")
 
                     await client.start_notify(INPUT_UUID, self.notification_handler)
 

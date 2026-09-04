@@ -39,6 +39,7 @@ class TestAudioResolver(unittest.TestCase):
             ("rover_arm_drivetrain", "mario_kart_start.wav"),
             ("rover_emergency_brake", "smw_yoshi_runs_away.wav"),
             ("app_exit_idle", "smw_goal_iris-out.wav"),
+            ("smw_save_menu", "smw_save_menu.wav"),
         ]
 
         for ev_key, expected_file in required:
@@ -190,7 +191,9 @@ class TestOrnithVoiceCadence(unittest.TestCase):
         mock_service = MagicMock()
         mock_service.button_b_click_event = threading.Event()
         mock_service.abort_audio_event = threading.Event()
-        mock_backend.pokeball_service = mock_service
+        mock_app_mgr = MagicMock()
+        mock_app_mgr.pokeball_service = mock_service
+        self.app.app_manager = mock_app_mgr
 
         self.app.state = "LISTENING"
         self.app.recording_start_time = 500.0

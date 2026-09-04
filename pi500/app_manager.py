@@ -223,6 +223,7 @@ class AppManager:
 
         self.active_app = app_instance
         self.current_app_name = app_name
+        app_instance.app_manager = self
         app_instance.error = ""
 
         # 3. Setup hook

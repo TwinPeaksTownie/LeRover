@@ -282,27 +282,50 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
 
     for rel_path in files:
         norm_path = rel_path.replace("\\", "/").strip()
+        target_node = None
+        remote_path = None
+
         if norm_path.startswith("pi500/"):
             target_node = "pi500"
             remote_path = f"/home/user/so101/{norm_path}"
-            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
-            deployments.append(v_res)
-            if not v_res.get("match", False):
-                has_mismatch = True
         elif norm_path.startswith("apps/"):
             target_node = "pi500"
             remote_path = f"/home/user/so101/{norm_path}"
-            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
-            deployments.append(v_res)
-            if not v_res.get("match", False):
-                has_mismatch = True
         elif norm_path.startswith("pi4b/"):
             target_node = "pi4b"
             remote_rel = norm_path[5:]
             remote_path = f"/home/carson/touch_ui/{remote_rel}"
-            v_res = verify_file_deployment(os.path.join(repo_path, norm_path), remote_path, target_node)
+        elif norm_path.startswith("config/"):
+            target_node = "pi4b"
+            remote_path = f"/home/carson/touch_ui/{norm_path}"
+
+        if target_node and remote_path:
+            local_file = os.path.join(repo_path, norm_path)
+            if not os.path.exists(local_file):
+                remote_check = ssh_run_command(target_node, f"test -f '{remote_path}' && echo 'EXISTS' || echo 'ABSENT'")
+                is_absent = (remote_check.get("stdout") == "ABSENT")
+                v_res = {
+                    "status": "success",
+                    "verified": True,
+                    "match": is_absent,
+                    "local_file": local_file,
+                    "remote_path": remote_path,
+                    "node": target_node,
+                    "local_md5": "DELETED",
+                    "remote_md5": "ABSENT" if is_absent else "EXISTS",
+                    "message": "File deleted locally and confirmed absent on remote target." if is_absent else f"Deleted file still exists on remote target: {remote_path}"
+                }
+                deployments.append(v_res)
+                if not is_absent:
+                    has_mismatch = True
+                continue
+
+            v_res = verify_file_deployment(local_file, remote_path, target_node)
             deployments.append(v_res)
-            if not v_res.get("match", False):
+            if "match" in v_res:
+                if not v_res["match"]:
+                    has_mismatch = True
+            else:
                 has_mismatch = True
 
     return {
