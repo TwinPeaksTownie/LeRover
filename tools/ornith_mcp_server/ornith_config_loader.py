@@ -11,6 +11,7 @@ def get_config_path() -> str:
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "apps", "ornith_voice", "config.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
         os.path.join(r"i:\aux_servo_interface", "apps", "ornith_voice", "config.json"),
+        os.path.join("/workspace", "apps", "ornith_voice", "config.json"),
         os.path.join("/home/user/so101", "apps", "ornith_voice", "config.json"),
     ]
     for p in possible_paths:
@@ -32,6 +33,7 @@ def get_secret(key_name: str) -> str:
         os.path.join(config_dir, "secrets.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "secrets", "nim_secrets.json"),
         os.path.join(r"i:\aux_servo_interface", "secrets", "nim_secrets.json"),
+        os.path.join("/workspace", "secrets", "nim_secrets.json"),
         os.path.join("/home/user/so101", "secrets", "nim_secrets.json"),
     ]
     for p in candidate_paths:
@@ -83,6 +85,9 @@ def get_ornith_config() -> dict:
     _ = cfg["robot_app"]["double_click_window_sec"]
     _ = cfg["robot_app"]["auto_send_timeout_sec"]
     _ = cfg["robot_app"]["settle_delay_sec"]
+    _ = cfg["daemon"]["poll_interval_sec"]
+    _ = cfg["daemon"]["max_retries"]
+    _ = cfg["daemon"]["require_handoff"]
 
     active_b = cfg["audit"]["active_backend"]
     if active_b == "nim":

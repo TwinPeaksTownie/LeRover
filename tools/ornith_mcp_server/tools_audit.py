@@ -162,7 +162,7 @@ def get_active_conversation_transcript(
         "recent_history": recent_history
     }
 
-def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
+def get_git_diff(repo_path: str = None, max_chars: int = 250000, fallback_to_commits: bool = False) -> dict:
     """
     Captures complete git diff including untracked and modified text source files.
     """
@@ -208,8 +208,8 @@ def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
         )
         diff_text = diff_proc.stdout or ""
 
-        # If no uncommitted diffs, inspect recent code commits (baseline..HEAD or HEAD~FALLBACK_COMMITS..HEAD)
-        if not diff_text.strip() and not untracked_files:
+        # Only inspect recent code commits if explicitly requested
+        if fallback_to_commits and not diff_text.strip() and not untracked_files:
             base_ref = f"HEAD~{FALLBACK_COMMITS}"
             base_proc = subprocess.run(
                 ["git", "log", "--grep=baseline:", "-n", "1", "--format=%H"],
@@ -674,7 +674,7 @@ Provide your adversarial audit:"""
     spoken_status = "not_spoken"
     if speak_verdict and spoken_text:
         try:
-            tools_speech.speak_laura(spoken_text, target="both")
+            tools_speech.speak_laura(spoken_text, target=_CONFIG["speech"]["target"])
             spoken_status = f"spoken_{verdict_str.lower()}"
         except Exception as e:
             _log_debug(f"Speech notification error: {e}")

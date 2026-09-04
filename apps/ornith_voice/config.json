@@ -6,7 +6,7 @@
   "icon": "🎙️",
   "tags": ["voice", "ai", "ornith", "cohere", "tts"],
   "speech": {
-    "target": "both",
+    "target": "local",
     "voice_url": "hf://laura",
     "pocket_tts_host": "127.0.0.1",
     "pocket_tts_port": 8057,
@@ -20,7 +20,7 @@
     "nim_url": "https://integrate.api.nvidia.com/v1/chat/completions",
     "max_tokens": 16384,
     "temperature": 1.0,
-    "reasoning_effort": "max",
+    "reasoning_effort": "low",
     "default_speak_verdict": true,
     "max_diff_chars": 12000,
     "uncommitted_fallback_commits": 4,
@@ -37,7 +37,7 @@
         "model": "moonshotai/kimi-k3",
         "max_tokens": 16384,
         "temperature": 1.0,
-        "reasoning_effort": "max",
+        "reasoning_effort": "low",
         "seed": 0
       }
     }
@@ -69,5 +69,10 @@
     "settle_delay_sec": 0.65,
     "playback_wait_timeout_sec": 12.0,
     "pending_audio_file": "/tmp/pending_ornith_audio.wav"
+  },
+  "daemon": {
+    "poll_interval_sec": 2.0,
+    "max_retries": 3,
+    "require_handoff": true
   }
 }

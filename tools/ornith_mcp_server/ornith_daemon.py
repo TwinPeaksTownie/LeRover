@@ -66,6 +66,8 @@ class OrnithSupervisorDaemon:
 
         conv_id = trans.get("conversation_id")
         is_done = trans.get("is_turn_done")
+        has_handoff = trans.get("has_handoff", False)
+        handoff_summary = trans.get("handoff_summary", "").strip()
         steps = trans.get("recent_history", [])
         last_step_idx = steps[-1].get("step_index") if steps else None
 
@@ -83,19 +85,25 @@ class OrnithSupervisorDaemon:
         if last_step_idx is not None and last_step_idx == self.last_reviewed_step:
             return {"status": "idle", "reason": f"Step {last_step_idx} already reviewed"}
 
-        # 2. Check for codebase changes
-        diff_res = tools_audit.get_git_diff(self.repo_path)
+        # EXPLICIT HANDOFF GATE: Must have called signal_task_complete
+        require_handoff = bool(_CONFIG["daemon"]["require_handoff"])
+        if require_handoff and not has_handoff:
+            self.last_reviewed_step = last_step_idx
+            return {"status": "idle", "reason": "No explicit task handoff (signal_task_complete) detected"}
+
+        # 2. Check for codebase changes (uncommitted working tree changes only)
+        diff_res = tools_audit.get_git_diff(self.repo_path, fallback_to_commits=False)
         if not diff_res.get("has_changes"):
             self.last_reviewed_step = last_step_idx
             return {"status": "idle", "reason": "Turn finished with no git diff changes to audit"}
 
         # Mark step as reviewed
         self.last_reviewed_step = last_step_idx
-        task_summary = trans.get("latest_user_request", "Codebase modification").strip()
+        task_summary = handoff_summary or trans.get("latest_user_request", "Codebase modification").strip()
         logger.info(f"Auditing Step {last_step_idx} for task: '{task_summary[:80]}'")
 
         if self.dry_run:
-            logger.info("[DRY RUN] Would query Ornith in LM Studio for review.")
+            logger.info("[DRY RUN] Would query Ornith for review.")
             return {"status": "dry_run", "task": task_summary}
 
         # 3. Query Ornith in LM Studio
