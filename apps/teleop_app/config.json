@@ -13,5 +13,8 @@
     "poll_leader_interval_sec": 1.0,
     "gripper_bounds": [0.0, 100.0],
     "arm_bounds": [-100.0, 100.0]
+  },
+  "chimes": {
+    "app_start": "app_start"
   }
 }

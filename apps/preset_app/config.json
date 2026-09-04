@@ -6,5 +6,8 @@
   "modes": ["normal", "demo", "angry", "dance"],
   "default_mode": "normal",
   "icon": "🪴",
-  "tags": ["teaching", "pose", "sequence", "audio", "so101"]
+  "tags": ["teaching", "pose", "sequence", "audio", "so101"],
+  "chimes": {
+    "app_start": "app_start"
+  }
 }

@@ -6,5 +6,8 @@
   "icon": "🎵",
   "tags": ["audio", "youtube", "choreography", "music", "singing", "dance"],
   "dispatch_freq_hz": 50,
-  "library_subdir": "library/beat_bandit"
+  "library_subdir": "library/beat_bandit",
+  "chimes": {
+    "app_start": "app_start"
+  }
 }

@@ -5,5 +5,8 @@
   "version": "1.0.0",
   "icon": "🔧",
   "tags": ["calibration", "servos", "so101"],
-  "port_web": 8086
+  "port_web": 8086,
+  "chimes": {
+    "app_start": "app_start"
+  }
 }
