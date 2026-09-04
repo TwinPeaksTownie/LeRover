@@ -639,10 +639,18 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "action": "stopped"}).encode('utf-8'))
                 return
 
-            wav_path = req_data.get("wav_path")
-            stop_prev = bool(req_data.get("stop_previous", False))
-            delay_s = float(req_data.get("delay_sec", 0.0))
-            event_name = req_data.get("event")
+            wav_path = None
+            if "wav_path" in req_data:
+                wav_path = req_data["wav_path"]
+            stop_prev = False
+            if "stop_previous" in req_data:
+                stop_prev = bool(req_data["stop_previous"])
+            delay_s = 0.0
+            if "delay_sec" in req_data:
+                delay_s = float(req_data["delay_sec"])
+            event_name = None
+            if "event" in req_data:
+                event_name = req_data["event"]
             play_sound_helper(kind=kind, wav_path=wav_path, stop_previous=stop_prev, delay_sec=delay_s, event=event_name)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

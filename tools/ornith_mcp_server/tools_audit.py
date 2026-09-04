@@ -221,8 +221,8 @@ def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
                 )
                 if base_proc.returncode == 0 and base_proc.stdout.strip():
                     base_ref = base_proc.stdout.strip()
-            except Exception:
-                pass
+            except Exception as e:
+                _log_debug(f"Baseline commit resolution fallback: {e}")
 
             diff_proc_last = subprocess.run(
                 ["git", "diff", f"{base_ref}..HEAD", "--", ".", ":!*manifest.json"],
