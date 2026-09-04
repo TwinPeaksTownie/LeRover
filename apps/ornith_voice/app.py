@@ -253,9 +253,9 @@ class OrnithVoiceApp(BaseApp):
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main interaction loop implementing Option B cadence, double-click commit, and A+B chord cancel."""
         self.logger.info("OrnithVoiceApp interaction loop running.")
-        if not hasattr(backend, "pokeball_service") or backend.pokeball_service is None:
-            raise AttributeError("RobotBackend is missing required 'pokeball_service' attribute")
-        service = backend.pokeball_service
+        if not self.app_manager or not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
+            raise AttributeError("OrnithVoiceApp requires authoritative app_manager.pokeball_service from daemon host")
+        service = self.app_manager.pokeball_service
 
         if not hasattr(service, "button_b_click_event") or service.button_b_click_event is None:
             raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")

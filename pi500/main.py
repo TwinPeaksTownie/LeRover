@@ -48,11 +48,11 @@ def main() -> None:
 
     logging.info("Initializing PokeballService (intrinsic daemon BLE manager)...")
     pokeball_service = PokeballService(backend=backend)
-    backend.pokeball_service = pokeball_service
     pokeball_service.start()
 
     logging.info("Initializing AppManager & registering applications...")
     app_manager = AppManager(backend)
+    app_manager.pokeball_service = pokeball_service
     pokeball_service.app_manager = app_manager
 
     # 1. Auto-discover self-contained modular applications from apps/
@@ -74,7 +74,7 @@ def main() -> None:
 
     logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
 
-    http_server = create_master_http_server("0.0.0.0", args.http_port, backend, app_manager)
+    http_server = create_master_http_server("0.0.0.0", args.http_port, backend, app_manager, pokeball_service=pokeball_service)
     server_thread = threading.Thread(target=http_server.serve_forever, daemon=True)
     server_thread.start()
     logging.info(f"Master API Web Server successfully bound on port {args.http_port}")

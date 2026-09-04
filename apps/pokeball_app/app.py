@@ -497,35 +497,50 @@ class PokeballApp(BaseApp):
         self.api_url = api_url
         self.rover_ctrl = rover_ctrl
         self.backend: Optional[RobotBackend] = None
+        self.pokeball_service: Optional[PokeballService] = None
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         self.backend = backend
-        if not hasattr(backend, "pokeball_service") or backend.pokeball_service is None:
-            raise AttributeError("RobotBackend is missing required 'pokeball_service'")
-        service: PokeballService = backend.pokeball_service
+        if not self.app_manager or not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
+            raise AttributeError("PokeballApp requires authoritative app_manager.pokeball_service from daemon host")
+        service = self.app_manager.pokeball_service
+        self.pokeball_service = service
 
         service.teleop_enabled = True
         service.is_armed = False
         service.arm_lockout_until = 0.0
 
-        if hasattr(backend, "rover_ctrl") and backend.rover_ctrl is not None:
-            service.rover_ctrl = backend.rover_ctrl
-        elif service.rover_ctrl is None:
+        if self.rover_ctrl is None:
             if RoverController is None:
                 raise RuntimeError("RoverController dependency is missing for pokeball_teleop_app")
-            service.rover_ctrl = RoverController()
-            service.rover_ctrl.start()
+            self.rover_ctrl = RoverController()
+            self.rover_ctrl.start()
+        service.rover_ctrl = self.rover_ctrl
 
         self.logger.info("PokeballApp enabled teleoperation on intrinsic PokeballService (Unarmed baseline).")
         while not stop_event.is_set():
             time.sleep(0.5)
+
         service.teleop_enabled = False
         service.is_armed = False
-        if service.rover_ctrl:
-            service.rover_ctrl.stop()
-        self.logger.info("PokeballApp disabled teleoperation on intrinsic PokeballService.")
+        if self.rover_ctrl:
+            self.rover_ctrl.stop()
+            try:
+                self.rover_ctrl.shutdown()
+            except Exception as e:
+                self.logger.exception("Error shutting down RoverController in PokeballApp: %s", e)
+                raise
+            self.rover_ctrl = None
+        service.rover_ctrl = None
+        self.logger.info("PokeballApp disabled teleoperation and released rover drivetrain.")
 
     def stop(self) -> None:
-        if self.backend and hasattr(self.backend, "pokeball_service") and self.backend.pokeball_service is not None:
-            self.backend.pokeball_service.teleop_enabled = False
+        if self.pokeball_service is not None:
+            self.pokeball_service.teleop_enabled = False
+            self.pokeball_service.is_armed = False
+            if self.pokeball_service.rover_ctrl:
+                self.pokeball_service.rover_ctrl.stop()
+        if self.rover_ctrl is not None:
+            self.rover_ctrl.stop()
         super().stop()
+
