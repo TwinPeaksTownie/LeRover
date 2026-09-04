@@ -58,7 +58,21 @@ def load_pokeball_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
         raise FileNotFoundError(f"Missing required Pokeball config: {CONFIG_PATH}")
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    _ = cfg["name"]
+    _ = cfg["ble"]["mac_address"]
+    _ = cfg["ble"]["input_uuid"]
+    _ = cfg["ble"]["telemetry_file"]
+    _ = cfg["gestures"]["chord_abort_sec"]
+    _ = cfg["gestures"]["arm_drivetrain_sec"]
+    _ = cfg["gestures"]["arm_lockout_sec"]
+    _ = cfg["gestures"]["b_hold_sec"]
+    _ = cfg["chimes"]["app_start"]
+    _ = cfg["chimes"]["ble_connect"]
+    _ = cfg["chimes"]["arm_rover"]
+    _ = cfg["chimes"]["emergency_brake"]
+    _ = cfg["chimes"]["chord_abort"]
+    return cfg
 
 _CONFIG = load_pokeball_config()
 MAC_ADDRESS = _CONFIG["ble"]["mac_address"]
@@ -90,6 +104,8 @@ def load_joystick_calibration() -> int:
     if os.path.exists(aux_path):
         with open(aux_path, "r", encoding="utf-8") as f:
             calib = json.load(f)
+            if "pokeball_joystick" in calib:
+                return int(calib["pokeball_joystick"]["center_x"])
             return int(calib["7"]["center_ticks"])
     raise FileNotFoundError(f"Missing required calibration file: {aux_path}")
 
@@ -114,7 +130,7 @@ def play_chime(event_name="device_connect"):
                 if resp.status != 200:
                     logging.warning(f"Audio request '{event_name}' ({sound_file}) returned non-200 status: {resp.status}")
         except Exception as e:
-            logging.warning(f"Audio request '{event_name}' ({sound_file}) to Pi 4B failed: {e}")
+            logging.exception(f"Audio request '{event_name}' ({sound_file}) to Pi 4B failed: {e}")
     threading.Thread(target=_work, daemon=True).start()
 
 
@@ -166,6 +182,7 @@ class PokeballService:
 
         self.is_busy = False
         self.busy_until = 0.0
+        self.chord_suppress_until = 0.0
         self.last_btn_top = False
         self.last_btn_stick = False
         self.last_x_direction = "center"
@@ -283,6 +300,9 @@ class PokeballService:
                 hold_duration_ab = now - self.both_ab_press_start_time
                 if hold_duration_ab >= chord_abort_sec and not self.ab_hold_triggered:
                     self.ab_hold_triggered = True
+                    self.chord_suppress_until = now + 1.0
+                    self.btn_b_press_start_time = None
+                    self.button_b_click_event.clear()
                     self.logger.info("🛑 [CHORD] A + B simultaneous hold detected! Triggering abort_audio_event...")
                     self.abort_audio_event.set()
             else:
@@ -291,21 +311,24 @@ class PokeballService:
 
             # --- 2. BUTTON B (TOP RED BUTTON) HANDLING (When not in chord) ---
             if btn_b and not btn_a:
-                if self.btn_b_press_start_time is None:
-                    self.btn_b_press_start_time = now
-                hold_duration_b = now - self.btn_b_press_start_time
-                self.telemetry["hold_progress"] = min(1.0, hold_duration_b / b_hold_sec)
-                if hold_duration_b >= b_hold_sec and not self.b_hold_triggered:
-                    self.b_hold_triggered = True
-                    self.logger.info("🎙️ [TRIGGER] Button B hold detected! Launching OrnithVoiceApp...")
-                    if self.app_manager:
-                        threading.Thread(target=self.app_manager.start_app_by_name, args=("ornith_voice",), daemon=True).start()
-                    else:
-                        play_chime("ornith_app_start")
+                if now < self.chord_suppress_until:
+                    self.btn_b_press_start_time = None
+                else:
+                    if self.btn_b_press_start_time is None:
+                        self.btn_b_press_start_time = now
+                    hold_duration_b = now - self.btn_b_press_start_time
+                    self.telemetry["hold_progress"] = min(1.0, hold_duration_b / b_hold_sec)
+                    if hold_duration_b >= b_hold_sec and not self.b_hold_triggered:
+                        self.b_hold_triggered = True
+                        self.logger.info("🎙️ [TRIGGER] Button B hold detected! Launching OrnithVoiceApp...")
+                        if self.app_manager:
+                            threading.Thread(target=self.app_manager.start_app_by_name, args=("ornith_voice",), daemon=True).start()
+                        else:
+                            play_chime("ornith_app_start")
             else:
                 if self.btn_b_press_start_time is not None:
                     duration = now - self.btn_b_press_start_time
-                    if 0.05 <= duration < 2.0 and not self.b_hold_triggered:
+                    if now >= self.chord_suppress_until and 0.05 <= duration < 2.0 and not self.b_hold_triggered:
                         self.logger.info("🔘 Button B single click detected.")
                         self.button_b_click_event.set()
 

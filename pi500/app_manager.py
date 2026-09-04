@@ -263,13 +263,7 @@ class AppManager:
         app_instance.thread.start()
 
         # Dispatch application startup audio cue strictly AFTER worker thread starts
-        start_cue = "app_start"
-        if hasattr(app_instance, "config") and isinstance(app_instance.config, dict):
-            app_cfg = app_instance.config
-            if "chimes" in app_cfg and "app_start" in app_cfg["chimes"]:
-                start_cue = str(app_cfg["chimes"]["app_start"])
-            elif "voice_bridge" in app_cfg and "chimes" in app_cfg["voice_bridge"] and "app_start" in app_cfg["voice_bridge"]["chimes"]:
-                start_cue = str(app_cfg["voice_bridge"]["chimes"]["app_start"])
+        start_cue = str(app_instance.config["chimes"]["app_start"])
         dispatch_audio_event(kind=start_cue)
         return True
 

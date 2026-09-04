@@ -216,7 +216,7 @@ export function toggleClackPose() {
         })
         .catch(() => {
             if (btn) btn.style.opacity = '1.0';
-            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
 }
 
@@ -239,7 +239,7 @@ export function toggleBeatBanditApp() {
             .catch(err => {
                 if (btn) btn.style.opacity = '1.0';
                 ui.setHeaderAlert('START FAILED');
-                api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
             });
     } else {
         if (isBeatBanditDancing) {
@@ -256,7 +256,7 @@ export function toggleBeatBanditApp() {
             .catch(err => {
                 if (btn) btn.style.opacity = '1.0';
                 ui.setHeaderAlert('STOP FAILED');
-                api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
             });
     }
 }
@@ -294,7 +294,7 @@ export function startBeatBanditTrack(urlOrId) {
             if (btn) btn.style.opacity = '1.0';
             if (d && d.status === 'error') {
                 ui.setHeaderAlert(d.message || 'PLAYBACK ERROR');
-                api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
                 return;
             }
             setIsBeatBanditAppRunning(true);
@@ -305,7 +305,7 @@ export function startBeatBanditTrack(urlOrId) {
         .catch(() => {
             if (btn) btn.style.opacity = '1.0';
             ui.setHeaderAlert('PLAYBACK ERROR');
-            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
 }
 
@@ -327,7 +327,7 @@ export function stopBeatBanditDance() {
         })
         .catch(() => {
             if (btn) btn.style.opacity = '1.0';
-            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
 }
 
@@ -351,7 +351,7 @@ export function startBeatBanditSectionPlay() {
         .then(d => {
             if (d && d.status === 'error') {
                 ui.setHeaderAlert(d.message || 'SECTION PLAY ERROR');
-                api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
                 return;
             }
             setIsBeatBanditAppRunning(true);
@@ -362,7 +362,7 @@ export function startBeatBanditSectionPlay() {
         })
         .catch(() => {
             ui.setHeaderAlert('PLAY ERROR');
-            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
 }
 
@@ -460,7 +460,7 @@ export async function saveAndRecompileSettings() {
             ui.renderTimeline();
         }
 
-        await api.sendPlaySound({ kind: 'smw_save_menu' })
+        await api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' })
             .catch(err => console.warn('Sound FX error:', err));
 
         if (saveSettingsBtn) {
@@ -483,7 +483,7 @@ export function saveCurrentChoreography() {
     api.saveBeatBanditChoreo(tid, activeChoreoData)
         .then(r => r.json())
         .then(d => {
-            api.sendPlaySound({ kind: 'smw_save_menu' })
+            api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' })
                 .catch(err => console.warn('Sound FX error:', err));
             const saveBtn = document.getElementById('bbSaveChoreoBtn');
             if (saveBtn) {
@@ -559,7 +559,7 @@ export function submitDirectorFeedbackFlow(acceptAsIs = false) {
                 setActiveChoreoData(d.choreography);
                 ui.closeDirectorModal();
                 ui.renderTimeline();
-                api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+                api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
             } else {
                 console.error('Failed to synthesize choreography:', d);
                 ui.renderDirectorLoading('Error: ' + (d.message || 'Failed to synthesize choreography.'));
@@ -612,7 +612,7 @@ export function triggerOverwritePreset(presetName, label) {
     api.sendArmOverwritePreset(presetName, currentPresetMode)
         .then(r => r.json())
         .then(() => {
-            api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+            api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
 
             if (appsStatus) {
                 appsStatus.innerText = `✅ OVERWROTE ${label} (${currentPresetMode.toUpperCase()})`;
@@ -750,7 +750,7 @@ export function applyConfig(key, val) {
         .catch(() => {
             updateConfigKey(key, prevVal);
             ui.updateConfigUI();
-            api.sendPlaySound({ kind: 'incorrect' }).catch(() => {});
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
 }
 
@@ -1024,7 +1024,7 @@ function bindEventListeners() {
             setTimelineOutTime(null);
         }
         ui.renderTimeline();
-        api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+        api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
     });
     if (setOutBtn) setOutBtn.addEventListener('click', () => {
         if (timelineInTime !== null && timelinePlayheadTime <= timelineInTime) {
@@ -1032,7 +1032,7 @@ function bindEventListeners() {
         }
         setTimelineOutTime(Number(timelinePlayheadTime.toFixed(1)));
         ui.renderTimeline();
-        api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+        api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
     });
     if (clearInOutBtn) clearInOutBtn.addEventListener('click', () => {
         setTimelineInTime(null);
@@ -1173,14 +1173,14 @@ function bindEventListeners() {
                 if (d && d.status === 'error') {
                     console.error('[BEAT BANDIT] Preview error:', d.message);
                     ui.setHeaderAlert(d.message || 'PREVIEW ERROR');
-                    api.sendPlaySound({ kind: 'incorrect' }).catch(e => console.error('[AUDIO] Chime error:', e));
+                    api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(e => console.error('[AUDIO] Chime error:', e));
                     setTimelineIsPlaying(false);
                 }
             })
             .catch(err => {
                 console.error('[BEAT BANDIT] Preview network failure:', err);
                 ui.setHeaderAlert('PREVIEW FAILED: ' + (err.message || err));
-                api.sendPlaySound({ kind: 'incorrect' }).catch(e => console.error('[AUDIO] Chime error:', e));
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(e => console.error('[AUDIO] Chime error:', e));
                 setTimelineIsPlaying(false);
             });
     });
@@ -1392,9 +1392,13 @@ function bindEventListeners() {
                 selectedMoveBlock.mode = val;
                 ui.renderTimeline();
             } else if (id === 'inspTransSlider') {
-                selectedMoveBlock.transition_sec = parseFloat(val) || 0.5;
+                const parsedVal = parseFloat(val);
+                if (Number.isNaN(parsedVal)) {
+                    throw new TypeError(`Invalid transition slider value: ${val}`);
+                }
+                selectedMoveBlock.transition_sec = parsedVal;
                 const v = document.getElementById('inspTransVal');
-                if (v) v.innerText = `${parseFloat(val).toFixed(1)}s`;
+                if (v) v.innerText = `${parsedVal.toFixed(1)}s`;
                 ui.renderTimeline();
             } else if (id === 'inspS7Slider') {
                 selectedMoveBlock.target_deg = parseFloat(val);
@@ -1680,7 +1684,7 @@ function bindEventListeners() {
                 if (d.pose && activeChoreoData) {
                     activeChoreoData.poses[selectedPoseName] = d.pose;
                     ui.updatePoseSliders(d.pose);
-                    api.sendPlaySound({ kind: 'smw_save_menu' }).catch(() => {});
+                    api.sendPlaySound({ event: 'smw_save_menu', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
                 }
                 if (btn) btn.innerText = '🦾 CAPTURE FROM ARM';
             })

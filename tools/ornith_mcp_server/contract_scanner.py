@@ -294,15 +294,15 @@ def scan_javascript_code(code: str, filename: str) -> List[Dict[str, Any]]:
                     "reason": "Forbidden ternary dummy fallback number on live telemetry or state. Must render actual live state or neutral placeholder ('--')."
                 })
 
-        # 3. Logical OR dummy fallback: || <literal> on telemetry/state
-        if re.search(r'\|\|\s*([0-9]+(\.[0-9]+)?)\b', clean_line):
-            if any(w in clean_line.lower() for w in ["telem", "stick", "pos", "coord", "data", "val", "joy", "raw", "target"]):
+        # 3. Logical OR dummy fallback: || <literal> on telemetry/state or outbound API payloads
+        if re.search(r'\|\|\s*([0-9]+(\.[0-9]+)?|["\'][^"\']*["\']|true|false)\b', clean_line):
+            if any(w in clean_line.lower() for w in ["telem", "stick", "pos", "coord", "data", "val", "joy", "raw", "target", "payload", "event", "kind", "sound", "play_sound", "wav"]):
                 violations.append({
                     "rule": "JS_NO_DUMMY_FALLBACK",
                     "file": filename,
                     "line": idx,
                     "snippet": clean_line,
-                    "reason": "Forbidden logical OR dummy fallback (|| <number>) on telemetry or state. Must fail fast or display placeholder."
+                    "reason": "Forbidden logical OR dummy fallback (|| <literal>) on telemetry, state, or outbound API payload. Must fail fast or enforce required schema."
                 })
 
         # 4. Destructuring defaults: const { x = 7, y = 118 } = ...
@@ -342,7 +342,7 @@ def scan_javascript_code(code: str, filename: str) -> List[Dict[str, Any]]:
             curr_idx += 1
         body = code[start_idx:curr_idx]
         if "data" not in params:
-            if re.search(r'\bdata\.[a-zA-Z0-9_$]+', body) and not re.search(r'\b(const|let|var)\s+data\b', body):
+            if re.search(r'\bdata\.[a-zA-Z0-9_$]+', body) and not re.search(r'\b(const|let|var)\s+data\b', body) and not re.search(r'(\bdata\s*=>|\(\s*data\s*(\)|,))', body):
                 lineno = code[:match.start()].count('\n') + 1
                 violations.append({
                     "rule": "JS_SCOPE_INTEGRITY",

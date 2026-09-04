@@ -120,7 +120,7 @@ class OrnithVoiceApp(BaseApp):
                 with urllib.request.urlopen(req, timeout=2.0):
                     pass
             except Exception as e:
-                self.logger.warning("Sound dispatch '%s' (%s) to Pi 4B failed: %s", kind, sound_file, e)
+                self.logger.exception("Sound dispatch '%s' (%s) to Pi 4B failed: %s", kind, sound_file, e)
         threading.Thread(target=_post, daemon=True).start()
 
     def _cancel_robot_mic(self) -> None:

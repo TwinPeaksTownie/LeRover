@@ -92,7 +92,7 @@ def play_chime(kind: str = "incorrect") -> None:
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 pass
         except Exception as e:
-            logging.warning("Failed to dispatch chime '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
+            logging.exception("Failed to dispatch chime '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
     threading.Thread(target=_work, daemon=True).start()
 
 

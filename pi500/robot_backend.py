@@ -90,7 +90,7 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 pass
         except Exception as e:
-            logging.warning("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
+            logging.exception("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
     threading.Thread(target=_work, daemon=True).start()
 
 

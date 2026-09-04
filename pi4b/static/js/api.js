@@ -316,16 +316,29 @@ export function sendSetConfig(configObj) {
 }
 
 export function sendPlaySound(payload) {
-    const eventName = payload.event || payload.kind || 'incorrect';
+    if (!payload || typeof payload !== 'object') {
+        throw new TypeError("sendPlaySound: payload must be a non-null object");
+    }
+    if (payload.event === undefined || typeof payload.event !== 'string' || payload.event.length === 0) {
+        throw new TypeError("sendPlaySound: 'event' must be a non-empty string");
+    }
+    if (payload.stop_previous === undefined || typeof payload.stop_previous !== 'boolean') {
+        throw new TypeError("sendPlaySound: 'stop_previous' must be a boolean");
+    }
+    if (payload.delay_sec === undefined || typeof payload.delay_sec !== 'number') {
+        throw new TypeError("sendPlaySound: 'delay_sec' must be a number");
+    }
+    if (payload.wav_path === undefined || typeof payload.wav_path !== 'string') {
+        throw new TypeError("sendPlaySound: 'wav_path' must be a string");
+    }
     return safeFetch('/api/play_sound', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            event: eventName,
-            kind: eventName,
-            stop_previous: !!payload.stop_previous,
-            delay_sec: payload.delay_sec ? Number(payload.delay_sec) : 0.0,
-            wav_path: payload.wav_path || ""
+            event: payload.event,
+            stop_previous: payload.stop_previous,
+            delay_sec: payload.delay_sec,
+            wav_path: payload.wav_path
         })
     }, 1000);
 }

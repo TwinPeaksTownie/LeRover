@@ -8,5 +8,11 @@
     "center_ticks": 2400,
     "min_ticks": 3,
     "max_ticks": 4800
+  },
+  "pokeball_joystick": {
+    "center_x": 2048,
+    "center_y": 2048,
+    "min_raw": 0,
+    "max_raw": 4095
   }
 }
