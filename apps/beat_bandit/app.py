@@ -135,9 +135,41 @@ class BeatBanditApp(BaseApp):
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         self.stop_event = stop_event
+
+        if self.app_manager is None:
+            raise AttributeError("BeatBanditApp requires authoritative app_manager injected by daemon host")
+        if not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
+            raise AttributeError("BeatBanditApp requires authoritative app_manager.pokeball_service from daemon host")
+        service = self.app_manager.pokeball_service
+
+        if not hasattr(service, "button_b_click_event") or service.button_b_click_event is None:
+            raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
+        service.button_b_click_event.clear()
+
+        if "double_click_window_sec" not in self.config:
+            raise KeyError("Fail-Fast Error: Missing required 'double_click_window_sec' in config.json")
+        double_click_window = float(self.config["double_click_window_sec"])
+
+        self.logger.info("BeatBanditApp run loop active. Monitoring Pokeball Button B double-clicks (window=%.2fs)...", double_click_window)
+
+        last_b_click_time = 0.0
+
         while not stop_event.is_set():
-            time.sleep(0.1)
+            if service.button_b_click_event.is_set():
+                service.button_b_click_event.clear()
+                now = time.time()
+                if (now - last_b_click_time) <= double_click_window:
+                    self.logger.info("🛑 Double Button B click detected (interval=%.3fs). Triggering stop_and_center...", now - last_b_click_time)
+                    last_b_click_time = 0.0
+                    self.stop_and_center(backend)
+                else:
+                    self.logger.info("🔘 First Button B click detected. Waiting for second click within %.2fs...", double_click_window)
+                    last_b_click_time = now
+
+            time.sleep(0.03)
+
         self.stop_dance()
+
 
     def teardown(self, backend: RobotBackend) -> None:
         self.stop_dance()
@@ -388,6 +420,72 @@ class BeatBanditApp(BaseApp):
             self.player = None
         self.audio_client.stop_playback()
         self.current_state = "IDLE"
+
+    def stop_and_center(self, backend: RobotBackend) -> None:
+        """Stops active choreography, halts audio on Pi 4B, and dynamically homes Servos 1-8."""
+        self.logger.info("🛑 stop_and_center requested! Halting choreography and centering actuators...")
+        self.stop_dance()
+
+        # Dynamic Calibration: Servos 1-6 loaded from presets_dance.json["stand"]
+        poses = load_dance_presets()
+        if "stand" not in poses:
+            raise KeyError("Fail-Fast Error: Missing required 'stand' preset in presets_dance.json")
+        stand = poses["stand"]
+        for motor_key in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]:
+            if motor_key not in stand:
+                raise KeyError(f"Fail-Fast Error: Motor '{motor_key}' missing in 'stand' preset")
+        home_rom = {
+            "shoulder_pan": float(stand["shoulder_pan"]),
+            "shoulder_lift": float(stand["shoulder_lift"]),
+            "elbow_flex": float(stand["elbow_flex"]),
+            "wrist_flex": float(stand["wrist_flex"]),
+            "wrist_roll": float(stand["wrist_roll"]),
+            "gripper": float(stand["gripper"]),
+        }
+
+        # Dynamic Calibration: Servos 7 and 8 computed from calibration_aux.json bounds
+        calib_aux_file = Path(__file__).resolve().parent.parent.parent / "calibration_aux.json"
+        if not calib_aux_file.exists():
+            calib_aux_file = Path.home() / "so101" / "calibration_aux.json"
+        if not calib_aux_file.exists():
+            raise FileNotFoundError(f"Fail-Fast Error: 'calibration_aux.json' not found at {calib_aux_file}")
+        with open(calib_aux_file, "r", encoding="utf-8") as f:
+            calib_aux = json.load(f)
+
+        if "7" not in calib_aux or "min_ticks" not in calib_aux["7"] or "max_ticks" not in calib_aux["7"] or "center_ticks" not in calib_aux["7"]:
+            raise KeyError("Fail-Fast Error: Servo 7 calibration parameters missing in calibration_aux.json")
+        min_7 = float(calib_aux["7"]["min_ticks"])
+        max_7 = float(calib_aux["7"]["max_ticks"])
+        center_7 = float(calib_aux["7"]["center_ticks"])
+        if max_7 <= min_7:
+            raise ValueError(f"Fail-Fast Error: Invalid Servo 7 calibration bounds: min={min_7}, max={max_7}")
+        s7_neutral_rom = round(((center_7 - min_7) / (max_7 - min_7)) * 100.0, 2)
+
+        if "8" not in calib_aux or "min_ticks" not in calib_aux["8"] or "max_ticks" not in calib_aux["8"] or "center_ticks" not in calib_aux["8"]:
+            raise KeyError("Fail-Fast Error: Servo 8 calibration parameters missing in calibration_aux.json")
+        min_8 = float(calib_aux["8"]["min_ticks"])
+        max_8 = float(calib_aux["8"]["max_ticks"])
+        center_8 = float(calib_aux["8"]["center_ticks"])
+        if max_8 <= min_8:
+            raise ValueError(f"Fail-Fast Error: Invalid Servo 8 calibration bounds: min={min_8}, max={max_8}")
+        s8_neutral_rom = round(((center_8 - min_8) / (max_8 - min_8)) * 100.0, 2)
+
+        if "homing_speed" not in self.config:
+            raise KeyError("Fail-Fast Error: Missing required 'homing_speed' in config.json")
+        homing_speed = int(self.config["homing_speed"])
+
+        if hasattr(backend, "dispatch_dance_frame"):
+            backend.dispatch_dance_frame(
+                home_rom,
+                s7_rom=s7_neutral_rom,
+                s8_goal=s8_neutral_rom,
+                s8_is_rom=True,
+                s8_speed=homing_speed,
+            )
+
+        dispatch_audio_event(kind="app_exit_idle")
+        self.current_state = "IDLE"
+
 
     def preview_isolated_block(
         self,

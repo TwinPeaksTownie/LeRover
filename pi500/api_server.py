@@ -837,9 +837,15 @@ class MasterApiHandler(BaseHTTPRequestHandler):
 
         elif parsed.path == "/api/apps/beat_bandit/stop":
             bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
-            if bb_app and hasattr(bb_app, "stop_dance"):
-                bb_app.stop_dance()
+            if bb_app:
+                if not hasattr(bb_app, "stop_and_center"):
+                    raise AttributeError("BeatBanditApp is missing required 'stop_and_center' method")
+                if not self.backend:
+                    raise RuntimeError("Robot backend uninitialized for stop_and_center")
+                bb_app.stop_and_center(self.backend)
             self._send_json({"status": "ok", "action": "stopped"})
+
+
 
         elif parsed.path == "/api/apps/beat_bandit/save_choreo":
             track_id = None
