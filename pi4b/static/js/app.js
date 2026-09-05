@@ -13,6 +13,7 @@ import {
     isBeatBanditAppRunning,
     isBeatBanditDancing,
     isBeatBanditRunning,
+    isListenerAppRunning,
     selectedBeatBanditTrackId,
     cachedBeatBanditTracks,
     currentAppsMode,
@@ -51,6 +52,7 @@ import {
     setIsBeatBanditAppRunning,
     setIsBeatBanditDancing,
     setIsBeatBanditRunning,
+    setIsListenerAppRunning,
     setBeatBanditTrackPage,
     setCachedBeatBanditTracks,
     setCurrentAppsMode,
@@ -260,6 +262,65 @@ export function toggleBeatBanditApp() {
             });
     }
 }
+
+export function toggleListenerApp() {
+    const action = isListenerAppRunning ? 'stop' : 'start';
+    const btn = document.getElementById('listenerAppToggleBtn');
+    const txt = document.getElementById('listenerAppToggleBtnText');
+    if (btn) {
+        btn.style.opacity = '0.5';
+        if (txt) txt.innerText = action === 'start' ? '⌛ STARTING...' : '⌛ STOPPING...';
+    }
+    if (action === 'start') {
+        api.sendAppStart('listener_app')
+            .then(r => r.json())
+            .then(d => {
+                if (d.running !== undefined) setIsListenerAppRunning(d.running);
+                if (btn) btn.style.opacity = '1.0';
+                ui.renderButtonStates();
+            })
+            .catch(err => {
+                if (btn) btn.style.opacity = '1.0';
+                ui.setHeaderAlert('START FAILED');
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                    .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+            });
+    } else {
+        api.sendAppStop('listener_app')
+            .then(r => r.json())
+            .then(() => {
+                setIsListenerAppRunning(false);
+                if (btn) btn.style.opacity = '1.0';
+                ui.renderButtonStates();
+            })
+            .catch(err => {
+                if (btn) btn.style.opacity = '1.0';
+                ui.setHeaderAlert('STOP FAILED');
+                api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                    .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+            });
+    }
+}
+
+export function selectListenerTrack(index) {
+    const rowBtn = document.getElementById(`listenerTrackRow${index}`);
+    if (rowBtn) {
+        rowBtn.style.opacity = '0.5';
+    }
+    api.sendListenerSelect(index)
+        .then(r => r.json())
+        .then(d => {
+            if (rowBtn) rowBtn.style.opacity = '1.0';
+            api.sendPlaySound({ event: 'correct', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+        })
+        .catch(err => {
+            if (rowBtn) rowBtn.style.opacity = '1.0';
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+        });
+}
+
 
 export function handleMainDanceBtnClick() {
     if (isBeatBanditDancing || timelineIsPlaying) {
@@ -844,6 +905,7 @@ function bindEventListeners() {
     const launchClacker = document.getElementById('launchClackerBtn');
     const launchStudio = document.getElementById('launchStudioBtn');
     const launchBeatBandit = document.getElementById('launchBeatBanditBtn');
+    const launchListener = document.getElementById('launchListenerBtn');
 
     if (launchClacker) launchClacker.addEventListener('click', () => {
         ui.openAppsSubView('clacker');
@@ -855,6 +917,9 @@ function bindEventListeners() {
     if (launchBeatBandit) launchBeatBandit.addEventListener('click', () => {
         ui.openAppsSubView('beat_bandit');
         fetchBeatBanditTracks();
+    });
+    if (launchListener) launchListener.addEventListener('click', () => {
+        ui.openAppsSubView('listener');
     });
 
     // View B: Piranha Pose Controls & Presets
@@ -960,6 +1025,21 @@ function bindEventListeners() {
     if (bbFetchBtn) bbFetchBtn.addEventListener('click', () => startBeatBanditFromInput());
     if (bbPageBtn) bbPageBtn.addEventListener('click', () => ui.handleBeatBanditPageToggle());
     if (bbMainDanceBtn) bbMainDanceBtn.addEventListener('click', () => handleMainDanceBtnClick());
+
+    // View E: Dedicated Voice Listener Panel
+    const listenerBackBtn = document.getElementById('listenerBackBtn');
+    const listenerAppToggleBtn = document.getElementById('listenerAppToggleBtn');
+    if (listenerBackBtn) listenerBackBtn.addEventListener('click', () => {
+        ui.openAppsSubView('launcher');
+    });
+    if (listenerAppToggleBtn) listenerAppToggleBtn.addEventListener('click', () => toggleListenerApp());
+
+    for (let i = 0; i < 4; i++) {
+        const rowBtn = document.getElementById(`listenerTrackRow${i}`);
+        if (rowBtn) {
+            rowBtn.addEventListener('click', () => selectListenerTrack(i));
+        }
+    }
 
     // Event Delegation for dynamically rendered Beat Bandit Tracks
     if (bbTracksList) {

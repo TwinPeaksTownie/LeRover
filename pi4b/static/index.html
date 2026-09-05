@@ -129,29 +129,37 @@
                 <div id="appsStatus" class="header-readout" style="font-size: 16px; color: #00e5ff;">ROBOT APPS IDLE</div>
             </div>
 
-            <!-- VIEW A: Top-Level 3-Button Launcher (Default View) -->
-            <div id="appsViewLauncher" style="display: flex; flex-direction: column; gap: 10px; height: calc(100% - 32px); justify-content: center; padding: 6px 16px;">
-                <button id="launchClackerBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 3px solid #00e5ff; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
-                    <span style="font-size: 46px;">🪴</span>
-                    <div style="text-align: left;">
-                        <div style="font-size: 24px; color: #00e5ff; font-weight: 900;">PIRANHA POSE</div>
-                        <div style="font-size: 14px; color: #a0c8e0; font-weight: 600; margin-top: 3px;">Multi-Mode Presets, Sequence Engine & Acoustic Clack Control</div>
+            <!-- VIEW A: Top-Level 4-Button Launcher (2x2 Grid) -->
+            <div id="appsViewLauncher" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: calc(100% - 32px); padding: 4px 8px; box-sizing: border-box;">
+                <button id="launchClackerBtn" class="btn-action" style="background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
+                    <span style="font-size: 34px;">🪴</span>
+                    <div style="text-align: left; min-width: 0;">
+                        <div style="font-size: 18px; color: #00e5ff; font-weight: 900; line-height: 1.2;">PIRANHA POSE</div>
+                        <div style="font-size: 11px; color: #a0c8e0; font-weight: 600; margin-top: 2px; white-space: normal;">Presets, Sequences & Clacks</div>
                     </div>
                 </button>
 
-                <button id="launchStudioBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #2d2400, #1a1500); border: 3px solid #ffaa00; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
-                    <span style="font-size: 46px;">🔧</span>
-                    <div style="text-align: left;">
-                        <div style="font-size: 24px; color: #ffaa00; font-weight: 900;">SERVO STUDIO</div>
-                        <div style="font-size: 14px; color: #e0cca0; font-weight: 600; margin-top: 3px;">Live Motor Calibration & Diagnostics (:8086)</div>
+                <button id="launchStudioBtn" class="btn-action" style="background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
+                    <span style="font-size: 34px;">🔧</span>
+                    <div style="text-align: left; min-width: 0;">
+                        <div style="font-size: 18px; color: #ffaa00; font-weight: 900; line-height: 1.2;">SERVO STUDIO</div>
+                        <div style="font-size: 11px; color: #e0cca0; font-weight: 600; margin-top: 2px; white-space: normal;">Motor Calibration & Diagnostics</div>
                     </div>
                 </button>
 
-                <button id="launchBeatBanditBtn" class="btn-action" style="flex: 1; background: linear-gradient(135deg, #380e45, #1d0724); border: 3px solid #a855f7; color: #ffffff; border-radius: 12px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 14px 22px; gap: 18px;">
-                    <span style="font-size: 46px;">🎧</span>
-                    <div style="text-align: left;">
-                        <div style="font-size: 24px; color: #a855f7; font-weight: 900;">BEAT BANDIT</div>
-                        <div style="font-size: 14px; color: #e9cbfd; font-weight: 600; margin-top: 3px;">YouTube Music Audio Analysis & Choreographer</div>
+                <button id="launchBeatBanditBtn" class="btn-action" style="background: linear-gradient(135deg, #380e45, #1d0724); border: 2px solid #a855f7; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
+                    <span style="font-size: 34px;">🎧</span>
+                    <div style="text-align: left; min-width: 0;">
+                        <div style="font-size: 18px; color: #a855f7; font-weight: 900; line-height: 1.2;">BEAT BANDIT</div>
+                        <div style="font-size: 11px; color: #e9cbfd; font-weight: 600; margin-top: 2px; white-space: normal;">Audio Analysis & Choreographer</div>
+                    </div>
+                </button>
+
+                <button id="launchListenerBtn" class="btn-action" style="background: linear-gradient(135deg, #0e3538, #051d1f); border: 2px solid #00f2fe; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
+                    <span style="font-size: 34px;">👂</span>
+                    <div style="text-align: left; min-width: 0;">
+                        <div style="font-size: 18px; color: #00f2fe; font-weight: 900; line-height: 1.2;">VOICE LISTENER</div>
+                        <div style="font-size: 11px; color: #9dfbfa; font-weight: 600; margin-top: 2px; white-space: normal;">Voice Commands & Track Search</div>
                     </div>
                 </button>
             </div>
@@ -719,6 +727,74 @@
                     </div>
                 </div>
 
+            </div>
+
+            <!-- VIEW E: Dedicated Voice Listener Panel & 4-Row Track Selection -->
+            <div id="appsViewListener" style="display: none; flex-direction: column; flex-grow: 1; height: calc(100% - 32px); min-height: 0; width: 100%; gap: 6px;">
+                <!-- Top Navigation & Action Bar (44px) -->
+                <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 8px; height: 44px; flex-shrink: 0; align-items: center;">
+                    <button id="listenerBackBtn" class="btn-action btn-back" style="height: 100%; min-height: 0; padding: 0; font-size: 16px; font-weight: 900;">
+                        ◀ BACK
+                    </button>
+                    <button id="listenerAppToggleBtn" class="btn-action" style="height: 100%; min-height: 0; font-size: 16px; font-weight: 900; padding: 2px 8px; border-radius: 8px; background: linear-gradient(135deg, #0e3538, #051d1f); border: 2px solid #00f2fe; color: #fff;">
+                        <span id="listenerAppToggleBtnText">👂 START LISTENER APP</span>
+                        <span id="listenerAppToggleBtnSub" style="display:block; font-size:11.5px; color:#9dfbfa; font-weight:700;">Voice Hotword & Speech-to-Intent Pipeline</span>
+                    </button>
+                    <div id="listenerStatusPill" style="background: #091a1c; border: 1.5px solid #00f2fe; border-radius: 8px; padding: 0 12px; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #9dfbfa; white-space: nowrap;">
+                        🎙️ <span id="listenerStateText" style="margin-left: 5px;">IDLE</span>
+                    </div>
+                </div>
+
+                <!-- Query / Instructions Readout Header (28px) -->
+                <div style="display: flex; justify-content: space-between; align-items: center; height: 28px; background: #0c181a; border: 1px solid #1a3c40; border-radius: 6px; padding: 0 10px; flex-shrink: 0;">
+                    <div style="font-size: 12px; font-weight: 800; color: #00f2fe; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span>QUERY:</span>
+                        <span id="listenerQueryDisplay" style="color: #fff; font-family: monospace;">(none - speak 'download [song] by [artist]')</span>
+                    </div>
+                    <div style="font-size: 11px; font-weight: 700; color: #888; white-space: nowrap;">
+                        🎮 Poké Ball: Stick Up/Down + Push A
+                    </div>
+                </div>
+
+                <!-- 4 Stacked Track Rows Container -->
+                <div id="listenerTrackList" style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1; min-height: 0; width: 100%; justify-content: space-between;">
+                    <!-- 4 Row Buttons (Full width, complete title wrapped without truncation) -->
+                    <button id="listenerTrackRow0" class="btn-action listener-track-row" data-index="0" style="display: none; flex: 1; background: #0c1b1e; border: 2px solid #19464d; border-radius: 8px; padding: 6px 14px; text-align: left; align-items: center; justify-content: space-between; min-height: 0;">
+                        <div style="display: flex; flex-direction: column; min-width: 0; flex: 1; padding-right: 12px;">
+                            <div class="track-row-title" style="font-size: 14px; font-weight: 900; color: #ffffff; line-height: 1.25; white-space: normal; word-break: break-word;"></div>
+                            <div class="track-row-meta" style="font-size: 11px; font-weight: 700; color: #6db3bd; margin-top: 3px;"></div>
+                        </div>
+                        <div class="track-row-badge" style="background: #112d33; border: 1px solid #00f2fe; color: #00f2fe; font-size: 12px; font-weight: 800; border-radius: 6px; padding: 4px 8px; white-space: nowrap;"></div>
+                    </button>
+                    <button id="listenerTrackRow1" class="btn-action listener-track-row" data-index="1" style="display: none; flex: 1; background: #0c1b1e; border: 2px solid #19464d; border-radius: 8px; padding: 6px 14px; text-align: left; align-items: center; justify-content: space-between; min-height: 0;">
+                        <div style="display: flex; flex-direction: column; min-width: 0; flex: 1; padding-right: 12px;">
+                            <div class="track-row-title" style="font-size: 14px; font-weight: 900; color: #ffffff; line-height: 1.25; white-space: normal; word-break: break-word;"></div>
+                            <div class="track-row-meta" style="font-size: 11px; font-weight: 700; color: #6db3bd; margin-top: 3px;"></div>
+                        </div>
+                        <div class="track-row-badge" style="background: #112d33; border: 1px solid #00f2fe; color: #00f2fe; font-size: 12px; font-weight: 800; border-radius: 6px; padding: 4px 8px; white-space: nowrap;"></div>
+                    </button>
+                    <button id="listenerTrackRow2" class="btn-action listener-track-row" data-index="2" style="display: none; flex: 1; background: #0c1b1e; border: 2px solid #19464d; border-radius: 8px; padding: 6px 14px; text-align: left; align-items: center; justify-content: space-between; min-height: 0;">
+                        <div style="display: flex; flex-direction: column; min-width: 0; flex: 1; padding-right: 12px;">
+                            <div class="track-row-title" style="font-size: 14px; font-weight: 900; color: #ffffff; line-height: 1.25; white-space: normal; word-break: break-word;"></div>
+                            <div class="track-row-meta" style="font-size: 11px; font-weight: 700; color: #6db3bd; margin-top: 3px;"></div>
+                        </div>
+                        <div class="track-row-badge" style="background: #112d33; border: 1px solid #00f2fe; color: #00f2fe; font-size: 12px; font-weight: 800; border-radius: 6px; padding: 4px 8px; white-space: nowrap;"></div>
+                    </button>
+                    <button id="listenerTrackRow3" class="btn-action listener-track-row" data-index="3" style="display: none; flex: 1; background: #0c1b1e; border: 2px solid #19464d; border-radius: 8px; padding: 6px 14px; text-align: left; align-items: center; justify-content: space-between; min-height: 0;">
+                        <div style="display: flex; flex-direction: column; min-width: 0; flex: 1; padding-right: 12px;">
+                            <div class="track-row-title" style="font-size: 14px; font-weight: 900; color: #ffffff; line-height: 1.25; white-space: normal; word-break: break-word;"></div>
+                            <div class="track-row-meta" style="font-size: 11px; font-weight: 700; color: #6db3bd; margin-top: 3px;"></div>
+                        </div>
+                        <div class="track-row-badge" style="background: #112d33; border: 1px solid #00f2fe; color: #00f2fe; font-size: 12px; font-weight: 800; border-radius: 6px; padding: 4px 8px; white-space: nowrap;"></div>
+                    </button>
+
+                    <!-- Empty / Idle Placeholder -->
+                    <div id="listenerEmptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: #5a7d82; text-align: center; padding: 20px;">
+                        <div style="font-size: 36px; margin-bottom: 8px;">👂 🎶</div>
+                        <div style="font-size: 16px; font-weight: 800; color: #9dfbfa;">No Track Query Results Yet</div>
+                        <div style="font-size: 12px; color: #aaa; margin-top: 6px;">Hold Poké Ball Top Button for 3s, then speak:<br><span style="color: #00f2fe; font-weight: 700;">"Download Pink Pony Club by Chappell Roan"</span></div>
+                    </div>
+                </div>
             </div>
 
         </div>

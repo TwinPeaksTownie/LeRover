@@ -311,11 +311,29 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                         "vocal_power": 0.0,
                         "s7_angle_deg": 0.0,
                     }
+                l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+                if l_app and hasattr(l_app, "get_status"):
+                    resp["listener"] = l_app.get_status()
+                else:
+                    resp["listener"] = {
+                        "name": "listener_app",
+                        "state": "IDLE",
+                        "search_query": "",
+                        "search_results": [],
+                        "selected_index": 0,
+                        "error": "",
+                    }
             self._send_json(resp)
         elif parsed.path in ["/api/apps", "/api/apps/list"]:
             self._send_json({"status": "ok", "apps": self.app_manager.list_apps()})
         elif parsed.path == "/api/apps/status":
             self._send_json({"status": "ok", "app_manager": self.app_manager.get_status()})
+        elif parsed.path == "/api/apps/listener/status":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            st = {"name": "listener_app", "state": "IDLE", "search_query": "", "search_results": [], "selected_index": 0, "error": ""}
+            if l_app and hasattr(l_app, "get_status"):
+                st = l_app.get_status()
+            self._send_json({"status": "ok", "listener": st})
         elif parsed.path == "/api/apps/beat_bandit/status":
             bb_app = None
             if self.app_manager.current_app_name == "beat_bandit_app":
@@ -657,6 +675,42 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             else:
                 self.app_manager.stop_all()
             self._send_json({"status": "ok", "message": f"Stopped app {app_name if app_name else 'all'}"})
+
+        elif parsed.path == "/api/apps/listener/select":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            if not l_app or not hasattr(l_app, "select_track"):
+                return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
+            idx = None
+            if "index" in body and body["index"] is not None:
+                idx = int(body["index"])
+            tid = None
+            if "id" in body and body["id"]:
+                tid = str(body["id"])
+            elif "track_id" in body and body["track_id"]:
+                tid = str(body["track_id"])
+            if idx is None and tid is None:
+                return self._send_json({"status": "error", "message": "Missing required 'index' or 'id' field in select payload"}, 400)
+            res_track = l_app.select_track(index=idx, track_id=tid)
+            self._send_json({"status": "ok" if res_track else "error", "selected_index": l_app.selected_index, "track": res_track})
+
+        elif parsed.path == "/api/apps/listener/navigate":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            if not l_app or not hasattr(l_app, "navigate_selection"):
+                return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
+            if "delta" in body:
+                delta = int(body["delta"])
+            elif "direction" in body:
+                direction_str = str(body["direction"]).lower()
+                if direction_str == "up":
+                    delta = -1
+                elif direction_str == "down":
+                    delta = 1
+                else:
+                    return self._send_json({"status": "error", "message": f"Invalid direction '{direction_str}'. Expected 'up' or 'down'"}, 400)
+            else:
+                return self._send_json({"status": "error", "message": "Missing required field 'delta' or 'direction' in navigate payload"}, 400)
+            new_idx = l_app.navigate_selection(delta)
+            self._send_json({"status": "ok", "selected_index": new_idx})
 
         elif parsed.path == "/api/pokeball_teleop_toggle":
             if "action" not in body:

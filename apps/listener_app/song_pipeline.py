@@ -185,15 +185,119 @@ def analyze_audio_track(wav_path: Path) -> Dict[str, Any]:
     }
 
 
-def download_and_compile(title: str, artist: str) -> Path:
+def _validate_candidate(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Validates candidate metadata against strict fail-fast schema contracts.
+    Requires 'id', 'title', 'duration' (or 'duration_string'), and 'uploader' (or 'channel').
+    Raises KeyError or ValueError on missing or corrupt contract fields.
+    """
+    if "id" not in item or not item["id"]:
+        raise KeyError("Candidate payload missing mandatory non-empty 'id' key")
+    video_id = str(item["id"])
+
+    if "title" not in item or not item["title"]:
+        raise KeyError(f"Candidate '{video_id}' missing mandatory non-empty 'title' key")
+    title = str(item["title"])
+
+    if "duration" in item and isinstance(item["duration"], (int, float)):
+        dur_sec = int(item["duration"])
+    elif "duration_string" in item and item["duration_string"]:
+        parts = str(item["duration_string"]).split(":")
+        if len(parts) == 2:
+            dur_sec = int(parts[0]) * 60 + int(parts[1])
+        elif len(parts) == 3:
+            dur_sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        else:
+            raise ValueError(f"Invalid duration_string format: {item['duration_string']}")
+    else:
+        raise KeyError(f"Candidate '{video_id}' missing mandatory 'duration' or 'duration_string' key")
+
+    if "duration_string" in item and item["duration_string"]:
+        duration_str = str(item["duration_string"])
+    else:
+        duration_str = f"{dur_sec // 60}:{dur_sec % 60:02d}"
+
+    if "uploader" in item and item["uploader"]:
+        uploader = str(item["uploader"])
+    elif "channel" in item and item["channel"]:
+        uploader = str(item["channel"])
+    else:
+        raise KeyError(f"Candidate '{video_id}' missing mandatory 'uploader' or 'channel' key")
+
+    webpage_url = f"https://www.youtube.com/watch?v={video_id}"
+    if "webpage_url" in item and item["webpage_url"]:
+        webpage_url = str(item["webpage_url"])
+
+    return {
+        "id": video_id,
+        "title": title,
+        "duration": duration_str,
+        "duration_sec": dur_sec,
+        "uploader": uploader,
+        "url": webpage_url,
+    }
+
+
+def fetch_search_candidates(query: str, limit: int = 4) -> List[Dict[str, Any]]:
+    """Searches YouTube via yt-dlp and returns up to limit candidate track dictionaries.
+    Uses --flat-playlist and --dump-json to return metadata rapidly without downloading audio.
+    """
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("Search query cannot be empty or whitespace.")
+    clean_query = query.strip()
+
+    logger.info("Querying search candidates for '%s' (limit=%d)...", clean_query, limit)
+    cmd = [
+        "yt-dlp",
+        f"ytsearch{limit}:{clean_query}",
+        "--dump-json",
+        "--flat-playlist",
+        "--no-playlist",
+        "--quiet",
+        "--no-warnings",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        logger.error("yt-dlp search query failed: %s", res.stderr)
+        raise RuntimeError(f"yt-dlp search query failed: {res.stderr}")
+
+    candidates: List[Dict[str, Any]] = []
+    for line in res.stdout.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception as e:
+            logger.error("JSON parse error on yt-dlp search line '%s': %s", line, e, exc_info=True)
+            raise ValueError(f"yt-dlp emitted malformed JSON line: {line}") from e
+
+        try:
+            candidate = _validate_candidate(item)
+            candidates.append(candidate)
+            if len(candidates) >= limit:
+                break
+        except (KeyError, ValueError) as e:
+            logger.error("Candidate contract validation failed: %s", e, exc_info=True)
+            raise
+
+    return candidates
+
+
+def download_and_compile(title: str, artist: str = "", video_id: Optional[str] = None) -> Path:
     """Executes end-to-end fetch, rhythm analysis, and choreography compilation."""
-    slug = sanitize_slug(f"{title}_{artist}")
+    slug_base = f"{title}_{artist}" if artist else title
+    slug = sanitize_slug(slug_base)
     cache_dir = get_audio_cache_dir()
     wav_path = cache_dir / f"{slug}.wav"
 
     if not wav_path.exists():
-        search_query = f"{title} {artist} official audio"
-        fetch_audio_ytdlp(search_query, wav_path)
+        if video_id:
+            query = f"https://www.youtube.com/watch?v={video_id}"
+        elif artist:
+            query = f"{title} {artist} official audio"
+        else:
+            query = title
+        fetch_audio_ytdlp(query, wav_path)
 
     analysis = analyze_audio_track(wav_path)
     

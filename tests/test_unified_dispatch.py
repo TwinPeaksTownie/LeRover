@@ -36,6 +36,7 @@ class TestUnifiedDispatch(unittest.TestCase):
         self.backend.bus = MagicMock()
         self.backend.ctrl = MagicMock()
         self.backend.move_target = MagicMock()
+        self.backend._last_dance_s7_ticks = None
 
     def test_dispatch_dance_frame_tick_conversion(self):
         """Tests that 50% ROM converts to exactly midpoint ticks (2000)."""

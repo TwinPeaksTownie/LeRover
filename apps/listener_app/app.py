@@ -44,7 +44,7 @@ import network_resolver
 import audio_resolver
 
 from apps.listener_app.intent_parser import parse_intent
-from apps.listener_app.song_pipeline import download_and_compile, find_compiled_sequence
+from apps.listener_app.song_pipeline import download_and_compile, find_compiled_sequence, fetch_search_candidates
 
 CONFIG_PATH = APP_DIR / "config.json"
 
@@ -124,10 +124,95 @@ class ListenerApp(BaseApp):
         self.logger = logging.getLogger("so101.app.listener_app")
         self.config = load_listener_config()
         self.state = "IDLE"
+        self.search_query: str = ""
+        self.search_results: List[Dict[str, Any]] = []
+        self.selected_index: int = 0
+        self._selection_lock = threading.RLock()
         self.app_manager: Any = None
         self.asr_model: Any = None
         self.kws_engine: Any = None
         self.calib_limits: Dict[int, Dict[str, int]] = {}
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns structured status dictionary for Master API inspection."""
+        with self._selection_lock:
+            return {
+                "name": self.name,
+                "state": self.state,
+                "query": self.search_query,
+                "search_query": self.search_query,
+                "search_results": list(self.search_results),
+                "selected_index": self.selected_index,
+                "error": self.error,
+            }
+
+    def navigate_selection(self, delta: int) -> int:
+        """Navigates track selection cursor by delta (+1 or -1) clamped to [0, len(results)-1]."""
+        with self._selection_lock:
+            if not self.search_results:
+                self.selected_index = 0
+                return 0
+            max_idx = max(0, len(self.search_results) - 1)
+            self.selected_index = max(0, min(max_idx, self.selected_index + delta))
+            self.logger.info("Track selection navigated to index %d: %s", self.selected_index, self.search_results[self.selected_index]["title"])
+            return self.selected_index
+
+    def select_track(self, index: Optional[int] = None, track_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Selects a track by index or track_id and dispatches download & compilation."""
+        with self._selection_lock:
+            if self.state == "DOWNLOADING":
+                self.logger.warning("select_track rejected: download and compilation already active")
+                return None
+            if not self.search_results:
+                self.logger.warning("select_track called with empty search_results")
+                return None
+
+            target_track = None
+            if index is not None:
+                if 0 <= index < len(self.search_results):
+                    self.selected_index = index
+                    target_track = self.search_results[index]
+                else:
+                    self.logger.warning("Invalid track index %d (out of range)", index)
+                    return None
+            elif track_id is not None:
+                for i, t in enumerate(self.search_results):
+                    if t["id"] == track_id:
+                        self.selected_index = i
+                        target_track = t
+                        break
+                if target_track is None:
+                    self.logger.warning("Track ID '%s' not found in search results", track_id)
+                    return None
+            else:
+                if 0 <= self.selected_index < len(self.search_results):
+                    target_track = self.search_results[self.selected_index]
+                else:
+                    return None
+
+            self.logger.info("Track selected: '%s' (%s), initiating download...", target_track["title"], target_track["id"])
+            self.state = "DOWNLOADING"
+            self._play_chime("commit")
+
+        def _do_download_and_compile():
+            try:
+                out_path = download_and_compile(
+                    title=target_track["title"],
+                    video_id=target_track["id"],
+                )
+                self.logger.info("Choreography ready at: %s", out_path)
+                with self._selection_lock:
+                    self.state = "IDLE"
+                self._play_chime("wake")
+            except Exception as e:
+                self.logger.error("Download and compile error: %s", e, exc_info=True)
+                with self._selection_lock:
+                    self.error = str(e)
+                    self.state = "IDLE"
+                self._play_chime("cancel")
+
+        threading.Thread(target=_do_download_and_compile, daemon=True).start()
+        return target_track
 
     def setup(self, backend: RobotBackend) -> None:
         """Pre-run setup: loads calibration limits and initializes local ASR model."""
@@ -322,10 +407,32 @@ class ListenerApp(BaseApp):
                             self._execute_movement_primitive(backend, intent["action"])
 
                         elif intent_type == "DOWNLOAD_SONG":
+                            with self._selection_lock:
+                                if self.state == "DOWNLOADING":
+                                    self.logger.warning("Rejecting search query: track download and compilation active")
+                                    self._play_chime("cancel")
+                                    continue
                             title = intent["title"]
                             artist = intent["artist"]
-                            self.logger.info("Spawning song download & compilation for '%s' by '%s'...", title, artist)
-                            threading.Thread(target=download_and_compile, args=(title, artist), daemon=True).start()
+                            query_str = f"{title} {artist}".strip()
+                            with self._selection_lock:
+                                self.search_query = query_str
+                                self.state = "SEARCHING"
+                            self.logger.info("Querying top 4 tracks for '%s'...", query_str)
+                            try:
+                                candidates = fetch_search_candidates(query_str, limit=4)
+                                with self._selection_lock:
+                                    self.search_results = candidates
+                                    self.selected_index = 0
+                                    self.state = "SELECTING"
+                                self._play_chime("commit")
+                                self.logger.info("Retrieved %d candidates for selection: %s", len(candidates), [c["title"] for c in candidates])
+                            except Exception as e:
+                                self.logger.error("Search query failed for '%s': %s", query_str, e, exc_info=True)
+                                with self._selection_lock:
+                                    self.error = str(e)
+                                    self.state = "LISTENING"
+                                self._play_chime("cancel")
 
                         elif intent_type == "PLAY_SONG":
                             title = intent["title"]

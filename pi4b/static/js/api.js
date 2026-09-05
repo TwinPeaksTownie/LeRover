@@ -342,3 +342,23 @@ export function sendPlaySound(payload) {
         })
     }, 1000);
 }
+
+// Voice Listener Track Selection & Navigation
+export function sendListenerSelect(index, trackId = null) {
+    const payload = {};
+    if (index !== undefined && index !== null) payload.index = parseInt(index, 10);
+    if (trackId) payload.id = trackId;
+    return safeFetch('/api/apps/listener/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }, 4000);
+}
+
+export function sendListenerNavigate(delta) {
+    return safeFetch('/api/apps/listener/navigate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta: parseInt(delta, 10) })
+    }, 2500);
+}

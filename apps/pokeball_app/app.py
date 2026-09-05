@@ -194,6 +194,8 @@ class PokeballService:
         self.last_btn_top = False
         self.last_btn_stick = False
         self.last_x_direction = "center"
+        self.last_listener_nav_time = 0.0
+        self.last_btn_a_listener = False
 
         self.telemetry = {
             "running": True,
@@ -383,6 +385,29 @@ class PokeballService:
                 if not self.is_armed and btn_b and not self.last_btn_top and x_direction in ("left", "right"):
                     if not (self.is_busy or now < self.busy_until):
                         self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
+
+            # --- 5. LISTENER APP NAVIGATION & SELECTION (When ListenerApp is Active & in SELECTING state) ---
+            if self.app_manager and self.app_manager.current_app_name == "listener_app":
+                l_app = self.app_manager.active_app
+                if l_app and hasattr(l_app, "state") and l_app.state == "SELECTING":
+                    # Joystick Y Tilt: step cursor with 0.35s refractory debounce
+                    if (now - self.last_listener_nav_time) >= 0.35:
+                        if norm_y > 0.4:
+                            # Tilted UP -> move to previous row (-1)
+                            l_app.navigate_selection(-1)
+                            self.last_listener_nav_time = now
+                        elif norm_y < -0.4:
+                            # Tilted DOWN -> move to next row (+1)
+                            l_app.navigate_selection(1)
+                            self.last_listener_nav_time = now
+
+                    # Button A Click: confirm selection
+                    if btn_a and not self.last_btn_a_listener:
+                        self.logger.info("🔘 Button A click detected in SELECTING state! Triggering select_track()...")
+                        l_app.select_track()
+                    self.last_btn_a_listener = btn_a
+            else:
+                self.last_btn_a_listener = False
 
             self.last_btn_b = btn_b
             self.last_btn_top = btn_b

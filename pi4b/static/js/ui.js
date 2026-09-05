@@ -14,6 +14,7 @@ import {
     isBeatBanditAppRunning,
     isBeatBanditDancing,
     isBeatBanditRunning,
+    isListenerAppRunning,
     beatBanditTrackPage,
     selectedBeatBanditTrackId,
     cachedBeatBanditTracks,
@@ -57,6 +58,7 @@ import {
     setIsBeatBanditAppRunning,
     setIsBeatBanditDancing,
     setIsBeatBanditRunning,
+    setIsListenerAppRunning,
     setBeatBanditTrackPage,
     setSelectedBeatBanditTrackId,
     setCurrentAppsMode,
@@ -93,7 +95,7 @@ export function setHeaderAlert(msg) {
 }
 
 export function renderButtonStates() {
-    const stateKey = `${isFollowerRunning}_${isLeaderRunning}_${isStudioRunning}_${isClackPoseRunning}_${isBeatBanditAppRunning}_${isBeatBanditDancing}_${isMasterDaemonRunning}_${isPokeballRunning}_${isPokeballConnected}`;
+    const stateKey = `${isFollowerRunning}_${isLeaderRunning}_${isStudioRunning}_${isClackPoseRunning}_${isBeatBanditAppRunning}_${isBeatBanditDancing}_${isListenerAppRunning}_${isMasterDaemonRunning}_${isPokeballRunning}_${isPokeballConnected}`;
     if (lastRenderedButtonsKey === stateKey) {
         return; // Zero DOM mutations when state is unchanged!
     }
@@ -174,6 +176,21 @@ export function renderButtonStates() {
         }
     }
 
+    // Voice Listener App Toggle button
+    const listenerAppToggleBtn = document.getElementById('listenerAppToggleBtn');
+    const listenerAppToggleBtnText = document.getElementById('listenerAppToggleBtnText');
+    const listenerAppToggleBtnSub = document.getElementById('listenerAppToggleBtnSub');
+    if (listenerAppToggleBtn) {
+        listenerAppToggleBtn.style.borderColor = isListenerAppRunning ? '#00f2fe' : '#444444';
+        listenerAppToggleBtn.style.color = isListenerAppRunning ? '#9dfbfa' : '#ffffff';
+        listenerAppToggleBtn.style.background = isListenerAppRunning ? 'linear-gradient(135deg, #0e3538, #051d1f)' : '#181818';
+        if (listenerAppToggleBtnText) listenerAppToggleBtnText.innerText = isListenerAppRunning ? '🛑 STOP LISTENER APP' : '👂 START LISTENER APP';
+        if (listenerAppToggleBtnSub) {
+            listenerAppToggleBtnSub.innerText = isListenerAppRunning ? 'Voice Hotword & Speech Pipeline Active' : 'Voice Hotword & Speech-to-Intent Pipeline';
+            listenerAppToggleBtnSub.style.color = isListenerAppRunning ? '#9dfbfa' : '#888';
+        }
+    }
+
     // Beat Bandit dance button
     const bbMainDanceBtn = document.getElementById('bbMainDanceBtn');
     const bbMainDanceIcon = document.getElementById('bbMainDanceIcon');
@@ -221,6 +238,9 @@ export function renderButtonStates() {
         } else if (isBeatBanditAppRunning) {
             appsStatus.innerText = 'BEAT BANDIT ACTIVE';
             appsStatus.style.color = '#a855f7';
+        } else if (isListenerAppRunning) {
+            appsStatus.innerText = 'VOICE LISTENER ACTIVE';
+            appsStatus.style.color = '#00f2fe';
         } else if (isClackPoseRunning) {
             appsStatus.innerText = 'PIRANHA POSE ACTIVE';
             appsStatus.style.color = '#00ff66';
@@ -489,11 +509,13 @@ export function openAppsSubView(subview) {
     const vClacker = document.getElementById('appsViewClacker');
     const vStudio = document.getElementById('appsViewStudio');
     const vBeatBandit = document.getElementById('appsViewBeatBandit');
+    const vListener = document.getElementById('appsViewListener');
     
-    if (vLauncher) vLauncher.style.display = (subview === 'launcher') ? 'flex' : 'none';
+    if (vLauncher) vLauncher.style.display = (subview === 'launcher') ? 'grid' : 'none';
     if (vClacker) vClacker.style.display = (subview === 'clacker') ? 'block' : 'none';
     if (vStudio) vStudio.style.display = (subview === 'studio') ? 'flex' : 'none';
     if (vBeatBandit) vBeatBandit.style.display = (subview === 'beat_bandit') ? 'flex' : 'none';
+    if (vListener) vListener.style.display = (subview === 'listener') ? 'flex' : 'none';
 }
 
 export function openBackendSubView(subview) {
@@ -800,6 +822,7 @@ export function updateTelemetryUI(data) {
     setIsClackPoseRunning(currentApp === 'clack_pose_app' || currentApp === 'piranha_pose_app');
     setIsFollowerRunning(currentApp === 'teleop_app');
     setIsLeaderRunning(!!((data.leader && data.leader.running) || (telemLeader && telemLeader.running)));
+    setIsListenerAppRunning(currentApp === 'listener_app');
     if (data && data.ornith_state) {
         setCurrentOrnithState(data.ornith_state);
     }
@@ -819,7 +842,10 @@ export function updateTelemetryUI(data) {
     } else {
         setIsBeatBanditAppRunning(false);
     }
-    if (currentApp === 'clack_pose_app' || currentApp === 'piranha_pose_app') {
+    if (currentApp === 'listener_app') {
+        teleopStatusStr = 'LISTENER ACTIVE';
+        teleopStatusColor = '#00f2fe';
+    } else if (currentApp === 'clack_pose_app' || currentApp === 'piranha_pose_app') {
         teleopStatusStr = 'PIRANHA POSE ACTIVE';
         teleopStatusColor = '#00e5ff';
     } else if (currentApp === 'pokeball_teleop_app') {
@@ -1012,6 +1038,17 @@ export function updateTelemetryUI(data) {
         bbS7.innerText = (s7num > 0 ? '+' : '') + s7num.toFixed(1) + '°';
     }
     if (bbMove && bbData.current_move) bbMove.innerText = bbData.current_move;
+
+    // Voice Listener Telemetry Parsing
+    const listenerData = ht.listener !== undefined ? ht.listener : data.listener;
+    if (listenerData) {
+        renderListenerTracks(
+            listenerData.query,
+            listenerData.search_results,
+            listenerData.selected_index,
+            listenerData.state
+        );
+    }
 
     renderButtonStates();
 
@@ -2062,4 +2099,93 @@ export function renderDirectorBrief(briefData, trackTitle = 'Current Track', tra
         climaxList.innerHTML = html;
     }
 }
+
+export function renderListenerTracks(query, tracks, selectedIndex, stateStr) {
+    const queryEl = document.getElementById('listenerQueryDisplay');
+    if (queryEl) {
+        if (typeof query === 'string' && query.length > 0) {
+            queryEl.innerText = `"${query}"`;
+        } else {
+            queryEl.innerText = '(speak "download [song] by [artist]")';
+        }
+    }
+
+    const stateEl = document.getElementById('listenerStateText');
+    const pillEl = document.getElementById('listenerStatusPill');
+    if (stateEl && typeof stateStr === 'string') {
+        stateEl.innerText = stateStr;
+    }
+    if (pillEl && typeof stateStr === 'string') {
+        if (stateStr === 'SELECTING') {
+            pillEl.style.borderColor = '#00ff66';
+            pillEl.style.color = '#00ff66';
+            pillEl.style.background = 'rgba(0, 255, 102, 0.15)';
+        } else if (stateStr === 'DOWNLOADING' || stateStr === 'COMPILING') {
+            pillEl.style.borderColor = '#ffaa00';
+            pillEl.style.color = '#ffaa00';
+            pillEl.style.background = 'rgba(255, 170, 0, 0.15)';
+        } else if (stateStr === 'ERROR') {
+            pillEl.style.borderColor = '#ff3344';
+            pillEl.style.color = '#ff3344';
+            pillEl.style.background = 'rgba(255, 51, 68, 0.15)';
+        } else {
+            pillEl.style.borderColor = '#00f2fe';
+            pillEl.style.color = '#9dfbfa';
+            pillEl.style.background = '#091a1c';
+        }
+    }
+
+    const emptyEl = document.getElementById('listenerEmptyState');
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'flex';
+        for (let i = 0; i < 4; i++) {
+            const rowBtn = document.getElementById(`listenerTrackRow${i}`);
+            if (rowBtn) rowBtn.style.display = 'none';
+        }
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    for (let i = 0; i < 4; i++) {
+        const rowBtn = document.getElementById(`listenerTrackRow${i}`);
+        if (!rowBtn) continue;
+        if (i >= tracks.length) {
+            rowBtn.style.display = 'none';
+            continue;
+        }
+        const item = tracks[i];
+        if (!item || typeof item !== 'object') {
+            rowBtn.style.display = 'none';
+            continue;
+        }
+
+        rowBtn.style.display = 'flex';
+        const isSelected = (i === selectedIndex);
+        if (isSelected) {
+            rowBtn.style.borderColor = '#00f2fe';
+            rowBtn.style.background = 'linear-gradient(90deg, rgba(0, 242, 254, 0.25), #0c1b1e)';
+            rowBtn.style.boxShadow = '0 0 14px rgba(0, 242, 254, 0.45)';
+        } else {
+            rowBtn.style.borderColor = '#19464d';
+            rowBtn.style.background = '#0c1b1e';
+            rowBtn.style.boxShadow = 'none';
+        }
+
+        const titleEl = rowBtn.querySelector('.track-row-title');
+        const metaEl = rowBtn.querySelector('.track-row-meta');
+        const badgeEl = rowBtn.querySelector('.track-row-badge');
+
+        if (titleEl && item.title) {
+            titleEl.innerText = item.title;
+        }
+        if (metaEl && item.uploader) {
+            metaEl.innerText = `${i + 1}. ${item.uploader}`;
+        }
+        if (badgeEl && item.duration) {
+            badgeEl.innerText = item.duration;
+        }
+    }
+}
+
 
