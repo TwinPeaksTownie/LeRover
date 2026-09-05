@@ -293,6 +293,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     "leader": leader_data,
                     "pokeball": pokeball_data,
                     "servos": servos_map,
+                    "wlan0_ip": network_resolver.get_interface_ip("wlan0"),
                 }
                 bb_app = self.app_manager.active_app if (self.app_manager.current_app_name == "beat_bandit_app") else None
                 if bb_app and hasattr(bb_app, "get_status"):

@@ -1055,13 +1055,22 @@ export function updateTelemetryUI(data) {
     // Power / Connection Mode Status (Tab 4)
     const pStatus = document.getElementById('powerStatus');
     const cm = data.connection_mode || {};
+    const pi4bWlan = data.pi4b_wlan_ip;
+    const pi500Wlan = data.pi500_wlan_ip;
+    let ipBadge = '';
+    if (pi4bWlan && pi500Wlan) {
+        ipBadge = ` [4B:${pi4bWlan} | 500:${pi500Wlan}]`;
+    } else if (pi4bWlan) {
+        ipBadge = ` [4B:${pi4bWlan}]`;
+    }
+
     let modeBadge = '🔵 OFFLINE (ETH)';
     if (cm.mode === 'IPHONE_HOTSPOT') {
-        modeBadge = '🟢 IPHONE HOTSPOT';
+        modeBadge = '🟢 IPHONE HOTSPOT' + ipBadge;
     } else if (cm.mode === 'HOME_WIFI') {
-        modeBadge = '🟢 MAESTAS MANSION';
+        modeBadge = '🟢 MAESTAS MANSION' + ipBadge;
     } else if (cm.ssid) {
-        modeBadge = '🟢 ' + cm.ssid.toUpperCase();
+        modeBadge = '🟢 ' + cm.ssid.toUpperCase() + ipBadge;
     }
 
     if (pStatus) {

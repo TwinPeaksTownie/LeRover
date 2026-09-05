@@ -186,17 +186,71 @@ def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
     return resolve_target(candidates, "pi4b_ip")
 
 
+def find_secrets_path() -> str:
+    search_paths = [
+        os.environ.get("SECRETS_CONFIG_PATH", ""),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "secrets.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "secrets.json"),
+        "/home/carson/touch_ui/config/secrets.json",
+        "/home/user/so101/config/secrets.json",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json"),
+        "/home/carson/touch_ui/secrets.json",
+        "/home/user/so101/pi500/secrets.json",
+    ]
+    for p in search_paths:
+        if p and os.path.exists(p):
+            return p
+    return ""
+
+
+def get_home_public_ip() -> Optional[str]:
+    if "HOME_PUBLIC_IP" in os.environ and os.environ["HOME_PUBLIC_IP"].strip():
+        return os.environ["HOME_PUBLIC_IP"].strip()
+    sec_path = find_secrets_path()
+    if sec_path and os.path.exists(sec_path):
+        try:
+            with open(sec_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "home_public_ip" in data and data["home_public_ip"]:
+                    return str(data["home_public_ip"]).strip()
+        except Exception as e:
+            logger.warning("Error reading secrets from %s: %s", sec_path, e)
+    return None
+
+
+def get_interface_ip(ifname: str = "wlan0") -> Optional[str]:
+    """Dynamically resolves IPv4 address of a network interface (e.g. wlan0, eth0)."""
+    if os.name != 'nt':
+        try:
+            res = subprocess.run(
+                ["ip", "-4", "-o", "addr", "show", ifname],
+                capture_output=True, text=True, timeout=1.0
+            )
+            for line in res.stdout.strip().splitlines():
+                parts = line.split()
+                if len(parts) >= 4:
+                    return parts[3].split("/")[0]
+        except Exception:
+            pass
+    return None
+
+
 def get_mac_ip(prefer_port: Optional[int] = 8086) -> str:
     cfg = load_network_config()
     wifi_ip = cfg.get("wifi_defaults", {}).get("mac_ip", "192.168.0.149")
     m_host = cfg.get("wifi_defaults", {}).get("mac_host", "mac-mini.local")
+    pub_ip = get_home_public_ip()
 
     candidates: List[Tuple[str, Optional[int]]] = [
         (wifi_ip, prefer_port),
-        (wifi_ip, 22),
         (m_host, prefer_port),
-        (wifi_ip, None)
     ]
+    if pub_ip:
+        candidates.append((pub_ip, prefer_port))
+    candidates.extend([
+        (wifi_ip, 22),
+        (wifi_ip, None)
+    ])
     return resolve_target(candidates, "mac_ip")
 
 

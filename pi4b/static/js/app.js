@@ -756,8 +756,40 @@ export function fetchPresetsList(forceRender = false) {
         .finally(() => { setIsFetchingPresets(false); });
 }
 
+export function triggerConnectHotspot() {
+    const btn = document.getElementById('connectHotspotBtn');
+    const txt = document.getElementById('connectHotspotBtnText');
+    const sub = document.getElementById('connectHotspotBtnSub');
+    if (btn) btn.style.opacity = '0.5';
+    if (txt) txt.innerText = '⌛ CONNECTING HOTSPOT...';
+    if (sub) sub.innerText = '(SWITCHING TO IPHONE)';
+
+    api.sendConnectHotspot()
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
+        .then(data => {
+            if (btn) btn.style.opacity = '1.0';
+            if (txt) txt.innerText = '📱 CONNECT HOTSPOT';
+            if (sub) sub.innerText = '✅ HOTSPOT COMMAND SENT';
+            setTimeout(() => {
+                if (sub) sub.innerText = '(FORCE IPHONE WI-FI)';
+            }, 5000);
+        })
+        .catch(err => {
+            if (btn) btn.style.opacity = '1.0';
+            if (txt) txt.innerText = '❌ HOTSPOT ERROR';
+            if (sub) sub.innerText = err.message || 'FAILED';
+            setTimeout(() => {
+                if (txt) txt.innerText = '📱 CONNECT HOTSPOT';
+                if (sub) sub.innerText = '(FORCE IPHONE WI-FI)';
+            }, 4000);
+        });
+}
+
 export function triggerPi500PowerOn() {
-    api.sendPi500PowerOn().catch(() => {});
+    triggerConnectHotspot();
 }
 
 export function triggerPi500MasterDaemonRestart() {
@@ -1963,14 +1995,14 @@ function bindEventListeners() {
     const powerBackBtn = document.getElementById('powerBackBtn');
     const masterDaemonBtn = document.getElementById('masterDaemonBtn');
     const wifiRestoreBtn = document.getElementById('wifiRestoreBtn');
-    const pi500PowerOnBtn = document.getElementById('pi500PowerOnBtn');
+    const pi500PowerOnBtn = document.getElementById('connectHotspotBtn') || document.getElementById('pi500PowerOnBtn');
     const wifiDisableBtn = document.getElementById('wifiDisableBtn');
     const emergencyKillBtn = document.getElementById('emergencyKillBtn');
 
     if (powerBackBtn) powerBackBtn.addEventListener('click', () => ui.openBackendSubView('main'));
     if (masterDaemonBtn) masterDaemonBtn.addEventListener('click', () => triggerPi500MasterDaemonRestart());
     if (wifiRestoreBtn) wifiRestoreBtn.addEventListener('click', () => triggerWifiRestore());
-    if (pi500PowerOnBtn) pi500PowerOnBtn.addEventListener('click', () => triggerPi500PowerOn());
+    if (pi500PowerOnBtn) pi500PowerOnBtn.addEventListener('click', () => triggerConnectHotspot());
     if (wifiDisableBtn) wifiDisableBtn.addEventListener('click', () => triggerWifiDisable());
     if (emergencyKillBtn) emergencyKillBtn.addEventListener('click', () => triggerEmergencyKillAll());
 

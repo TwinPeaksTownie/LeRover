@@ -58,7 +58,9 @@ STATUS_CACHE = {
     "pi500_online": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0,
-    "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
+    "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False},
+    "pi4b_wlan_ip": None,
+    "pi500_wlan_ip": None
 }
 
 TAP_DETECTOR = None
@@ -213,6 +215,7 @@ def poll_status_loop():
         STATUS_CACHE["connection_mode"] = conn_mode
         STATUS_CACHE["resolved_pi500_ip"] = p500_ip
         STATUS_CACHE["resolved_mac_ip"] = mac_ip
+        STATUS_CACHE["pi4b_wlan_ip"] = network_resolver.get_interface_ip("wlan0") if network_resolver else None
 
         # 2. Poll Pi 500 Master Daemon over HTTP 8085
         try:
@@ -225,6 +228,8 @@ def poll_status_loop():
                     STATUS_CACHE["daemon_running"] = True
                     STATUS_CACHE["hardware_connected"] = bool(data.get("hardware_connected", False))
                     if isinstance(data, dict):
+                        if "wlan0_ip" in data:
+                            STATUS_CACHE["pi500_wlan_ip"] = data["wlan0_ip"]
                         if "follower" in data and isinstance(data["follower"], dict):
                             STATUS_CACHE["follower"] = data["follower"]
                         else:
@@ -643,18 +648,34 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if path in ["/api/wifi_disable", "/api/wifi_restore"]:
             action = "enable" if path == "/api/wifi_restore" else "disable"
             try:
-                script_path = "/home/carson/touch_ui/scripts/toggle_wifi_blacklist.py"
-                if not os.path.exists(script_path):
-                    script_path = os.path.join(DIRECTORY, "scripts", "toggle_wifi_blacklist.py")
-                if not os.path.exists(script_path):
-                    script_path = os.path.join(os.path.dirname(DIRECTORY), "scripts", "toggle_wifi_blacklist.py")
-                
-                subprocess.Popen([sys.executable, script_path, action])
                 if action == "enable":
+                    def _restore_home_wifi():
+                        try:
+                            subprocess.run(["sudo", "rfkill", "unblock", "wifi"], check=False)
+                            subprocess.run(["sudo", "nmcli", "radio", "wifi", "on"], check=False)
+                            subprocess.run(["sudo", "nmcli", "connection", "up", "Maestas Mansion"], check=False)
+                        except Exception as e:
+                            logging.warning(f"Error restoring Pi 4B home wifi: {e}")
+                        try:
+                            pi500_cmd = "sudo rfkill unblock wifi; sudo nmcli radio wifi on; sudo nmcli connection up 'Maestas Mansion' || nmcli connection up 'Maestas Mansion'"
+                            subprocess.run([
+                                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
+                                "user@10.0.0.1", pi500_cmd
+                            ], capture_output=True, timeout=10)
+                        except Exception as e:
+                            logging.warning(f"Error restoring Pi 500 home wifi: {e}")
+
+                    threading.Thread(target=_restore_home_wifi, daemon=True).start()
                     play_sound_helper(kind="connect")
                 else:
+                    script_path = "/home/carson/touch_ui/scripts/toggle_wifi_blacklist.py"
+                    if not os.path.exists(script_path):
+                        script_path = os.path.join(DIRECTORY, "scripts", "toggle_wifi_blacklist.py")
+                    if not os.path.exists(script_path):
+                        script_path = os.path.join(os.path.dirname(DIRECTORY), "scripts", "toggle_wifi_blacklist.py")
+                    subprocess.Popen([sys.executable, script_path, "disable"])
                     play_sound_helper(kind="disconnect")
-                
+
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -714,25 +735,51 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p}).encode('utf-8'))
             return
 
-        if path == "/api/pi500_poweron":
-            try:
-                mac_hex = "d83add8a4642"
-                mac_bytes = bytes.fromhex(mac_hex)
-                magic_payload = b'\xff' * 6 + mac_bytes * 16
-                udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                udp_sock.sendto(magic_payload, ('255.255.255.255', 9))
-                udp_sock.sendto(magic_payload, ('192.168.0.255', 9))
-                udp_sock.sendto(magic_payload, ('10.0.0.255', 9))
-                udp_sock.close()
-                subprocess.Popen(["wakeonlan", "-i", "eth0", "d8:3a:dd:8a:46:42"])
-            except Exception as e:
-                print(f"WOL error: {e}", flush=True)
+        if path == "/api/connect_hotspot":
+            def _switch_to_hotspot():
+                try:
+                    subprocess.run(["sudo", "rfkill", "unblock", "wifi"], check=False)
+                    subprocess.run(["sudo", "nmcli", "radio", "wifi", "on"], check=False)
+                    subprocess.run(["sudo", "nmcli", "connection", "up", "iPhone"], check=False)
+                except Exception as e:
+                    logging.warning(f"Error connecting Pi 4B to hotspot: {e}")
+
+                try:
+                    pi500_cmd = "sudo rfkill unblock wifi; sudo nmcli radio wifi on; sudo nmcli connection up iPhone || nmcli connection up iPhone"
+                    subprocess.run([
+                        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
+                        "user@10.0.0.1", pi500_cmd
+                    ], capture_output=True, timeout=10)
+                except Exception as e:
+                    logging.warning(f"Error connecting Pi 500 to hotspot: {e}")
+
+            threading.Thread(target=_switch_to_hotspot, daemon=True).start()
+            play_sound_helper(kind="connect")
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "WOL magic packet sent"}).encode())
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "message": "Initiated connection to iPhone hotspot across Pi 4B and Pi 500"
+            }).encode('utf-8'))
+            return
+
+        if path == "/api/pi500_poweron":
+            # Legacy alias redirected to connect_hotspot
+            def _switch_to_hotspot_legacy():
+                subprocess.run(["sudo", "nmcli", "connection", "up", "iPhone"], check=False)
+                subprocess.run([
+                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
+                    "user@10.0.0.1", "sudo nmcli connection up iPhone || nmcli connection up iPhone"
+                ], capture_output=True, timeout=10)
+
+            threading.Thread(target=_switch_to_hotspot_legacy, daemon=True).start()
+            play_sound_helper(kind="connect")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "message": "Initiated connection to iPhone hotspot"}).encode())
             return
 
         if path == "/api/clack_pose_toggle":
