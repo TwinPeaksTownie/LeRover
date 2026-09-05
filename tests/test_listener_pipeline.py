@@ -75,6 +75,10 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(res2["intent"], "PLAY_SONG")
         self.assertEqual(res2["title"], "espresso")
 
+        res3 = parse_intent("play redwine supernova")
+        self.assertEqual(res3["intent"], "PLAY_SONG")
+        self.assertEqual(res3["title"], "redwine supernova")
+
     def test_intent_parser_exit(self):
         self.assertEqual(parse_intent("exit")["intent"], "EXIT")
         self.assertEqual(parse_intent("quit")["intent"], "EXIT")
@@ -114,6 +118,9 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(app.metadata.name, cfg["name"])
         self.assertEqual(app.metadata.title, cfg["title"])
         self.assertEqual(app.metadata.icon, cfg["icon"])
+        self.assertEqual(app.get_status()["transcript"], "")
+        app.transcript = "play redwine supernova"
+        self.assertEqual(app.get_status()["transcript"], "play redwine supernova")
 
     def test_app_manager_auto_discovery(self):
         mock_backend = MagicMock()
@@ -195,6 +202,15 @@ class TestListenerPipeline(unittest.TestCase):
                 "bpm": 114.8,
                 "wav_path": "/path/to/F0N7aNy-9tg.wav",
                 "analysis": {}
+            },
+            "y9Wxl9Q9lUQ": {
+                "track_id": "y9Wxl9Q9lUQ",
+                "title": "Red Wine Supernova",
+                "artist": "Chappell Roan",
+                "duration": 192.72,
+                "bpm": 123.0,
+                "wav_path": "/path/to/rw.wav",
+                "analysis": {}
             }
         }
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
@@ -222,7 +238,17 @@ class TestListenerPipeline(unittest.TestCase):
             self.assertIsNotNone(t4)
             self.assertEqual(t4["title"], "Peaches")
 
-            # 5. Missing track returns None
+            # 5. Spaceless matching ("redwine supernova" -> "Red Wine Supernova")
+            t_space1 = find_beat_bandit_track("redwine supernova", manifest_path=tf_path)
+            self.assertIsNotNone(t_space1)
+            self.assertEqual(t_space1["track_id"], "y9Wxl9Q9lUQ")
+
+            # 6. Spaceless matching with split words ("red wine super nova" -> "Red Wine Supernova")
+            t_space2 = find_beat_bandit_track("red wine super nova", manifest_path=tf_path)
+            self.assertIsNotNone(t_space2)
+            self.assertEqual(t_space2["track_id"], "y9Wxl9Q9lUQ")
+
+            # 7. Missing track returns None
             t5 = find_beat_bandit_track("Nonexistent Song 12345", manifest_path=tf_path)
             self.assertIsNone(t5)
 

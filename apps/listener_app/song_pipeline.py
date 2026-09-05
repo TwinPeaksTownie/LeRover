@@ -99,6 +99,8 @@ def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> 
 
     clean_query = re.sub(r"\b(?:the\s+song|song|the\s+track|track)\b", "", clean_query).strip()
 
+    spaceless_query = clean_query.replace(" ", "")
+
     exact_match: Optional[Dict[str, Any]] = None
     partial_match: Optional[Dict[str, Any]] = None
 
@@ -117,19 +119,21 @@ def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> 
         clean_artist = re.sub(r"[^\w\s]", "", artist_str.lower()).strip()
         clean_artist = re.sub(r"\s+", " ", clean_artist)
 
+        spaceless_title = clean_title.replace(" ", "")
         clean_combined = f"{clean_title} {clean_artist}".strip()
         clean_by = f"{clean_title} by {clean_artist}".strip()
+        spaceless_combined = clean_combined.replace(" ", "")
 
-        if clean_query == clean_title or clean_query == tid.lower():
+        if clean_query == clean_title or spaceless_query == spaceless_title or clean_query == tid.lower():
             exact_match = meta
             break
 
-        if clean_query == clean_by or clean_query == clean_combined:
+        if clean_query == clean_by or clean_query == clean_combined or spaceless_query == spaceless_combined:
             exact_match = meta
             break
 
         if partial_match is None:
-            if clean_query in clean_title or clean_title in clean_query:
+            if clean_query in clean_title or clean_title in clean_query or spaceless_query in spaceless_title or spaceless_title in spaceless_query:
                 partial_match = meta
             elif clean_artist and (clean_query in clean_artist or clean_artist in clean_query):
                 partial_match = meta

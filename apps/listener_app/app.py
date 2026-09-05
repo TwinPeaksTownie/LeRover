@@ -24,6 +24,7 @@ import threading
 import time
 import urllib.request
 import wave
+from collections import deque
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -153,6 +154,7 @@ class ListenerApp(BaseApp):
         self.logger = logging.getLogger("so101.app.listener_app")
         self.config = load_listener_config()
         self.state = "IDLE"
+        self.transcript: str = ""
         self.search_query: str = ""
         self.search_results: List[Dict[str, Any]] = []
         self.selected_index: int = 0
@@ -168,6 +170,7 @@ class ListenerApp(BaseApp):
             return {
                 "name": self.name,
                 "state": self.state,
+                "transcript": self.transcript,
                 "query": self.search_query,
                 "search_query": self.search_query,
                 "search_results": list(self.search_results),
@@ -363,6 +366,8 @@ class ListenerApp(BaseApp):
             self.logger.info("Stop event signaled during acoustic settle delay. Exiting...")
             return
 
+        pre_roll_buffer: deque[bytes] = deque(maxlen=4)  # 4 * 80ms = 320ms pre-roll buffer
+
         stream_resp = None
         try:
             try:
@@ -371,7 +376,7 @@ class ListenerApp(BaseApp):
             except Exception as e:
                 self.logger.warning("Could not open daemon audio stream (%s), entering command polling mode...", e, exc_info=True)
 
-            # Hotword evaluation loop
+            # Utterance capture loop
             while not stop_event.is_set():
                 if stream_resp is not None:
                     chunk = stream_resp.read(chunk_bytes)
@@ -395,15 +400,18 @@ class ListenerApp(BaseApp):
                     continue
 
                 energy = self._calculate_frame_energy(chunk)
+                pre_roll_buffer.append(chunk)
 
-                # Keyword Spotting trigger condition consuming configured energy multiplier
-                hotword_triggered = (energy > (energy_thresh * energy_multiplier))
+                # Voice Activity Detection: speech onset detected when volume exceeds energy_thresh
+                speech_detected = (energy > energy_thresh)
 
-                if hotword_triggered:
-                    self.logger.info("Hotword triggered! Entering command capture window...")
+                if speech_detected:
+                    self.logger.info("Speech onset detected (energy=%.1f > %d)! Entering command capture window...", energy, energy_thresh)
                     self.state = "CAPTURING"
+                    self.transcript = ""
 
-                    command_chunks: List[bytes] = [chunk]
+                    # Prepend pre-roll buffer so opening consonants ("s", "p", etc.) are not clipped
+                    command_chunks: List[bytes] = list(pre_roll_buffer)
                     record_start = time.time()
                     last_voice_time = time.time()
 
@@ -425,6 +433,8 @@ class ListenerApp(BaseApp):
                     self.state = "PROCESSING"
                     self._play_chime("commit")
                     transcript = self._transcribe_pcm_buffer(command_chunks)
+                    self.transcript = transcript
+                    pre_roll_buffer.clear()
                     if transcript:
                         intent = parse_intent(transcript)
                         self.logger.info("Parsed intent: %s", intent)
@@ -551,6 +561,7 @@ class ListenerApp(BaseApp):
                             self.logger.debug("Closing stream before chime settle: %s", e)
                         stream_resp = None
 
+                    pre_roll_buffer.clear()
                     self.state = "LISTENING"
                     self._play_chime("wake")
                     if stop_event.wait(timeout=settle_delay):

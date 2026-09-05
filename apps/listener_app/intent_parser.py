@@ -6,8 +6,11 @@ Strict Fail-Fast schema compliance: Zero .get(k, default) fallbacks.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger("so101.listener_app.intent_parser")
 
 APP_ALIAS_MAP = {
     "teleop": "teleop_app",
@@ -98,5 +101,17 @@ def parse_intent(text: str) -> Dict[str, Any]:
         title = re.sub(r"\s+(?:song|track)$", "", title).strip()
         if title:
             return {"intent": "PLAY_SONG", "title": title, "raw": raw_clean}
+
+    # 6. Direct song title lookup fallback (e.g. "red wine supernova", "redwine supernova", "peaches")
+    try:
+        from apps.listener_app.song_pipeline import find_beat_bandit_track, find_compiled_sequence
+        matched_track = find_beat_bandit_track(raw_clean)
+        if matched_track is not None:
+            return {"intent": "PLAY_SONG", "title": str(matched_track["title"]), "raw": raw_clean}
+        compiled_seq = find_compiled_sequence(raw_clean)
+        if compiled_seq is not None:
+            return {"intent": "PLAY_SONG", "title": raw_clean, "raw": raw_clean}
+    except Exception as e:
+        logger.warning("Direct title lookup failed for query %r: %s", raw_clean, e, exc_info=True)
 
     return {"intent": "UNKNOWN", "raw": raw_clean}
