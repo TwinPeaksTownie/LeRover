@@ -117,6 +117,30 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.service.rover_ctrl.stop.assert_called()
             mock_play_chime.assert_called_with("rover_emergency_brake")
 
+    @patch("apps.pokeball_app.app.play_chime")
+    def test_button_b_hold_launches_listener_app(self, mock_play_chime):
+        """Holding Button B for 3.0s must launch listener_app via AppManager."""
+        self.service.app_manager = MagicMock()
+        t0 = 300.0
+
+        # Press Button B (0x01)
+        with patch("time.time", return_value=t0):
+            self._simulate_input(buttons=0x01, now=t0)
+            self.assertFalse(self.service.b_hold_triggered)
+            self.service.app_manager.start_app_by_name.assert_not_called()
+
+        # Hold for 3.05s -> ListenerApp triggered!
+        with patch("time.time", return_value=t0 + 3.05):
+            with patch("threading.Thread") as mock_thread:
+                self._simulate_input(buttons=0x01, now=t0 + 3.05)
+                self.assertTrue(self.service.b_hold_triggered)
+                mock_thread.assert_called_once_with(
+                    target=self.service.app_manager.start_app_by_name,
+                    args=("listener_app",),
+                    daemon=True,
+                )
+                mock_thread.return_value.start.assert_called_once()
+
     def _simulate_input(self, buttons: int, now: float):
         """Dispatches synthetic BLE report directly into production PokeballService.notification_handler."""
         center = self.service.joystick_center

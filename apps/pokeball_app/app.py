@@ -328,9 +328,9 @@ class PokeballService:
                     self.telemetry["hold_progress"] = min(1.0, hold_duration_b / b_hold_sec)
                     if hold_duration_b >= b_hold_sec and not self.b_hold_triggered:
                         self.b_hold_triggered = True
-                        self.logger.info("🎙️ [TRIGGER] Button B hold detected! Launching OrnithVoiceApp...")
+                        self.logger.info("🎙️ [TRIGGER] Button B hold detected! Launching ListenerApp...")
                         if self.app_manager:
-                            threading.Thread(target=self.app_manager.start_app_by_name, args=("ornith_voice",), daemon=True).start()
+                            threading.Thread(target=self.app_manager.start_app_by_name, args=("listener_app",), daemon=True).start()
                         else:
                             play_chime(_CONFIG["chimes"]["app_start"])
             else:
