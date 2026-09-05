@@ -353,6 +353,53 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "exists": exists, "bytes": size}).encode('utf-8'))
             return
 
+        if parsed.path == "/api/microphone/stream":
+            proc = None
+            try:
+                cmd = ["parecord", "--format=s16le", "--rate=16000", "--channels=1", "--raw"]
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                time.sleep(0.05)
+                if proc.poll() is not None:
+                    err_msg = ""
+                    if proc.stderr:
+                        err_msg = proc.stderr.read().decode("utf-8", "replace").strip()
+                    self.send_response(503)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": f"Failed to spawn parecord: {err_msg} (exit code {proc.returncode})"}).encode("utf-8"))
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/x-raw;format=s16le;rate=16000;channels=1")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.end_headers()
+
+                import select
+                while True:
+                    rlist, _, _ = select.select([proc.stdout], [], [], 2.0)
+                    if not rlist:
+                        if proc.poll() is not None:
+                            break
+                        continue
+                    chunk = proc.stdout.read(2560)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError) as disc_err:
+                logging.info(f"[ROBOT MIC STREAM] Client stream disconnected: {disc_err}")
+            except Exception as stream_err:
+                logging.error(f"[ROBOT MIC STREAM] Unexpected stream error: {stream_err}\n{traceback.format_exc()}")
+            finally:
+                if proc is not None:
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=1.0)
+                    except (subprocess.TimeoutExpired, ProcessLookupError, OSError) as term_err:
+                        logging.warning(f"[ROBOT MIC STREAM] Process termination error, escalating to kill: {term_err}")
+                        proc.kill()
+            return
+
         if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences", "/api/pokeball_reconnect"]:
             try:
                 p500_ip = get_current_pi500_ip(port=8085)

@@ -17,12 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from robot_backend import RobotBackend
 from app_manager import AppManager
-from teleop_control_loop import TeleopControlApp
-from servo_studio_app import ServoStudioApp
-from pokeball_app import PokeballApp, PokeballService
-from clack_pose_app import PiranhaPoseApp, ClackPoseApp
-from beat_bandit_app import BeatBanditApp
-from ornith_app import OrnithVoiceApp
+from pokeball_app import PokeballService
 from api_server import create_master_http_server
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -55,24 +50,12 @@ def main() -> None:
     app_manager.pokeball_service = pokeball_service
     pokeball_service.app_manager = app_manager
 
-    # 1. Auto-discover self-contained modular applications from apps/
+    # Auto-discover self-contained modular applications dynamically from apps/
     discovered = app_manager.discover_apps()
+    if not app_manager.registry:
+        raise RuntimeError("No applications could be discovered from apps/ directory")
 
-    # 2. Register fallback classes if not already discovered
-    fallback_apps = [
-        TeleopControlApp,
-        ServoStudioApp,
-        PokeballApp,
-        PiranhaPoseApp,
-        ClackPoseApp,
-        BeatBanditApp,
-        OrnithVoiceApp,
-    ]
-    for app_cls in fallback_apps:
-        if app_cls.metadata.name not in app_manager.registry:
-            app_manager.register_app(app_cls)
-
-    logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications.")
+    logging.info(f"AppManager ready with {len(app_manager.registry)} registered applications: {list(app_manager.registry.keys())}")
 
     http_server = create_master_http_server("0.0.0.0", args.http_port, backend, app_manager, pokeball_service=pokeball_service)
     server_thread = threading.Thread(target=http_server.serve_forever, daemon=True)
