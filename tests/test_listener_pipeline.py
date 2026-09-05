@@ -20,8 +20,8 @@ for p in [WORKSPACE_ROOT, PI500_DIR]:
     if ps not in sys.path:
         sys.path.insert(0, ps)
 
-from apps.listener_app.intent_parser import parse_intent, sanitize_input
-from apps.listener_app.song_pipeline import sanitize_slug, find_compiled_sequence, get_sequences_dir
+from apps.listener_app.intent_parser import parse_intent, sanitize_input, APP_ALIAS_MAP
+from apps.listener_app.song_pipeline import sanitize_slug, find_compiled_sequence, get_sequences_dir, find_beat_bandit_track
 from apps.listener_app.app import ListenerApp, load_listener_config, load_calibration_limits
 from app_manager import AppManager
 
@@ -32,15 +32,15 @@ class TestListenerPipeline(unittest.TestCase):
         # Canonical app switches
         res1 = parse_intent("start teleop")
         self.assertEqual(res1["intent"], "SWITCH_APP")
-        self.assertEqual(res1["app"], "teleop")
+        self.assertEqual(res1["app"], "teleop_app")
 
         res2 = parse_intent("open servo studio")
         self.assertEqual(res2["intent"], "SWITCH_APP")
-        self.assertEqual(res2["app"], "servo_studio")
+        self.assertEqual(res2["app"], "servo_studio_app")
 
         res3 = parse_intent("launch beat bandit")
         self.assertEqual(res3["intent"], "SWITCH_APP")
-        self.assertEqual(res3["app"], "beat_bandit")
+        self.assertEqual(res3["app"], "beat_bandit_app")
 
     def test_intent_parser_movement_primitives(self):
         res1 = parse_intent("home arm")
@@ -148,6 +148,78 @@ class TestListenerPipeline(unittest.TestCase):
         slug2 = sanitize_slug("Chappell Roan - Good Luck, Babe!")
         self.assertEqual(slug2, "chappell_roan_good_luck_babe")
 
+    def test_canonical_app_alias_map(self):
+        canonical_apps = {"teleop_app", "servo_studio_app", "beat_bandit_app", "preset_app", "pokeball_teleop_app", "piranha_pose_app", "ornith_voice"}
+        for alias, app_name in APP_ALIAS_MAP.items():
+            self.assertIn(app_name, canonical_apps, f"Alias '{alias}' points to unknown '{app_name}'")
+
+    def test_find_beat_bandit_track_matching(self):
+        import tempfile
+        import json
+
+        sample_manifest = {
+            "OlQJ2zy5DE8": {
+                "track_id": "OlQJ2zy5DE8",
+                "title": "Peaches",
+                "artist": "Jack Black",
+                "duration": 95.43,
+                "bpm": 184.6,
+                "wav_path": "/path/to/OlQJ2zy5DE8.wav",
+                "analysis": {}
+            },
+            "F0N7aNy-9tg": {
+                "track_id": "F0N7aNy-9tg",
+                "title": "Dracula",
+                "artist": "Unknown Artist",
+                "duration": 209.84,
+                "bpm": 114.8,
+                "wav_path": "/path/to/F0N7aNy-9tg.wav",
+                "analysis": {}
+            }
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            json.dump(sample_manifest, tf)
+            tf_path = Path(tf.name)
+
+        try:
+            # 1. Exact title match
+            t1 = find_beat_bandit_track("Peaches", manifest_path=tf_path)
+            self.assertIsNotNone(t1)
+            self.assertEqual(t1["track_id"], "OlQJ2zy5DE8")
+
+            # 2. Case-insensitive title match
+            t2 = find_beat_bandit_track("peaches", manifest_path=tf_path)
+            self.assertIsNotNone(t2)
+            self.assertEqual(t2["track_id"], "OlQJ2zy5DE8")
+
+            # 3. Combined "title by artist" match
+            t3 = find_beat_bandit_track("peaches by jack black", manifest_path=tf_path)
+            self.assertIsNotNone(t3)
+            self.assertEqual(t3["track_id"], "OlQJ2zy5DE8")
+
+            # 4. Track ID match
+            t4 = find_beat_bandit_track("OlQJ2zy5DE8", manifest_path=tf_path)
+            self.assertIsNotNone(t4)
+            self.assertEqual(t4["title"], "Peaches")
+
+            # 5. Missing track returns None
+            t5 = find_beat_bandit_track("Nonexistent Song 12345", manifest_path=tf_path)
+            self.assertIsNone(t5)
+
+            # 6. Corrupt manifest key raises KeyError (fail-fast)
+            bad_manifest = {"bad": {"title": "No track ID"}}
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as btf:
+                json.dump(bad_manifest, btf)
+                btf_path = Path(btf.name)
+            try:
+                with self.assertRaises(KeyError):
+                    find_beat_bandit_track("anything", manifest_path=btf_path)
+            finally:
+                btf_path.unlink(missing_ok=True)
+        finally:
+            tf_path.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
+

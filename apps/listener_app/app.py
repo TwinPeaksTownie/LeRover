@@ -45,7 +45,7 @@ import network_resolver
 import audio_resolver
 
 from apps.listener_app.intent_parser import parse_intent
-from apps.listener_app.song_pipeline import download_and_compile, find_compiled_sequence, fetch_search_candidates
+from apps.listener_app.song_pipeline import download_and_compile, find_compiled_sequence, find_beat_bandit_track, fetch_search_candidates
 
 CONFIG_PATH = APP_DIR / "config.json"
 
@@ -425,8 +425,15 @@ class ListenerApp(BaseApp):
                         if intent_type == "SWITCH_APP":
                             target_app = intent["app"]
                             self.logger.info("Switching to app '%s', terminating listener...", target_app)
+                            self._play_chime("commit")
                             if self.app_manager is not None:
-                                self.app_manager.start_app(target_app)
+                                def _switch_app():
+                                    try:
+                                        self.app_manager.start_app_by_name(target_app)
+                                    except Exception as ex:
+                                        self.logger.error("Failed switching to app '%s': %s", target_app, ex, exc_info=True)
+                                threading.Thread(target=_switch_app, daemon=True).start()
+                            self.stop()
                             return
 
                         elif intent_type == "MOVE_PRIMITIVE":
@@ -462,16 +469,53 @@ class ListenerApp(BaseApp):
 
                         elif intent_type == "PLAY_SONG":
                             title = intent["title"]
-                            seq_file = find_compiled_sequence(title)
-                            if seq_file is not None:
-                                self.logger.info("Found compiled sequence '%s', launching playback...", seq_file)
+                            bb_track = find_beat_bandit_track(title)
+                            if bb_track is not None:
+                                track_id = str(bb_track["track_id"])
+                                track_title = str(bb_track["title"])
+                                self.logger.info("Found Beat Bandit library track '%s' (ID: %s), transitioning to Beat Bandit...", track_title, track_id)
+                                self._play_chime("commit")
                                 if self.app_manager is not None:
-                                    self.app_manager.start_app("preset_app")
+                                    def _launch_bb():
+                                        try:
+                                            self.logger.info("Engaging Beat Bandit app session...")
+                                            ok = self.app_manager.start_app_by_name("beat_bandit_app")
+                                            if not ok:
+                                                self.logger.error("Failed to start beat_bandit_app via AppManager")
+                                                return
+                                            bb_app = self.app_manager.active_app
+                                            if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):
+                                                self.logger.info("Triggering Beat Bandit track playback for '%s'...", track_id)
+                                                robot_backend = self.app_manager.backend
+                                                bb_app.start_track_by_url_or_id(robot_backend, track_id)
+                                            else:
+                                                self.logger.error("Active app is not a valid BeatBanditApp instance")
+                                        except Exception as ex:
+                                            self.logger.error("Beat Bandit launch error: %s", ex, exc_info=True)
+                                    threading.Thread(target=_launch_bb, daemon=True).start()
+                                self.stop()
+                                return
                             else:
-                                self.logger.warning("Compiled sequence for '%s' not found.", title)
+                                seq_file = find_compiled_sequence(title)
+                                if seq_file is not None:
+                                    self.logger.info("Found compiled sequence '%s', launching preset playback...", seq_file)
+                                    self._play_chime("commit")
+                                    if self.app_manager is not None:
+                                        def _launch_preset():
+                                            try:
+                                                self.app_manager.start_app_by_name("preset_app")
+                                            except Exception as ex:
+                                                self.logger.error("Failed to start preset_app: %s", ex, exc_info=True)
+                                        threading.Thread(target=_launch_preset, daemon=True).start()
+                                    self.stop()
+                                    return
+                                else:
+                                    self.logger.warning("No Beat Bandit track or compiled sequence found for '%s'.", title)
+                                    self._play_chime("cancel")
 
                         elif intent_type == "EXIT":
                             self.logger.info("Exit command received, stopping listener app...")
+                            self.stop()
                             return
 
                     # Return to listening for next trigger

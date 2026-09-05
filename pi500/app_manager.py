@@ -284,7 +284,7 @@ class AppManager:
             app_inst.stop()
 
             # Stage 2: Join worker thread
-            if app_inst.thread and app_inst.thread.is_alive():
+            if app_inst.thread and app_inst.thread.is_alive() and app_inst.thread != threading.current_thread():
                 app_inst.thread.join(timeout=3.0)
                 if app_inst.thread.is_alive():
                     self.logger.warning(f"App '{app_name}' thread did not exit within 3.0s timeout.")

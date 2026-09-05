@@ -69,6 +69,7 @@ class BeatBanditApp(BaseApp):
 
     def __init__(self, running_on_pi: bool = True) -> None:
         super().__init__(running_on_pi=running_on_pi)
+        self.config = _CONFIG
         self.library_dir = get_library_path()
         self.manifest_file = self.library_dir / "manifest.json"
         self.audio_client = BeatBanditAudioClient(self.library_dir)

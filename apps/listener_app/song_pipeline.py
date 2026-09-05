@@ -64,6 +64,79 @@ def get_audio_cache_dir() -> Path:
     return target
 
 
+def get_beat_bandit_manifest_path() -> Optional[Path]:
+    """Returns the resolved path to Beat Bandit's library manifest.json."""
+    candidates = [
+        WORKSPACE_ROOT / "library" / "beat_bandit" / "manifest.json",
+        Path.home() / "so101" / "library" / "beat_bandit" / "manifest.json",
+        Path("/home/user/so101/library/beat_bandit/manifest.json"),
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Finds an existing analyzed track in Beat Bandit manifest matching the query string.
+    Strict Fail-Fast schema compliance: validates required keys explicitly. Zero .get(k, default).
+    """
+    target = manifest_path or get_beat_bandit_manifest_path()
+    if target is None or not target.exists():
+        logger.warning("Beat Bandit manifest not found at candidate locations.")
+        return None
+
+    with open(target, "r", encoding="utf-8") as f:
+        manifest_data = json.load(f)
+
+    if not isinstance(manifest_data, dict):
+        raise TypeError(f"Beat Bandit manifest at {target} must be a dict, got {type(manifest_data).__name__}")
+
+    clean_query = re.sub(r"[^\w\s]", "", query.lower()).strip()
+    clean_query = re.sub(r"\s+", " ", clean_query)
+    if not clean_query:
+        return None
+
+    clean_query = re.sub(r"\b(?:the\s+song|song|the\s+track|track)\b", "", clean_query).strip()
+
+    exact_match: Optional[Dict[str, Any]] = None
+    partial_match: Optional[Dict[str, Any]] = None
+
+    for tid, meta in manifest_data.items():
+        if not isinstance(meta, dict):
+            continue
+
+        for req_field in ("track_id", "title", "artist", "wav_path"):
+            if req_field not in meta:
+                raise KeyError(f"Track '{tid}' in {target} missing required field '{req_field}'")
+
+        title_str = str(meta["title"])
+        artist_str = str(meta["artist"])
+        clean_title = re.sub(r"[^\w\s]", "", title_str.lower()).strip()
+        clean_title = re.sub(r"\s+", " ", clean_title)
+        clean_artist = re.sub(r"[^\w\s]", "", artist_str.lower()).strip()
+        clean_artist = re.sub(r"\s+", " ", clean_artist)
+
+        clean_combined = f"{clean_title} {clean_artist}".strip()
+        clean_by = f"{clean_title} by {clean_artist}".strip()
+
+        if clean_query == clean_title or clean_query == tid.lower():
+            exact_match = meta
+            break
+
+        if clean_query == clean_by or clean_query == clean_combined:
+            exact_match = meta
+            break
+
+        if partial_match is None:
+            if clean_query in clean_title or clean_title in clean_query:
+                partial_match = meta
+            elif clean_artist and (clean_query in clean_artist or clean_artist in clean_query):
+                partial_match = meta
+
+    return exact_match or partial_match
+
+
 def find_compiled_sequence(title: str) -> Optional[Path]:
     """Finds an existing compiled sequence JSON by matching title slug."""
     slug = sanitize_slug(title)
