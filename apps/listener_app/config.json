@@ -22,6 +22,7 @@
     "energy_threshold": 300
   },
   "chimes": {
+    "app_start": "ornith_listen_start",
     "wake": "ornith_listen_start",
     "commit": "ornith_commit_speech",
     "cancel": "ornith_abort_recording",

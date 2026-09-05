@@ -39,6 +39,7 @@ for p in [WORKSPACE_ROOT, PI500_DIR, CONFIG_DIR]:
 
 from app_manager import BaseApp, AppMetadata
 from robot_backend import RobotBackend, dispatch_audio_event
+from telemetry_proxies import MOTOR_NAMES
 
 import network_resolver
 import audio_resolver
@@ -73,6 +74,7 @@ def load_listener_config() -> Dict[str, Any]:
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
     _ = int(cfg["vad"]["energy_threshold"])
+    _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["wake"]
     _ = cfg["chimes"]["commit"]
     _ = cfg["chimes"]["cancel"]
@@ -85,24 +87,48 @@ def load_listener_config() -> Dict[str, Any]:
 _CONFIG = load_listener_config()
 
 
-def load_calibration_limits() -> Dict[int, Dict[str, int]]:
+def load_calibration_limits(
+    backend: Optional[RobotBackend] = None,
+    calib_file: Optional[Path] = None,
+) -> Dict[int, Dict[str, int]]:
     """Loads empirical follower calibration limits dynamically into memory. Zero hardcoded 2048."""
-    calib_file = CONFIG_DIR / "follower.json"
-    if not calib_file.exists():
-        raise FileNotFoundError(f"Missing required follower calibration: {calib_file}")
-    with open(calib_file, "r", encoding="utf-8") as f:
+    # 1. Prefer in-memory backend calibration if available
+    if backend is not None and hasattr(backend, "arm_calibration") and bool(backend.arm_calibration):
+        limits = {}
+        for sid in range(1, 7):
+            name = MOTOR_NAMES[sid]
+            if name not in backend.arm_calibration:
+                raise KeyError(f"Follower calibration missing required servo '{name}' (ID {sid}) in backend")
+            calib = backend.arm_calibration[name]
+            rmin = int(calib.range_min)
+            rmax = int(calib.range_max)
+            limits[sid] = {
+                "min": rmin,
+                "max": rmax,
+                "center": (rmin + rmax) // 2,
+            }
+        return limits
+
+    # 2. Canonical LeRobot follower calibration file path
+    target_path = calib_file or (Path.home() / ".cache/huggingface/lerobot/calibration/robots/so_follower/follower.json")
+    if not target_path.exists():
+        raise FileNotFoundError(f"Missing required follower calibration: {target_path}")
+
+    with open(target_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     limits = {}
     for sid in range(1, 7):
-        sid_str = str(sid)
-        if sid_str not in data:
-            raise KeyError(f"Follower calibration missing required servo ID {sid} in {calib_file}")
-        cdata = data[sid_str]
+        name = MOTOR_NAMES[sid]
+        if name not in data:
+            raise KeyError(f"Follower calibration missing required servo '{name}' (ID {sid}) in {target_path}")
+        cdata = data[name]
+        rmin = int(cdata["range_min"])
+        rmax = int(cdata["range_max"])
         limits[sid] = {
-            "min": int(cdata["calib_min"]),
-            "max": int(cdata["calib_max"]),
-            "center": (int(cdata["calib_min"]) + int(cdata["calib_max"])) // 2,
+            "min": rmin,
+            "max": rmax,
+            "center": (rmin + rmax) // 2,
         }
     return limits
 
@@ -217,16 +243,16 @@ class ListenerApp(BaseApp):
     def setup(self, backend: RobotBackend) -> None:
         """Pre-run setup: loads calibration limits and initializes local ASR model."""
         self.logger.info("Initializing ListenerApp dependencies...")
-        self.calib_limits = load_calibration_limits()
+        self.calib_limits = load_calibration_limits(backend=backend)
         self._init_local_asr()
 
     def _init_local_asr(self) -> None:
         """Initializes local offline speech-to-text model."""
         try:
-            import whisper
+            from faster_whisper import WhisperModel
             model_name = self.config["asr"]["model_size"]
-            self.logger.info("Loading local Whisper model '%s'...", model_name)
-            self.asr_model = whisper.load_model(model_name)
+            self.logger.info("Loading local Whisper model '%s' via faster-whisper...", model_name)
+            self.asr_model = WhisperModel(model_name, device="cpu", compute_type="int8")
             self.logger.info("Local Whisper model successfully loaded.")
         except Exception as e:
             self.logger.error("Could not initialize local Whisper model: %s", e, exc_info=True)
@@ -284,8 +310,8 @@ class ListenerApp(BaseApp):
             f.write(wav_io.read())
 
         try:
-            result = self.asr_model.transcribe(str(tmp_wav), language=self.config["asr"]["language"])
-            text = result["text"].strip()
+            segments, _ = self.asr_model.transcribe(str(tmp_wav), language=self.config["asr"]["language"])
+            text = " ".join([seg.text for seg in segments]).strip()
             self.logger.info("Transcribed command: '%s'", text)
             return text
         except Exception as e:
@@ -301,7 +327,7 @@ class ListenerApp(BaseApp):
     def _execute_movement_primitive(self, backend: RobotBackend, action: str) -> None:
         """Executes calibrated movement primitive on hardware. Zero hardcoded 2048."""
         if not self.calib_limits:
-            self.calib_limits = load_calibration_limits()
+            self.calib_limits = load_calibration_limits(backend=backend)
 
         self.logger.info("Executing movement primitive: '%s'", action)
         if action in ("center", "home"):
