@@ -70,6 +70,9 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["asr"]["engine"]
     _ = cfg["asr"]["model_size"]
     _ = cfg["asr"]["language"]
+    settle_sec = float(cfg["vad"]["settle_delay_sec"])
+    if settle_sec <= 0:
+        raise ValueError("settle_delay_sec must be positive")
     _ = float(cfg["vad"]["silence_timeout_sec"])
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
@@ -346,14 +349,19 @@ class ListenerApp(BaseApp):
         """Main execution loop of ListenerApp. Must monitor stop_event.is_set()."""
         self.logger.info("Starting ListenerApp hotword loop...")
         self.state = "LISTENING"
-        self._play_chime("wake")
 
-        chunk_samples = self.config["hotword"]["chunk_samples"]
+        settle_delay = float(self.config["vad"]["settle_delay_sec"])
+        chunk_samples = int(self.config["hotword"]["chunk_samples"])
         chunk_bytes = chunk_samples * 2  # 16-bit mono = 2 bytes per sample
-        energy_multiplier = self.config["hotword"]["energy_multiplier"]
-        silence_timeout = self.config["vad"]["silence_timeout_sec"]
-        max_record_sec = self.config["vad"]["max_record_sec"]
-        energy_thresh = self.config["vad"]["energy_threshold"]
+        energy_multiplier = float(self.config["hotword"]["energy_multiplier"])
+        silence_timeout = float(self.config["vad"]["silence_timeout_sec"])
+        max_record_sec = float(self.config["vad"]["max_record_sec"])
+        energy_thresh = int(self.config["vad"]["energy_threshold"])
+
+        self.logger.info("Awaiting %.1fs acoustic settle delay before opening microphone stream...", settle_delay)
+        if stop_event.wait(timeout=settle_delay):
+            self.logger.info("Stop event signaled during acoustic settle delay. Exiting...")
+            return
 
         stream_resp = None
         try:
@@ -394,7 +402,6 @@ class ListenerApp(BaseApp):
                 if hotword_triggered:
                     self.logger.info("Hotword triggered! Entering command capture window...")
                     self.state = "CAPTURING"
-                    self._play_chime("commit")
 
                     command_chunks: List[bytes] = [chunk]
                     record_start = time.time()
@@ -416,6 +423,7 @@ class ListenerApp(BaseApp):
                             break
 
                     self.state = "PROCESSING"
+                    self._play_chime("commit")
                     transcript = self._transcribe_pcm_buffer(command_chunks)
                     if transcript:
                         intent = parse_intent(transcript)
@@ -518,9 +526,40 @@ class ListenerApp(BaseApp):
                             self.stop()
                             return
 
-                    # Return to listening for next trigger
+                    # Return to listening for next trigger if not waiting for user track selection
+                    with self._selection_lock:
+                        is_selecting = (self.state in ("SELECTING", "DOWNLOADING"))
+                    if is_selecting:
+                        if stream_resp is not None:
+                            try:
+                                stream_resp.close()
+                            except Exception as e:
+                                self.logger.debug("Closing stream during track selection: %s", e)
+                            stream_resp = None
+                        while not stop_event.is_set():
+                            with self._selection_lock:
+                                if self.state not in ("SELECTING", "DOWNLOADING"):
+                                    break
+                            time.sleep(0.1)
+                        if stop_event.is_set():
+                            break
+
+                    if stream_resp is not None:
+                        try:
+                            stream_resp.close()
+                        except Exception as e:
+                            self.logger.debug("Closing stream before chime settle: %s", e)
+                        stream_resp = None
+
                     self.state = "LISTENING"
                     self._play_chime("wake")
+                    if stop_event.wait(timeout=settle_delay):
+                        break
+                    try:
+                        stream_resp = self._connect_daemon_audio_stream()
+                        self.logger.info("Re-opened daemon audio stream after chime settle.")
+                    except Exception as e:
+                        self.logger.warning("Could not re-open daemon audio stream (%s), entering polling mode...", e)
 
         except Exception as e:
             self.logger.error("ListenerApp run error: %s", e, exc_info=True)

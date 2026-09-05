@@ -81,12 +81,32 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(parse_intent("cancel")["intent"], "EXIT")
 
     def test_config_fail_fast(self):
+        import copy
+        from unittest.mock import patch, mock_open
+        import json
+
         cfg = load_listener_config()
         self.assertEqual(cfg["name"], "listener_app")
         self.assertEqual(cfg["hotword"]["sample_rate"], 16000)
         self.assertEqual(cfg["asr"]["engine"], "faster_whisper")
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
+        self.assertEqual(cfg["vad"]["settle_delay_sec"], 3.0)
+        self.assertGreater(cfg["vad"]["settle_delay_sec"], 0)
+
+        # Missing settle_delay_sec raises KeyError
+        bad_cfg_missing = copy.deepcopy(cfg)
+        del bad_cfg_missing["vad"]["settle_delay_sec"]
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_missing))):
+            with self.assertRaises(KeyError):
+                load_listener_config()
+
+        # Non-positive settle_delay_sec raises ValueError
+        bad_cfg_zero = copy.deepcopy(cfg)
+        bad_cfg_zero["vad"]["settle_delay_sec"] = 0.0
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_zero))):
+            with self.assertRaises(ValueError):
+                load_listener_config()
 
     def test_app_metadata_parity(self):
         cfg = load_listener_config()
