@@ -8,7 +8,9 @@
   "ble": {
     "mac_address": "58:2F:40:8D:50:71",
     "input_uuid": "6675e16c-f36d-4567-bb55-6b51e27a23e6",
-    "reconnect_delay_sec": 3.0,
+    "packet_timeout_sec": 1.25,
+    "scan_timeout_sec": 4.0,
+    "reconnect_delay_sec": 0.5,
     "telemetry_file": "/tmp/pokeball_telemetry.json"
   },
   "control": {

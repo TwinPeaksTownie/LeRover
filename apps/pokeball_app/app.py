@@ -42,10 +42,11 @@ except ImportError:
 import audio_resolver
 
 try:
-    from bleak import BleakClient
+    from bleak import BleakClient, BleakScanner
     BLEAK_AVAILABLE = True
 except ImportError:
     BleakClient = None
+    BleakScanner = None
     BLEAK_AVAILABLE = False
 
 from app_manager import BaseApp, AppMetadata
@@ -62,6 +63,9 @@ def load_pokeball_config() -> dict:
     _ = cfg["name"]
     _ = cfg["ble"]["mac_address"]
     _ = cfg["ble"]["input_uuid"]
+    _ = cfg["ble"]["packet_timeout_sec"]
+    _ = cfg["ble"]["scan_timeout_sec"]
+    _ = cfg["ble"]["reconnect_delay_sec"]
     _ = cfg["ble"]["telemetry_file"]
     _ = cfg["gestures"]["chord_abort_sec"]
     _ = cfg["gestures"]["chord_click_suppress_sec"]
@@ -171,6 +175,10 @@ class PokeballService:
         self.last_btn_b = False
         self.connect_chime_played = False
         self.counter = 0
+        self.last_packet_time = 0.0
+        self.packet_timeout_sec = float(self.config["ble"]["packet_timeout_sec"])
+        self.scan_timeout_sec = float(self.config["ble"]["scan_timeout_sec"])
+        self.reconnect_delay_sec = float(self.config["ble"]["reconnect_delay_sec"])
 
         # Teleoperation and Rover state
         self.teleop_enabled = False
@@ -267,6 +275,8 @@ class PokeballService:
     def notification_handler(self, sender: Any, data: bytearray) -> None:
         try:
             self.counter += 1
+            now = time.time()
+            self.last_packet_time = now
             if len(data) < 5:
                 return
 
@@ -433,10 +443,9 @@ class PokeballService:
     def _cleanup_bluez_device(self) -> None:
         try:
             subprocess.run(["bluetoothctl", "disconnect", self.mac_address], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            subprocess.run(["bluetoothctl", "remove", self.mac_address], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            time.sleep(0.5)
+            time.sleep(0.2)
         except Exception as e:
-            self.logger.debug(f"BlueZ cleanup warning: {e}")
+            self.logger.debug(f"BlueZ disconnect warning: {e}")
 
     def _run_loop(self) -> None:
         if not BLEAK_AVAILABLE:
@@ -454,7 +463,14 @@ class PokeballService:
                     self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": None})
                     self.write_telemetry()
 
-                    async with BleakClient(self.mac_address, timeout=6.0) as client:
+                    device = await BleakScanner.find_device_by_address(self.mac_address, timeout=self.scan_timeout_sec)
+                    if not device:
+                        self.logger.debug(f"Poké Ball Plus ({self.mac_address}) not detected in {self.scan_timeout_sec}s scan window.")
+                        await asyncio.sleep(self.reconnect_delay_sec)
+                        continue
+
+                    self.logger.info(f"Discovered Poké Ball Plus ({device.name or device.address}). Connecting...")
+                    async with BleakClient(device, timeout=6.0) as client:
                         self.client = client
                         self.is_connected = True
                         self.logger.info("✅ Connected to Poké Ball Plus!")
@@ -462,16 +478,35 @@ class PokeballService:
                             play_chime(_CONFIG["chimes"]["ble_connect"])
                             self.connect_chime_played = True
 
-                        self.telemetry.update({"connected": True, "status": "CONNECTED", "last_seen": time.time()})
+                        self.last_packet_time = time.time()
+                        self.telemetry.update({"connected": True, "status": "CONNECTED", "last_seen": self.last_packet_time})
                         self.write_telemetry()
 
                         await client.start_notify(INPUT_UUID, self.notification_handler)
                         self.logger.info("Listening for Poké Ball Plus telemetry & button gestures...")
 
                         while client.is_connected and not self.stop_event.is_set():
-                            await asyncio.sleep(0.5)
-                            self.telemetry["last_seen"] = time.time()
-                            self.write_telemetry()
+                            await asyncio.sleep(0.1)
+                            now = time.time()
+                            if self.last_packet_time > 0 and (now - self.last_packet_time) > self.packet_timeout_sec:
+                                self.logger.warning(
+                                    f"⚠️ Poké Ball packet stream halted for {now - self.last_packet_time:.2f}s "
+                                    f"(threshold: {self.packet_timeout_sec}s). Reset or link loss detected!"
+                                )
+                                break
+
+                        self.logger.info("Disconnecting BleakClient handle...")
+                        self.is_connected = False
+                        if self.connect_chime_played:
+                            play_chime(_CONFIG["chimes"]["ble_disconnect"])
+                            self.connect_chime_played = False
+                        self.telemetry.update({"connected": False, "status": "SEARCHING"})
+                        self.write_telemetry()
+
+                        try:
+                            await asyncio.wait_for(client.disconnect(), timeout=1.5)
+                        except Exception as disc_err:
+                            self.logger.debug(f"Explicit disconnect completed/timed out: {disc_err}")
 
                 except Exception as e:
                     err_msg = str(e)
@@ -482,7 +517,7 @@ class PokeballService:
                         play_chime(_CONFIG["chimes"]["ble_disconnect"])
                         self.connect_chime_played = False
                     self.logger.info(f"Poké Ball BLE waiting for device... [{err_msg}]")
-                    await asyncio.sleep(3.0)
+                    await asyncio.sleep(self.reconnect_delay_sec)
 
             self.telemetry.update({"running": False, "connected": False, "status": "DISCONNECTED"})
             self.write_telemetry()
