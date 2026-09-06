@@ -54,6 +54,15 @@ class ChoreographyPlayer:
             raise KeyError("Fail-Fast Error: 'probabilities' dictionary missing in choreography payload")
         if "tracks" not in choreography or not isinstance(choreography["tracks"], dict):
             raise KeyError("Fail-Fast Error: 'tracks' dictionary missing in choreography payload")
+        if "blocks" not in choreography or not isinstance(choreography["blocks"], list):
+            raise KeyError("Fail-Fast Error: 'blocks' list missing in choreography payload")
+        if "settings" not in choreography or not isinstance(choreography["settings"], dict):
+            raise KeyError("Fail-Fast Error: 'settings' dictionary missing in choreography payload")
+
+        required_settings = ["smoothing_alpha_pan", "smoothing_alpha_roll", "neutral_pose"]
+        for s in required_settings:
+            if s not in choreography["settings"]:
+                raise KeyError(f"Fail-Fast Error: Mandatory setting '{s}' missing in choreography['settings']")
 
         required_tracks = ["spine_gaze", "s7_pedestal", "s8_gantry", "s1_torso", "s5_head_tilt", "s6_jaw"]
         for tr in required_tracks:
@@ -224,7 +233,7 @@ class ChoreographyPlayer:
                 self.progress_pct = min(100.0, (elapsed / max(0.1, self.duration)) * 100.0)
 
                 # Active Master Block & Beat Lookup
-                current_block = next((b for b in self.choreo.get("blocks", []) if b["start_sec"] <= elapsed < b["end_sec"]), None)
+                current_block = next((b for b in self.choreo["blocks"] if b["start_sec"] <= elapsed < b["end_sec"]), None)
                 beat_idx = int(np.searchsorted(beat_times, elapsed)) - 1
                 beat_idx = max(0, min(beat_idx, len(beat_times) - 1))
                 self.current_beat_idx = beat_idx
@@ -281,22 +290,32 @@ class ChoreographyPlayer:
                     b_et = float(spine_block["end_sec"])
                     b_dur = max(0.1, b_et - b_st)
 
+                    neutral_pose = str(self.choreo["settings"]["neutral_pose"])
                     if pat == "stand_dip_stand":
                         progress = max(0.0, min(1.0, (elapsed - b_st) / b_dur))
                         dip_weight = math.sin(progress * math.pi)
-                        p_stand = choreo_poses["stand"]
+                        p_stand = choreo_poses[neutral_pose]
                         mid_pose_name = spine_block["mid_pose"]
                         p_mid = choreo_poses[mid_pose_name]
                         target_lift = p_stand["shoulder_lift"] + (p_mid["shoulder_lift"] - p_stand["shoulder_lift"]) * dip_weight
                         target_elbow = p_stand["elbow_flex"] + (p_mid["elbow_flex"] - p_stand["elbow_flex"]) * dip_weight
-                        active_pose_name = "stand" if dip_weight < 0.3 else mid_pose_name
+                        if dip_weight < 0.3:
+                            active_pose_name = neutral_pose
+                        else:
+                            active_pose_name = mid_pose_name
                     else:
                         if pat == "return_stand_mid":
-                            active_pose_name = spine_block["start_pose"] if elapsed < (b_st + b_dur * 0.5) else "stand"
+                            if elapsed < (b_st + b_dur * 0.5):
+                                active_pose_name = spine_block["start_pose"]
+                            else:
+                                active_pose_name = neutral_pose
                         elif pat == "return_stand_late":
-                            active_pose_name = spine_block["start_pose"] if elapsed < (b_et - 0.4) else "stand"
+                            if elapsed < (b_et - 0.4):
+                                active_pose_name = spine_block["start_pose"]
+                            else:
+                                active_pose_name = neutral_pose
                         elif pat == "return_stand_early":
-                            active_pose_name = "stand"
+                            active_pose_name = neutral_pose
                         else:
                             active_pose_name = spine_block["pose_name"]
 
@@ -344,7 +363,8 @@ class ChoreographyPlayer:
                         target_pan = 50.0 + hip_sway_rom
                     else:
                         raise ValueError(f"Fail-Fast Error: Unknown facing_mode '{facing_mode}' in s1_torso block")
-                    smooth_posture_rom["shoulder_pan"] += 0.25 * (target_pan - smooth_posture_rom["shoulder_pan"])
+                    alpha_pan = float(self.choreo["settings"]["smoothing_alpha_pan"])
+                    smooth_posture_rom["shoulder_pan"] += alpha_pan * (target_pan - smooth_posture_rom["shoulder_pan"])
                     smooth_posture_rom["shoulder_pan"] = max(0.0, min(100.0, smooth_posture_rom["shoulder_pan"]))
 
                 # 4. Track 5: Head Tilt (Servo 5) - 3-Phase Motion Lifecycle (Attack -> Settle -> Return to Center)
@@ -388,7 +408,8 @@ class ChoreographyPlayer:
 
                 # Combine macro tilt with sinusoidal bounce micro-offset across full calibrated range [0.0, 100.0]
                 target_roll_final = max(0.0, min(100.0, target_roll + head_tilt_bounce_rom))
-                smooth_posture_rom["wrist_roll"] += 0.25 * (target_roll_final - smooth_posture_rom["wrist_roll"])
+                alpha_roll = float(self.choreo["settings"]["smoothing_alpha_roll"])
+                smooth_posture_rom["wrist_roll"] += alpha_roll * (target_roll_final - smooth_posture_rom["wrist_roll"])
                 smooth_posture_rom["wrist_roll"] = max(0.0, min(100.0, smooth_posture_rom["wrist_roll"]))
 
                 # 5. Track 8: Gantry (Servo 8)

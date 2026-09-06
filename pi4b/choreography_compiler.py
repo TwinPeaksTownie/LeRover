@@ -183,17 +183,48 @@ def validate_probabilities_schema(data: Dict[str, Any], source_desc: str = "prob
 
 
 
-DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
+def get_choreo_settings_path() -> Path:
+    """Resolves canonical choreo_settings.json file path."""
+    base_dir = Path(__file__).resolve().parent.parent
+    p1 = base_dir / "library" / "beat_bandit" / "choreo_settings.json"
+    if p1.exists():
+        return p1
+    p2 = Path.home() / "so101" / "library" / "beat_bandit" / "choreo_settings.json"
+    if p2.exists():
+        return p2
+    raise FileNotFoundError(f"choreo_settings.json not found at {p1} or {p2}")
 
-DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = {
-    "jaw_gate_threshold": 0.18,
-    "jaw_max_open_rom": 45.0,
-    "head_nod_depth_rom": 6.0,
-    "vibrato_amplitude": 20.0,
-    "groove_max_sway_rom": 15.0,
-    "head_tilt_max_rom": 15.0,
-    "gantry_default_speed": 500,
-}
+
+def load_choreo_settings(filepath: Optional[str] = None) -> Dict[str, Any]:
+    """Loads master choreography default settings strictly from JSON."""
+    if filepath is None:
+        fpath = str(get_choreo_settings_path())
+    else:
+        fpath = filepath
+    if not os.path.exists(fpath):
+        raise FileNotFoundError(f"Choreography settings configuration file not found at: {fpath}")
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    required_keys = [
+        "smoothing_alpha_pan",
+        "smoothing_alpha_roll",
+        "neutral_pose",
+        "jaw_gate_threshold",
+        "jaw_max_open_rom",
+        "head_nod_depth_rom",
+        "vibrato_amplitude",
+        "groove_max_sway_rom",
+        "head_tilt_max_rom",
+        "gantry_default_speed"
+    ]
+    for k in required_keys:
+        if k not in data:
+            raise KeyError(f"choreo_settings.json missing mandatory key '{k}'")
+    return data
+
+
+DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
+DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = load_choreo_settings()
 
 
 def sec_to_beat_index(sec: float, beat_times: List[float]) -> int:
@@ -213,13 +244,26 @@ def sec_to_beat_index(sec: float, beat_times: List[float]) -> int:
     return pos - 1
 
 
+def validate_audio_analysis(analysis: Dict[str, Any]) -> None:
+    """Strict fail-fast validator for audio analysis schema."""
+    if not isinstance(analysis, dict):
+        raise KeyError("Audio analysis payload must be a dictionary")
+    required = ["beat_times", "drops", "held_notes", "sections"]
+    for k in required:
+        if k not in analysis:
+            raise KeyError(f"Audio analysis missing mandatory key '{k}'")
+
+
 def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) -> List[Dict[str, Any]]:
     """Partitions the song into continuous discrete blocks spanning vocal segments
     and instrumental gaps (subdividing long instrumental gaps into musical chunks of >= 8 beats / 2 bars).
     All blocks track both physical timestamps and discrete musical beats/measures.
     """
-    beat_times = [float(b) for b in analysis.get("beat_times", [])]
-    raw_lyrics = analysis.get("lyrics", [])
+    validate_audio_analysis(analysis)
+    beat_times = [float(b) for b in analysis["beat_times"]]
+    raw_lyrics = []
+    if "lyrics" in analysis and isinstance(analysis["lyrics"], list):
+        raw_lyrics = analysis["lyrics"]
 
     sorted_lyrics = []
     for l_idx, seg in enumerate(raw_lyrics):
@@ -230,13 +274,40 @@ def partition_timeline_into_blocks(analysis: Dict[str, Any], duration: float) ->
         if et > st:
             s_beat = sec_to_beat_index(st, beat_times)
             e_beat = max(s_beat + 1, sec_to_beat_index(et, beat_times))
+
+            seg_id = f"ly_{l_idx + 1:03d}"
+            if "id" in seg:
+                seg_id = str(seg["id"])
+
+            seg_text = ""
+            if "text" in seg:
+                seg_text = str(seg["text"])
+
+            seg_name = f"Line {l_idx + 1}"
+            if "name" in seg:
+                seg_name = str(seg["name"])
+            elif seg_text:
+                seg_name = seg_text
+
+            orig_asr = seg_text
+            if "original_asr_text" in seg:
+                orig_asr = str(seg["original_asr_text"])
+
+            seg_type = "lyric"
+            if "type" in seg:
+                seg_type = str(seg["type"])
+
+            is_edited = False
+            if "is_user_edited" in seg:
+                is_edited = bool(seg["is_user_edited"])
+
             sorted_lyrics.append({
-                "id": str(seg.get("id", f"ly_{l_idx + 1:03d}")),
-                "name": str(seg.get("name", seg.get("text", f"Line {l_idx + 1}"))),
-                "text": str(seg.get("text", "")),
-                "original_asr_text": str(seg.get("original_asr_text", seg.get("text", ""))),
-                "type": str(seg.get("type", "lyric")),
-                "is_user_edited": bool(seg.get("is_user_edited", False)),
+                "id": seg_id,
+                "name": seg_name,
+                "text": seg_text,
+                "original_asr_text": orig_asr,
+                "type": seg_type,
+                "is_user_edited": is_edited,
                 "start_sec": round(st, 2),
                 "end_sec": round(et, 2),
                 "duration": round(et - st, 2),
@@ -363,16 +434,16 @@ def identify_climax_blocks(
     if max_arches <= 0 or not timeline_blocks:
         return set()
 
-    beat_times = [float(b) for b in analysis.get("beat_times", [])]
+    beat_times = [float(b) for b in analysis["beat_times"]]
     min_separation_beats = min_separation_bars * 4  # Standard 4/4 musical measure phrasing
 
-    drops = analysis.get("drops", [])
+    drops = analysis["drops"]
     drop_beats = [
         sec_to_beat_index(float(d["drop_sec"]), beat_times)
         for d in drops
         if "drop_sec" in d
     ]
-    held_notes = analysis.get("held_notes", [])
+    held_notes = analysis["held_notes"]
     held_spans = [
         (
             sec_to_beat_index(float(h["start_sec"]), beat_times),
@@ -381,23 +452,31 @@ def identify_climax_blocks(
         for h in held_notes
         if "start_sec" in h and "end_sec" in h
     ]
-    raw_sections = analysis.get("sections", [])
-    section_spans = [
-        (
-            sec_to_beat_index(float(s["start_sec"]), beat_times),
-            sec_to_beat_index(float(s["end_sec"]), beat_times),
-            max(0.0, min(1.0, float(s.get("energy_score", 0.5)))),
-            str(s.get("type", "")).lower()
-        )
-        for s in raw_sections
-        if "start_sec" in s and "end_sec" in s
-    ]
+    raw_sections = analysis["sections"]
+    section_spans = []
+    for s in raw_sections:
+        if "start_sec" in s and "end_sec" in s:
+            e_sc = 0.5
+            if "energy_score" in s:
+                e_sc = float(s["energy_score"])
+            s_tp = ""
+            if "type" in s:
+                s_tp = str(s["type"])
+            section_spans.append((
+                sec_to_beat_index(float(s["start_sec"]), beat_times),
+                sec_to_beat_index(float(s["end_sec"]), beat_times),
+                max(0.0, min(1.0, e_sc)),
+                s_tp.lower()
+            ))
 
     candidates: List[Tuple[float, int, str]] = []  # (score, start_beat, block_id)
 
     for blk in timeline_blocks:
         if "start_beat" not in blk or "end_beat" not in blk:
-            raise KeyError(f"Block '{blk.get('id', 'unknown')}' missing mandatory 'start_beat' / 'end_beat' fields")
+            err_id = "unknown"
+            if "id" in blk:
+                err_id = str(blk["id"])
+            raise KeyError(f"Block '{err_id}' missing mandatory 'start_beat' / 'end_beat' fields")
         b_sbeat = int(blk["start_beat"])
         b_ebeat = int(blk["end_beat"])
         blk_id = str(blk["id"])
@@ -474,13 +553,17 @@ def compile_choreography_tracks(
     if not analysis:
         raise ValueError("Cannot compile choreography: audio 'analysis' payload is empty.")
 
-    duration = float(duration or analysis.get("duration", 0.0))
+    if duration <= 0.0:
+        if "duration" in analysis:
+            duration = float(analysis["duration"])
+        else:
+            raise KeyError("Duration missing from call and audio analysis")
     if duration <= 0.0:
         raise ValueError(f"Invalid duration '{duration}' for choreography compilation.")
 
-    beat_times = analysis.get("beat_times", [])
-    if not beat_times:
-        raise ValueError("Cannot compile choreography: 'beat_times' missing in audio analysis.")
+    if "beat_times" not in analysis:
+        raise KeyError("Audio analysis missing 'beat_times'")
+    beat_times = analysis["beat_times"]
 
     if "bpm" in analysis:
         tempo = float(analysis["bpm"])
@@ -494,19 +577,24 @@ def compile_choreography_tracks(
 
     probs = validate_probabilities_schema(probabilities, source_desc="custom_probabilities") if probabilities is not None else load_choreography_probabilities()
 
-    raw_sections = analysis.get("sections", [])
-    drops = analysis.get("drops", [])
-    held_notes = analysis.get("held_notes", [])
-    drop_times = [float(d.get("drop_sec", 0.0)) for d in drops]
+    raw_sections = analysis["sections"]
+    drops = analysis["drops"]
+    held_notes = analysis["held_notes"]
+    drop_times = [float(d["drop_sec"]) for d in drops if "drop_sec" in d]
 
     # Build lookup of existing user-edited moves across all channels
-    existing_tracks = existing_choreography.get("tracks", {}) if existing_choreography else {}
-    existing_master_blocks = existing_choreography.get("blocks", []) if existing_choreography else []
-    edited_master_by_id = {b["id"]: b for b in existing_master_blocks if b.get("is_user_edited")}
+    existing_tracks = {}
+    existing_master_blocks = []
+    if existing_choreography:
+        if "tracks" in existing_choreography:
+            existing_tracks = existing_choreography["tracks"]
+        if "blocks" in existing_choreography:
+            existing_master_blocks = existing_choreography["blocks"]
+    edited_master_by_id = {b["id"]: b for b in existing_master_blocks if "is_user_edited" in b and b["is_user_edited"]}
 
     has_user_edits = bool(edited_master_by_id)
     for ch_moves in existing_tracks.values():
-        if any(m.get("is_user_edited") for m in ch_moves):
+        if any("is_user_edited" in m and m["is_user_edited"] for m in ch_moves):
             has_user_edits = True
             break
             
@@ -526,18 +614,30 @@ def compile_choreography_tracks(
     edited_moves_by_channel: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for ch in ["spine_gaze", "s8_gantry", "s7_pedestal", "s1_torso", "s5_head_tilt", "s6_jaw"]:
         edited_moves_by_channel[ch] = {}
-        for m in existing_tracks.get(ch, []):
-            if m.get("is_user_edited") or (m.get("block_id") in edited_master_by_id):
-                blk_key = m.get("block_id") or m.get("id")
+        ch_list = []
+        if ch in existing_tracks:
+            ch_list = existing_tracks[ch]
+        for m in ch_list:
+            is_m_edited = False
+            if "is_user_edited" in m and m["is_user_edited"]:
+                is_m_edited = True
+            elif "block_id" in m and m["block_id"] in edited_master_by_id:
+                is_m_edited = True
+            if is_m_edited:
+                blk_key = ""
+                if "block_id" in m:
+                    blk_key = m["block_id"]
+                elif "id" in m:
+                    blk_key = m["id"]
                 if blk_key:
                     edited_moves_by_channel[ch][blk_key] = m
 
     first_vocal_beat = len(beat_times)
     first_vocal_sec = duration
     for b in timeline_blocks:
-        if b.get("is_vocal"):
+        if "is_vocal" in b and b["is_vocal"]:
             if "start_beat" not in b:
-                raise KeyError(f"Vocal block '{b.get('id')}' missing mandatory 'start_beat' field")
+                raise KeyError(f"Vocal block missing mandatory 'start_beat' field: {b}")
             first_vocal_beat = int(b["start_beat"])
             first_vocal_sec = float(b["start_sec"])
             break
@@ -555,14 +655,19 @@ def compile_choreography_tracks(
     for idx, s in enumerate(raw_sections):
         st = float(s["start_sec"])
         et = min(duration, float(s["end_sec"]))
-        stype = str(s.get("type", "section")).lower()
+        stype = "section"
+        if "type" in s:
+            stype = str(s["type"]).lower()
+        e_score = 0.5
+        if "energy_score" in s:
+            e_score = float(s["energy_score"])
         sec_blocks.append({
             "id": f"sec_{idx + 1}",
             "name": stype.title(),
             "type": stype,
             "start_sec": round(st, 2),
             "end_sec": round(et, 2),
-            "energy_score": max(0.0, min(1.0, float(s.get("energy_score", 0.5)))),
+            "energy_score": max(0.0, min(1.0, e_score)),
         })
 
     prev_state = {
@@ -586,7 +691,9 @@ def compile_choreography_tracks(
         b_st = float(blk["start_sec"])
         b_et = float(blk["end_sec"])
         b_dur = b_et - b_st
-        is_vocal = bool(blk.get("is_vocal", False))
+        is_vocal = False
+        if "is_vocal" in blk:
+            is_vocal = bool(blk["is_vocal"])
         blk_id = blk["id"]
         blk_name = blk["name"]
         is_intro = (b_et <= first_vocal_sec)
@@ -596,15 +703,19 @@ def compile_choreography_tracks(
         )
 
         sec = next((s for s in sec_blocks if s["start_sec"] <= b_st < s["end_sec"]), None)
-        sec_energy = max(0.0, min(1.0, float(sec["energy_score"]))) if sec else 0.5
+        sec_energy = 0.5
+        if sec is not None:
+            sec_energy = max(0.0, min(1.0, float(sec["energy_score"])))
 
         is_drop_hit = any(b_st <= d_t <= b_et for d_t in drop_times)
         drop_t_hit = next((d_t for d_t in drop_times if b_st <= d_t <= b_et), b_st)
 
         # 1. Track 8: Gantry Slider (S8)
-        if blk_id in edited_moves_by_channel.get("s8_gantry", {}):
-            s8_moves.append(dict(edited_moves_by_channel["s8_gantry"][blk_id]))
-            prev_state["gantry_pos_rom"] = float(edited_moves_by_channel["s8_gantry"][blk_id].get("target_pos_rom", prev_state["gantry_pos_rom"]))
+        if blk_id in edited_moves_by_channel["s8_gantry"]:
+            s8_entry = edited_moves_by_channel["s8_gantry"][blk_id]
+            s8_moves.append(dict(s8_entry))
+            if "target_pos_rom" in s8_entry:
+                prev_state["gantry_pos_rom"] = float(s8_entry["target_pos_rom"])
         else:
             gan_cfg = probs["gantry_s8"]
             if is_drop_hit:
@@ -663,7 +774,7 @@ def compile_choreography_tracks(
                 })
 
         # 2. Track 6: Singing Jaw (S6)
-        if blk_id in edited_moves_by_channel.get("s6_jaw", {}):
+        if blk_id in edited_moves_by_channel["s6_jaw"]:
             jaw_moves.append(dict(edited_moves_by_channel["s6_jaw"][blk_id]))
         else:
             jaw_mode = "singing" if is_vocal else "closed"
@@ -680,7 +791,11 @@ def compile_choreography_tracks(
         # 3. Track 4: Neck Pitch (S4)
         pitch_cfg = probs["neck_pitch_s4"]
         pitch_r = rng.random()
-        has_held_note = any(h.get("start_sec", 0.0) <= b_st < h.get("end_sec", 0.0) for h in held_notes)
+        has_held_note = any(
+            float(h["start_sec"]) <= b_st < float(h["end_sec"])
+            for h in held_notes
+            if "start_sec" in h and "end_sec" in h
+        )
 
         up_prob = float(pitch_cfg["up_probability"])
         down_prob = float(pitch_cfg["down_probability"])
@@ -696,10 +811,13 @@ def compile_choreography_tracks(
             neck_pitch_rom = float(pitch_cfg["pitch_level_rom"])
 
         # 4. Tracks 2-3: Spine Elevation Group (S2 Lift & S3 Elbow)
-        if blk_id in edited_moves_by_channel.get("spine_gaze", {}):
+        if blk_id in edited_moves_by_channel["spine_gaze"]:
             custom_spine = dict(edited_moves_by_channel["spine_gaze"][blk_id])
             spine_moves.append(custom_spine)
-            prev_state["spine_pose"] = custom_spine.get("end_pose", custom_spine.get("pose_name", prev_state["spine_pose"]))
+            if "end_pose" in custom_spine:
+                prev_state["spine_pose"] = custom_spine["end_pose"]
+            elif "pose_name" in custom_spine:
+                prev_state["spine_pose"] = custom_spine["pose_name"]
         else:
             start_pose = prev_state["spine_pose"]
             is_climax_arch = (blk_id in climax_arch_block_ids)
@@ -804,13 +922,16 @@ def compile_choreography_tracks(
             })
 
         # 5. Track 7: Pedestal Spinner (S7)
-        if blk_id in edited_moves_by_channel.get("s7_pedestal", {}):
+        if blk_id in edited_moves_by_channel["s7_pedestal"]:
             custom_s7 = dict(edited_moves_by_channel["s7_pedestal"][blk_id])
             s7_moves.append(custom_s7)
             prev_state["pedestal_rom"] = float(custom_s7["target_pos_rom"])
         else:
             ped_cfg = probs["pedestal_s7"]
-            is_vocal_start = is_vocal and (blk_idx == 0 or not timeline_blocks[blk_idx - 1].get("is_vocal"))
+            prev_blk_vocal = False
+            if blk_idx > 0 and "is_vocal" in timeline_blocks[blk_idx - 1]:
+                prev_blk_vocal = bool(timeline_blocks[blk_idx - 1]["is_vocal"])
+            is_vocal_start = is_vocal and (blk_idx == 0 or not prev_blk_vocal)
             cur_p = prev_state["pedestal_rom"]
             vocal_shift_p = float(ped_cfg["vocal_start_shift_probability"])
             left_rom = float(ped_cfg["target_rom"]["shift_left"])
@@ -873,7 +994,7 @@ def compile_choreography_tracks(
             })
 
         # 6. Track 1: Hips / Torso Pan (S1)
-        if blk_id in edited_moves_by_channel.get("s1_torso", {}):
+        if blk_id in edited_moves_by_channel["s1_torso"]:
             s1_moves.append(dict(edited_moves_by_channel["s1_torso"][blk_id]))
         else:
             torso_cfg = probs["torso_s1"]
@@ -893,7 +1014,7 @@ def compile_choreography_tracks(
             })
 
         # 7. Track 5: Head Tilt & Wrist Roll (S5)
-        if blk_id in edited_moves_by_channel.get("s5_head_tilt", {}):
+        if blk_id in edited_moves_by_channel["s5_head_tilt"]:
             s5_moves.append(dict(edited_moves_by_channel["s5_head_tilt"][blk_id]))
         else:
             tilt_cfg = probs["head_tilt_s5"]
@@ -969,9 +1090,13 @@ def compile_choreography_tracks(
         raise KeyError("Fail-Fast Error: 'downbeats' missing in audio analysis")
     downbeats_list = analysis["downbeats"]
 
+    choreo_title = "Compiled Choreography"
+    if "title" in analysis:
+        choreo_title = str(analysis["title"])
+
     return {
         "version": CHOREO_SCHEMA_VERSION,
-        "title": analysis.get("title", "Compiled Choreography"),
+        "title": choreo_title,
         "duration": duration,
         "bpm": tempo,
         "settings": DEFAULT_CHOREO_SETTINGS,
@@ -985,7 +1110,7 @@ def compile_choreography_tracks(
         "amplitude_envelope_50hz": amp_env,
         "mouth_envelope_50hz": mouth_env,
         "tracks": {
-            "lyrics": [b for b in timeline_blocks if b.get("is_vocal")],
+            "lyrics": [b for b in timeline_blocks if "is_vocal" in b and b["is_vocal"]],
             "spine_gaze": spine_moves,
             "s8_gantry": s8_moves,
             "s7_pedestal": s7_moves,

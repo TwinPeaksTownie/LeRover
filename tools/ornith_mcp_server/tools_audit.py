@@ -476,24 +476,27 @@ def query_ornith_for_review(
 
     contract_res = scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
 
-    violations_detail = "\n".join(
-        f"- [{v['rule']}] {v['file']}:{v.get('line', 1)} - {v['reason']}\n  Snippet: {v.get('snippet', '')}"
-        for v in contract_res.get("violations", [])
-    ) if contract_res.get("violations") else "None. All code contracts verified."
+    if "violations" in contract_res and contract_res["violations"]:
+        violations_detail = "\n".join(
+            f"- [{v['rule']}] {v['file']}:{v['line']} - {v['reason']}\n  Snippet: {v['snippet']}"
+            for v in contract_res["violations"]
+        )
+    else:
+        violations_detail = "None. All code contracts verified."
 
     deployment_info = "No remote target files changed."
-    if contract_res.get("deployment_status"):
+    if "deployment_status" in contract_res and contract_res["deployment_status"]:
         dep = contract_res["deployment_status"]
-        deployment_info = f"Files checked: {dep.get('checked_files')}, Parity Mismatches: {dep.get('has_mismatch')}, All Verified: {dep.get('all_verified')}"
+        deployment_info = f"Files checked: {dep['checked_files']}, Parity Mismatches: {dep['has_mismatch']}, All Verified: {dep['all_verified']}"
 
     # State 4 Daemon Log Inspection
     daemon_log_info = "Daemon logs clean."
     target_node = "pi4b"
     try:
         d_logs = tools_hardware.query_daemon_logs(target_node, "backend.service", lines=25)
-        if not d_logs.get("clean"):
-            daemon_log_info = f"Errors found ({d_logs.get('error_count')}): " + "; ".join(d_logs.get("detected_errors", [])[:3])
-            violations_detail += f"\n- [DAEMON_LOG_ERROR] {target_node} backend.service logs:\n  " + "\n  ".join(d_logs.get("detected_errors", [])[:3])
+        if not d_logs["clean"]:
+            daemon_log_info = f"Errors found ({d_logs['error_count']}): " + "; ".join(d_logs["detected_errors"][:3])
+            violations_detail += f"\n- [DAEMON_LOG_ERROR] {target_node} backend.service logs:\n  " + "\n  ".join(d_logs["detected_errors"][:3])
         else:
             daemon_log_info = f"0 exceptions or timeouts in recent journalctl on {target_node}."
     except Exception as e:
@@ -540,8 +543,8 @@ Explain the exact technical reasons, line-by-line violations in the diff, and re
     user_prompt = f"""Task Summary: {task_summary}
 
 Contract Scan Result:
-- Clean: {contract_res.get('clean')}
-- Rule Violations: {len(contract_res.get('violations', []))}
+- Clean: {contract_res['clean']}
+- Rule Violations: {len(contract_res['violations'])}
 - Deployment Status: {deployment_info}
 - Pi 4B Daemon Logs: {daemon_log_info}
 

@@ -75,21 +75,44 @@ class BeatStudioManager:
             self.logger.error(f"Error saving manifest: {e}")
             return False
 
+def validate_manifest_track(track_meta: Dict[str, Any], track_id: str) -> None:
+    """Strict fail-fast validator for track manifest schema."""
+    required_keys = ["title", "artist", "duration", "analysis"]
+    for k in required_keys:
+        if k not in track_meta:
+            raise KeyError(f"Track '{track_id}' missing mandatory manifest key '{k}'")
+    if not isinstance(track_meta["analysis"], dict):
+        raise KeyError(f"Track '{track_id}' 'analysis' field must be a dict")
+
+
     def get_track_choreography(self, track_id: str) -> Dict[str, Any]:
         """Loads choreography from manifest or auto-compiles if not yet generated or outdated."""
         manifest = self._load_manifest()
-        track_meta = manifest.get(track_id)
-        if not track_meta:
+        if track_id not in manifest:
             raise FileNotFoundError(f"Track '{track_id}' not found in Beat Bandit manifest.")
+        track_meta = manifest[track_id]
+        validate_manifest_track(track_meta, track_id)
 
-        choreo = track_meta.get("choreography")
-        analysis = track_meta.get("analysis", {})
-        duration = float(track_meta.get("duration", 0.0) or analysis.get("duration", 0.0))
+        analysis = track_meta["analysis"]
+        duration = float(track_meta["duration"])
         if duration <= 0.0:
             raise ValueError(f"Invalid duration '{duration}' for track '{track_id}'.")
 
-        if not choreo or not choreo.get("tracks") or choreo.get("version") != CHOREO_SCHEMA_VERSION:
-            self.logger.info(f"Auto-compiling choreography for '{track_meta.get('title')}' ({track_id})...")
+        choreo = None
+        if "choreography" in track_meta:
+            choreo = track_meta["choreography"]
+
+        needs_compile = False
+        if not choreo:
+            needs_compile = True
+        elif "tracks" not in choreo:
+            needs_compile = True
+        elif "version" in choreo and choreo["version"] != CHOREO_SCHEMA_VERSION:
+            needs_compile = True
+
+        if needs_compile:
+            track_title = track_meta["title"]
+            self.logger.info(f"Auto-compiling choreography for '{track_title}' ({track_id})...")
             choreo = compile_default_choreography(analysis, duration, existing_choreo=choreo)
             track_meta["choreography"] = choreo
             manifest[track_id] = track_meta
@@ -104,10 +127,17 @@ class BeatStudioManager:
 
         # Merge in beat grid metadata for UI ruler
         choreo["track_id"] = track_id
-        choreo["title"] = track_meta.get("title", track_id)
-        choreo["artist"] = track_meta.get("artist", "")
-        tempo_val = track_meta.get("bpm") or track_meta.get("tempo") or analysis.get("bpm") or analysis.get("tempo")
-        if tempo_val is None:
+        choreo["title"] = track_meta["title"]
+        choreo["artist"] = track_meta["artist"]
+        if "bpm" in track_meta:
+            tempo_val = track_meta["bpm"]
+        elif "tempo" in track_meta:
+            tempo_val = track_meta["tempo"]
+        elif "bpm" in analysis:
+            tempo_val = analysis["bpm"]
+        elif "tempo" in analysis:
+            tempo_val = analysis["tempo"]
+        else:
             raise KeyError(f"Track '{track_id}' missing 'bpm' or 'tempo' in manifest or audio analysis.")
         choreo["tempo"] = float(tempo_val)
         choreo["beat_times"] = analysis["beat_times"]
@@ -124,44 +154,76 @@ class BeatStudioManager:
             raise FileNotFoundError(f"Track '{track_id}' not found in manifest.")
 
         track_meta = manifest[track_id]
-        poses = choreo_data.get("poses") or load_dance_presets()
-        probs = choreo_data.get("probabilities") or self.get_probabilities()
+        validate_manifest_track(track_meta, track_id)
+
+        poses = load_dance_presets()
+        if "poses" in choreo_data and choreo_data["poses"]:
+            poses = choreo_data["poses"]
+
+        probs = self.get_probabilities()
+        if "probabilities" in choreo_data and choreo_data["probabilities"]:
+            probs = choreo_data["probabilities"]
+
+        if "duration" in choreo_data:
+            c_duration = float(choreo_data["duration"])
+        else:
+            c_duration = float(track_meta["duration"])
+
+        c_settings = DEFAULT_CHOREO_SETTINGS
+        if "settings" in choreo_data:
+            c_settings = choreo_data["settings"]
+
+        c_sections = []
+        if "sections" in choreo_data:
+            c_sections = choreo_data["sections"]
+
+        c_blocks = []
+        if "blocks" in choreo_data:
+            c_blocks = choreo_data["blocks"]
+
+        c_tracks = {
+            "lyrics": [],
+            "spine_gaze": [],
+            "s8_gantry": [],
+            "s7_pedestal": [],
+            "s1_torso": [],
+            "s5_head_tilt": [],
+            "s6_jaw": [],
+        }
+        if "tracks" in choreo_data:
+            c_tracks = choreo_data["tracks"]
 
         clean_choreo = {
             "version": CHOREO_SCHEMA_VERSION,
-            "duration": float(choreo_data.get("duration", track_meta.get("duration", 0.0))),
-            "settings": choreo_data.get("settings", DEFAULT_CHOREO_SETTINGS),
+            "duration": c_duration,
+            "settings": c_settings,
             "poses": poses,
             "probabilities": probs,
-            "sections": choreo_data.get("sections", []),
-            "blocks": choreo_data.get("blocks", []),
-            "tracks": choreo_data.get("tracks", {
-                "lyrics": [],
-                "spine_gaze": [],
-                "s8_gantry": [],
-                "s7_pedestal": [],
-                "s1_torso": [],
-                "s5_head_tilt": [],
-                "s6_jaw": [],
-            }),
+            "sections": c_sections,
+            "blocks": c_blocks,
+            "tracks": c_tracks,
             "updated_at": time.time(),
         }
         track_meta["choreography"] = clean_choreo
         manifest[track_id] = track_meta
         self._save_manifest(manifest)
-        self.logger.info(f"Successfully saved choreography for '{track_meta.get('title')}' ({track_id}).")
+        track_title = track_meta["title"]
+        self.logger.info(f"Successfully saved choreography for '{track_title}' ({track_id}).")
         return {"status": "ok", "track_id": track_id, "updated_at": clean_choreo["updated_at"]}
 
     def auto_generate_choreography(self, track_id: str, style: str = "balanced", force_clean: bool = False) -> Dict[str, Any]:
         """Re-compiles choreography from analysis with preservation of manual edits."""
         manifest = self._load_manifest()
-        track_meta = manifest.get(track_id)
-        if not track_meta:
+        if track_id not in manifest:
             raise FileNotFoundError(f"Track '{track_id}' not found.")
+        track_meta = manifest[track_id]
+        validate_manifest_track(track_meta, track_id)
 
-        existing_choreo = None if force_clean else track_meta.get("choreography")
-        analysis = track_meta.get("analysis", {})
-        duration = float(track_meta.get("duration", 0.0) or analysis.get("duration", 0.0))
+        existing_choreo = None
+        if not force_clean and "choreography" in track_meta:
+            existing_choreo = track_meta["choreography"]
+        analysis = track_meta["analysis"]
+        duration = float(track_meta["duration"])
         choreo = compile_default_choreography(analysis, duration, existing_choreo=existing_choreo)
 
         track_meta["choreography"] = choreo
@@ -194,7 +256,7 @@ class BeatStudioManager:
         if not backend:
             raise RuntimeError("Hardware backend uninitialized.")
 
-        required_joints = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
+        required_joints = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
         for j in required_joints:
             if j not in pose_dict:
                 raise KeyError(f"Cannot preview pose: mandatory joint '{j}' missing from pose payload.")
@@ -205,7 +267,7 @@ class BeatStudioManager:
             "elbow_flex": float(max(-100.0, min(100.0, pose_dict["elbow_flex"]))),
             "wrist_flex": float(max(-100.0, min(100.0, pose_dict["wrist_flex"]))),
             "wrist_roll": float(max(-100.0, min(100.0, pose_dict["wrist_roll"]))),
-            "gripper": float(max(0.0, min(45.0, pose_dict.get("gripper", 0.0)))),
+            "gripper": float(max(0.0, min(45.0, pose_dict["gripper"]))),
         }
 
         if hasattr(backend, "set_arm_torque"):

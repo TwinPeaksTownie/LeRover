@@ -1,0 +1,12 @@
+﻿{
+  "smoothing_alpha_pan": 0.25,
+  "smoothing_alpha_roll": 0.25,
+  "neutral_pose": "stand",
+  "jaw_gate_threshold": 0.18,
+  "jaw_max_open_rom": 45.0,
+  "head_nod_depth_rom": 6.0,
+  "vibrato_amplitude": 20.0,
+  "groove_max_sway_rom": 15.0,
+  "head_tilt_max_rom": 15.0,
+  "gantry_default_speed": 500
+}

@@ -420,11 +420,11 @@ export function renderBeatBanditTracksList(tracks) {
     let html = '';
     pageTracks.forEach(t => {
         const isSelected = (t.track_id === selectedBeatBanditTrackId);
-        const mins = Math.floor((t.duration || 0) / 60);
-        const secs = Math.floor((t.duration || 0) % 60).toString().padStart(2, '0');
+        const mins = Math.floor((t.duration !== undefined && t.duration !== null ? t.duration : 0) / 60);
+        const secs = Math.floor((t.duration !== undefined && t.duration !== null ? t.duration : 0) % 60).toString().padStart(2, '0');
         const timeStr = `${mins}:${secs}`;
-        const bpmVal = t.tempo || t.bpm || 0;
-        const bpmStr = (bpmVal) ? `${Math.round(bpmVal)} BPM` : '-- BPM';
+        const bpmVal = t.tempo ? t.tempo : t.bpm;
+        const bpmStr = bpmVal ? `${Math.round(bpmVal)} BPM` : '-- BPM';
         const cardBorder = isSelected ? '2px solid #ff00cc' : '1.5px solid #333348';
         const cardBg = isSelected ? 'linear-gradient(135deg, #2e1040, #180924)' : '#161622';
         const titleSafe = encodeURIComponent(t.title || '');
@@ -917,7 +917,7 @@ export function updateTelemetryUI(data) {
             }
         }
         if (rawHex && activeTelem) rawHex.innerText = activeTelem.raw_hex || '--';
-        if (pkt && activeTelem) pkt.innerText = activeTelem.packet_count || 0;
+        if (pkt && activeTelem) pkt.innerText = (activeTelem.packet_count !== undefined && activeTelem.packet_count !== null) ? activeTelem.packet_count : '--';
         
         if (btnA && activeTelem) {
             const isTopActive = activeTelem.button_top || activeTelem.button_a;
@@ -959,7 +959,7 @@ export function updateTelemetryUI(data) {
                 valColor = (i === 6) ? '#ff00cc' : '#00ff66';
             }
         } else if (i === 7) {
-            const deg = (s.deg !== undefined && s.deg !== null) ? s.deg : (s.pos !== undefined && s.pos !== null ? ((s.pos - 2048) * 360 / 4096).toFixed(0) : '--');
+            const deg = (s.deg !== undefined && s.deg !== null) ? s.deg : '--';
             const sign = Number(deg) > 0 ? '+' : '';
             valText = deg !== '--' ? (sign + deg + '°') : '--';
             valColor = '#ffaa00';
@@ -1013,7 +1013,12 @@ export function updateTelemetryUI(data) {
     const progVal = (bbData.progress !== undefined) ? bbData.progress : bbData.progress_pct;
     if (bbProg && progVal !== undefined) bbProg.style.width = progVal + '%';
     if (bbBeatCtr && bbData.current_beat !== undefined) {
-        const totalB = bbData.total_beats || (activeChoreoData && activeChoreoData.beat_times ? activeChoreoData.beat_times.length : 0);
+        let totalB = '--';
+        if (bbData.total_beats !== undefined && bbData.total_beats !== null) {
+            totalB = bbData.total_beats;
+        } else if (activeChoreoData && activeChoreoData.beat_times) {
+            totalB = activeChoreoData.beat_times.length;
+        }
         bbBeatCtr.innerText = `Beat: ${bbData.current_beat} / ${totalB}`;
     }
 
@@ -1665,7 +1670,7 @@ export function openMoveInspector(channel, block) {
                         BOUNCE
                     </label>
                     <button id="inspBounceDownBtn" class="btn-action" style="padding: 0 4px; font-size: 8px; height: 16px; min-height: 0; background: #291b00; border: 1px solid #d97706; border-radius: 2px; color: #fbbf24; cursor: pointer;" title="Decrease bounce intensity by 1%">▼</button>
-                    <span id="inspBounceIntensityVal" style="font-size: 9px; font-family: monospace; font-weight: 800; color: #fbbf24; min-width: 22px; text-align: center;">${Math.round(Number((block.bounce_modifier && block.bounce_modifier.intensity !== undefined) ? block.bounce_modifier.intensity : 0.12) * 100)}%</span>
+                    <span id="inspBounceIntensityVal" style="font-size: 9px; font-family: monospace; font-weight: 800; color: #fbbf24; min-width: 22px; text-align: center;">${(block.bounce_modifier && block.bounce_modifier.intensity !== undefined) ? Math.round(Number(block.bounce_modifier.intensity) * 100) + '%' : '--'}</span>
                     <button id="inspBounceUpBtn" class="btn-action" style="padding: 0 4px; font-size: 8px; height: 16px; min-height: 0; background: #291b00; border: 1px solid #d97706; border-radius: 2px; color: #fbbf24; cursor: pointer;" title="Increase bounce intensity by 1%">▲</button>
                 </div>
                 `}
@@ -1711,9 +1716,9 @@ export function openMoveInspector(channel, block) {
             </div>
         `;
     } else if (channel === 's8_gantry') {
-        const pos = Number(block.target_pos || 2400);
-        const spd = Number(block.speed || 800);
-        const mode = block.mode || 'hold';
+        const pos = Number(block.target_pos);
+        const spd = Number(block.speed);
+        const mode = block.mode;
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -1740,7 +1745,7 @@ export function openMoveInspector(channel, block) {
             </div>
         `;
     } else if (channel === 's7_pedestal') {
-        const deg = Number(block.target_deg || 0);
+        const deg = Number(block.target_deg);
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
@@ -1861,11 +1866,11 @@ export function updatePoseSliders(poseDict) {
     const nameDisplay = document.getElementById('bbCurrentPoseNameDisplay');
     if (nameDisplay) nameDisplay.innerText = selectedPoseName.toUpperCase();
 
-    const rawPan = Number(poseDict.shoulder_pan || 0);
-    const rawLift = Number(poseDict.shoulder_lift || -43.17);
-    const rawElbow = Number(poseDict.elbow_flex || -25.69);
-    const rawWristF = Number(poseDict.wrist_flex || 56.61);
-    const rawWristR = Number(poseDict.wrist_roll || 0);
+    const rawPan = Number(poseDict.shoulder_pan);
+    const rawLift = Number(poseDict.shoulder_lift);
+    const rawElbow = Number(poseDict.elbow_flex);
+    const rawWristF = Number(poseDict.wrist_flex);
+    const rawWristR = Number(poseDict.wrist_roll);
 
     const uiPan = Math.max(0, Math.min(100, (rawPan + 100) / 2.0));
     const uiLift = Math.max(0, Math.min(100, (rawLift + 100) / 2.0));
@@ -1950,10 +1955,10 @@ export function renderSettingsView() {
     const p = activeProbabilitiesData;
     if (p) {
         // Section 1: Pedestal & Torso
-        const pedShiftP = (p.pedestal_s7 && p.pedestal_s7.vocal_start_shift_probability !== undefined) ? Math.round(p.pedestal_s7.vocal_start_shift_probability * 100) : 30;
-        const torsoCounterP = (p.torso_s1 && p.torso_s1.audience_counter_probability !== undefined) ? Math.round(p.torso_s1.audience_counter_probability * 100) : 80;
-        const pedLeftRom = (p.pedestal_s7 && p.pedestal_s7.target_rom && p.pedestal_s7.target_rom.shift_left !== undefined) ? p.pedestal_s7.target_rom.shift_left : 42.0;
-        const pedRightRom = (p.pedestal_s7 && p.pedestal_s7.target_rom && p.pedestal_s7.target_rom.shift_right !== undefined) ? p.pedestal_s7.target_rom.shift_right : 58.0;
+        const pedShiftP = Math.round(Number(p.pedestal_s7.vocal_start_shift_probability) * 100);
+        const torsoCounterP = Math.round(Number(p.torso_s1.audience_counter_probability) * 100);
+        const pedLeftRom = Number(p.pedestal_s7.target_rom.shift_left);
+        const pedRightRom = Number(p.pedestal_s7.target_rom.shift_right);
 
         const elPedShift = document.getElementById('bbSliderPedShiftProb');
         const elTorso = document.getElementById('bbSliderTorsoCounterProb');
