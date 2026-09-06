@@ -538,8 +538,8 @@ class ListenerApp(BaseApp):
                         # Read initial greeting or ready message
                         try:
                             _ = ws_client.recv(timeout=1.0)
-                        except Exception:
-                            pass
+                        except Exception as ex_init:
+                            self.logger.debug("Initial greeting read skipped: %s", ex_init)
 
                         def _rx_worker() -> None:
                             while not stop_rx.is_set():
@@ -551,7 +551,8 @@ class ListenerApp(BaseApp):
                                     msg_queue.put(msg)
                                 except TimeoutError:
                                     continue
-                                except Exception:
+                                except Exception as rx_err:
+                                    self.logger.debug("WebSocket receiver terminated: %s", rx_err)
                                     break
 
                         rx_thread = threading.Thread(target=_rx_worker, daemon=True)
@@ -561,7 +562,8 @@ class ListenerApp(BaseApp):
                         for prc in pre_roll_buffer:
                             try:
                                 ws_client.send(prc)
-                            except Exception:
+                            except Exception as pre_err:
+                                self.logger.debug("Pre-roll send error: %s", pre_err)
                                 break
 
                     except Exception as conn_err:
@@ -647,8 +649,8 @@ class ListenerApp(BaseApp):
                                 rx_thread.join(timeout=0.5)
                             try:
                                 ws_client.close()
-                            except Exception:
-                                pass
+                            except Exception as ex_close:
+                                self.logger.debug("WebSocket client close error: %s", ex_close)
 
                     # Fallback to combined deduplicated text if server final_result was empty
                     if not authoritative_transcript:

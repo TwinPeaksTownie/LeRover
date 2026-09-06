@@ -145,8 +145,8 @@ class VoskHandler(BaseHTTPRequestHandler):
             self.end_headers()
             try:
                 self.wfile.write(body)
-            except (BrokenPipeError, ConnectionResetError):
-                pass
+            except (BrokenPipeError, ConnectionResetError) as disc_err:
+                logger.debug("Client disconnected during 503 response: %s", disc_err)
             return
 
         if _loaded_time is None:
@@ -166,8 +166,8 @@ class VoskHandler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
+        except (BrokenPipeError, ConnectionResetError) as disc_err:
+            logger.debug("Client disconnected during 200 response: %s", disc_err)
 
     def handle_recognize(self) -> None:
         global _model, _model_ready
@@ -243,8 +243,8 @@ class VoskHandler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
+        except (BrokenPipeError, ConnectionResetError) as disc_err:
+            logger.debug("Client disconnected during recognize response: %s", disc_err)
 
     def log_message(self, format: str, *args: Any) -> None:
         # Override to keep daemon logs clean from routine polling
@@ -262,8 +262,8 @@ async def _ws_client_handler(websocket) -> None:
         try:
             await websocket.send(json.dumps({"type": "error", "message": "Model still loading"}))
             await websocket.close(1013, "Model still loading")
-        except Exception:
-            pass
+        except Exception as ex_send:
+            logger.debug("Could not send model loading error to WebSocket: %s", ex_send)
         return
 
     import vosk
@@ -272,7 +272,8 @@ async def _ws_client_handler(websocket) -> None:
 
     try:
         await websocket.send(json.dumps({"type": "ready", "sample_rate": sample_rate}))
-    except Exception:
+    except Exception as ex_ready:
+        logger.debug("WebSocket client disconnected before ready ack: %s", ex_ready)
         return
 
     try:
@@ -310,8 +311,8 @@ async def _ws_client_handler(websocket) -> None:
                         await websocket.send(json.dumps({"type": "reset_ack"}))
                 except Exception as ex:
                     await websocket.send(json.dumps({"type": "error", "message": str(ex)}))
-    except (websockets.exceptions.ConnectionClosed, BrokenPipeError, ConnectionResetError):
-        pass
+    except (websockets.exceptions.ConnectionClosed, BrokenPipeError, ConnectionResetError) as ex_close:
+        logger.debug("WebSocket client connection ended cleanly: %s", ex_close)
     except Exception as e:
         logger.error("Error in WebSocket client session: %s", e)
 
