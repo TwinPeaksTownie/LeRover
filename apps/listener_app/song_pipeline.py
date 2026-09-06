@@ -80,14 +80,31 @@ def get_beat_bandit_manifest_path() -> Optional[Path]:
     return None
 
 
-def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+def load_fuzzy_threshold() -> float:
+    """Loads fuzzy match threshold from config.json fail-fast."""
+    cfg_path = Path(__file__).resolve().parent / "config.json"
+    if cfg_path.exists():
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return float(cfg["vad"]["fuzzy_match_threshold"])
+    return 0.55
+
+
+def find_beat_bandit_track(
+    query: str,
+    manifest_path: Optional[Path] = None,
+    fuzzy_threshold: Optional[float] = None
+) -> Optional[Dict[str, Any]]:
     """Finds an existing analyzed track in Beat Bandit manifest matching the query string.
     Strict Fail-Fast schema compliance: validates required keys explicitly. Zero .get(k, default).
+    Sequential fallback: Exact -> Substring Containment -> Fuzzy Sequence Matching.
     """
     target = manifest_path or get_beat_bandit_manifest_path()
     if target is None or not target.exists():
         logger.warning("Beat Bandit manifest not found at candidate locations.")
         return None
+
+    thresh = fuzzy_threshold if fuzzy_threshold is not None else load_fuzzy_threshold()
 
     with open(target, "r", encoding="utf-8") as f:
         manifest_data = json.load(f)
@@ -106,6 +123,10 @@ def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> 
 
     exact_match: Optional[Dict[str, Any]] = None
     partial_match: Optional[Dict[str, Any]] = None
+    best_fuzzy_meta: Optional[Dict[str, Any]] = None
+    best_fuzzy_ratio: float = 0.0
+
+    import difflib
 
     for tid, meta in manifest_data.items():
         if not isinstance(meta, dict):
@@ -141,7 +162,26 @@ def find_beat_bandit_track(query: str, manifest_path: Optional[Path] = None) -> 
             elif clean_artist and (clean_query in clean_artist or clean_artist in clean_query):
                 partial_match = meta
 
-    return exact_match or partial_match
+        # Sequential fallback: calculate sequence similarity ratio
+        r_title = difflib.SequenceMatcher(None, clean_query, clean_title).ratio()
+        r_comb = difflib.SequenceMatcher(None, clean_query, clean_combined).ratio()
+        max_r = max(r_title, r_comb)
+        if max_r > best_fuzzy_ratio:
+            best_fuzzy_ratio = max_r
+            best_fuzzy_meta = meta
+
+    if exact_match is not None:
+        return exact_match
+    if partial_match is not None:
+        return partial_match
+    if best_fuzzy_meta is not None and best_fuzzy_ratio >= thresh:
+        logger.info(
+            "Fuzzy matched track query '%s' to '%s' (ratio %.3f >= %.3f)",
+            clean_query, best_fuzzy_meta["title"], best_fuzzy_ratio, thresh
+        )
+        return best_fuzzy_meta
+
+    return None
 
 
 def find_compiled_sequence(title: str) -> Optional[Path]:

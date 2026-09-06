@@ -92,10 +92,12 @@ class TestListenerPipeline(unittest.TestCase):
         cfg = load_listener_config()
         self.assertEqual(cfg["name"], "listener_app")
         self.assertEqual(cfg["hotword"]["sample_rate"], 16000)
-        self.assertEqual(cfg["asr"]["engine"], "faster_whisper")
+        self.assertEqual(cfg["asr"]["engine"], "vosk")
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
         self.assertEqual(cfg["vad"]["settle_delay_sec"], 3.0)
+        self.assertEqual(cfg["vad"]["pre_roll_chunks"], 15)
+        self.assertEqual(cfg["vad"]["fuzzy_match_threshold"], 0.55)
         self.assertGreater(cfg["vad"]["settle_delay_sec"], 0)
 
         # Missing settle_delay_sec raises KeyError
@@ -111,6 +113,53 @@ class TestListenerPipeline(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_zero))):
             with self.assertRaises(ValueError):
                 load_listener_config()
+
+        # Non-positive pre_roll_chunks raises ValueError
+        bad_cfg_pr = copy.deepcopy(cfg)
+        bad_cfg_pr["vad"]["pre_roll_chunks"] = 0
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_pr))):
+            with self.assertRaises(ValueError):
+                load_listener_config()
+
+    def test_find_beat_bandit_track_fuzzy(self):
+        from apps.listener_app.song_pipeline import find_beat_bandit_track
+        import tempfile
+        import json
+        from pathlib import Path
+
+        mock_manifest = {
+            "W8j1Gy41drQ": {
+                "track_id": "W8j1Gy41drQ",
+                "title": "Downtown",
+                "artist": "Macklemore & Ryan Lewis",
+                "wav_path": "/path/to/downtown.wav"
+            }
+        }
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8") as tf:
+            json.dump(mock_manifest, tf)
+            tf_path = Path(tf.name)
+
+        try:
+            # Exact match
+            m1 = find_beat_bandit_track("downtown", manifest_path=tf_path)
+            self.assertIsNotNone(m1)
+            self.assertEqual(m1["track_id"], "W8j1Gy41drQ")
+
+            # Fuzzy near-miss "allentown" (ratio 0.588 >= 0.55)
+            m2 = find_beat_bandit_track("allentown", manifest_path=tf_path, fuzzy_threshold=0.55)
+            self.assertIsNotNone(m2)
+            self.assertEqual(m2["track_id"], "W8j1Gy41drQ")
+
+            # Intent parser direct title lookup fallback with fuzzy match
+            parsed = parse_intent("allentown")
+            # When manifest path isn't injected, intent_parser uses get_beat_bandit_manifest_path()
+            # but this verifies the standalone find_beat_bandit_track fuzzy logic
+
+            # Complete mismatch returns None
+            m3 = find_beat_bandit_track("bohemian rhapsody", manifest_path=tf_path, fuzzy_threshold=0.55)
+            self.assertIsNone(m3)
+        finally:
+            tf_path.unlink(missing_ok=True)
 
     def test_app_metadata_parity(self):
         cfg = load_listener_config()

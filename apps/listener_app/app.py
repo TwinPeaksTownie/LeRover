@@ -86,6 +86,12 @@ def load_listener_config() -> Dict[str, Any]:
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
     _ = int(cfg["vad"]["energy_threshold"])
+    pre_roll = int(cfg["vad"]["pre_roll_chunks"])
+    if pre_roll <= 0:
+        raise ValueError("pre_roll_chunks must be positive")
+    fuzzy_thresh = float(cfg["vad"]["fuzzy_match_threshold"])
+    if fuzzy_thresh <= 0.0 or fuzzy_thresh > 1.0:
+        raise ValueError("fuzzy_match_threshold must be between 0.0 and 1.0")
     _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["wake"]
     _ = cfg["chimes"]["commit"]
@@ -469,7 +475,8 @@ class ListenerApp(BaseApp):
             self.logger.info("Stop event signaled during acoustic settle delay. Exiting...")
             return
 
-        pre_roll_buffer: deque[bytes] = deque(maxlen=4)  # 4 * 80ms = 320ms pre-roll buffer
+        pre_roll_chunks = int(self.config["vad"]["pre_roll_chunks"])
+        pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
 
         self._stream_resp = None
         try:
