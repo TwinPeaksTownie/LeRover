@@ -208,6 +208,31 @@ def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
         )
         diff_text = diff_proc.stdout or ""
 
+        # If working tree is clean because changes were committed to HEAD, audit HEAD~1..HEAD
+        if not diff_text.strip() and not modified_files:
+            recent_diff = subprocess.run(
+                ["git", "diff", "HEAD~1..HEAD", "--", ".", ":!*manifest.json"],
+                cwd=repo_path,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            if recent_diff.stdout and recent_diff.stdout.strip():
+                diff_text = recent_diff.stdout
+                recent_files = subprocess.run(
+                    ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+                    cwd=repo_path,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                if recent_files.stdout:
+                    for f in recent_files.stdout.splitlines():
+                        f = f.strip()
+                        _, ext = os.path.splitext(f.lower())
+                        if f and ext not in IGNORE_EXTENSIONS:
+                            modified_files.append(f)
+
         untracked_diffs = []
         for ufile in untracked_files:
             full_path = os.path.join(repo_path, ufile)

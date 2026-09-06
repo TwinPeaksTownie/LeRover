@@ -319,24 +319,57 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
     deployments = []
     has_mismatch = False
 
+    # Load topology mode if network_config.json exists
+    topology_mode = "DUAL_NODE"
+    net_cfg_path = os.path.join(repo_path, "config", "network_config.json")
+    if os.path.exists(net_cfg_path):
+        try:
+            with open(net_cfg_path, "r", encoding="utf-8") as f:
+                cfg_data = json.load(f)
+            if "topology_mode" in cfg_data:
+                topology_mode = cfg_data["topology_mode"]
+        except Exception as ex:
+            _log_debug(f"Failed to read topology_mode from {net_cfg_path}: {ex}")
+
     for rel_path in files:
         norm_path = rel_path.replace("\\", "/").strip()
         target_node = None
         remote_path = None
 
-        if norm_path.startswith("pi500/"):
-            target_node = "pi500"
-            remote_path = f"/home/user/so101/{norm_path}"
-        elif norm_path.startswith("apps/"):
-            target_node = "pi500"
-            remote_path = f"/home/user/so101/{norm_path}"
-        elif norm_path.startswith("pi4b/"):
-            target_node = "pi4b"
-            remote_rel = norm_path[5:]
-            remote_path = f"/home/carson/touch_ui/{remote_rel}"
-        elif norm_path.startswith("config/"):
-            target_node = "pi4b"
-            remote_path = f"/home/carson/touch_ui/{norm_path}"
+        if topology_mode == "STANDALONE_PI4B":
+            if norm_path.startswith("pi500/"):
+                target_node = "pi4b"
+                remote_path = f"/home/carson/aux_servo_interface/{norm_path}"
+            elif norm_path.startswith("apps/"):
+                target_node = "pi4b"
+                remote_path = f"/home/carson/aux_servo_interface/{norm_path}"
+            elif norm_path.startswith("pi4b/"):
+                target_node = "pi4b"
+                remote_rel = norm_path[5:]
+                remote_path = f"/home/carson/touch_ui/{remote_rel}"
+            elif norm_path.startswith("config/"):
+                target_node = "pi4b"
+                remote_path = f"/home/carson/touch_ui/{norm_path}"
+            elif norm_path.startswith("library/"):
+                target_node = "pi4b"
+                remote_path = f"/home/carson/so101/{norm_path}"
+        else:
+            if norm_path.startswith("pi500/"):
+                target_node = "pi500"
+                remote_path = f"/home/user/so101/{norm_path}"
+            elif norm_path.startswith("apps/"):
+                target_node = "pi500"
+                remote_path = f"/home/user/so101/{norm_path}"
+            elif norm_path.startswith("pi4b/"):
+                target_node = "pi4b"
+                remote_rel = norm_path[5:]
+                remote_path = f"/home/carson/touch_ui/{remote_rel}"
+            elif norm_path.startswith("config/"):
+                target_node = "pi4b"
+                remote_path = f"/home/carson/touch_ui/{norm_path}"
+            elif norm_path.startswith("library/"):
+                target_node = "pi500"
+                remote_path = f"/home/user/so101/{norm_path}"
 
         if target_node and remote_path:
             local_file = os.path.join(repo_path, norm_path)

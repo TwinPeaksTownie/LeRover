@@ -19,6 +19,7 @@ from power_manager import BusPowerManager
 from telemetry_proxies import _ServoFieldProxy, _ServoMotorStatesProxy, MOTOR_NAMES
 sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
+sys.path.append(str(Path.home() / "so101"))
 
 try:
     from lerobot.motors import Motor, MotorCalibration, MotorNormMode
@@ -1066,6 +1067,9 @@ class RobotBackend:
                     sid = motor_name_to_id.get(mname)
                     if sid and sid in self.servos:
                         self.servos[sid]["normalized"] = round(float(rom_val), 2)
+                        if mname in goal_ticks:
+                            self.servos[sid]["pos"] = goal_ticks[mname]
+                            self.servos[sid]["raw"] = goal_ticks[mname] % 4096
                         self.servos[sid]["torque"] = True
                 if s7_rom is not None and 7 in self.servos:
                     self.servos[7]["normalized"] = round(float(s7_rom), 2)
