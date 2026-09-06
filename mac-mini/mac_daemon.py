@@ -755,7 +755,7 @@ def analyze_track_dual_engine(wav_path: Path, track_id: str, title: str = "") ->
         "sections": sections,
         "held_notes": held_notes,
         "mouth_envelope_50hz": mouth_envelope,
-        "amplitude_envelope": amplitude_envelope,
+        "amplitude_envelope_50hz": amplitude_envelope,
         "lyrics": lyrics_blocks
     }
 

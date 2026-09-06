@@ -110,10 +110,10 @@ class BeatStudioManager:
         if tempo_val is None:
             raise KeyError(f"Track '{track_id}' missing 'bpm' or 'tempo' in manifest or audio analysis.")
         choreo["tempo"] = float(tempo_val)
-        choreo["beat_times"] = analysis.get("beat_times", [])
-        choreo["drops"] = analysis.get("drops", [])
-        choreo["amplitude_envelope"] = analysis.get("amplitude_envelope", [])
-        choreo["mouth_envelope_50hz"] = analysis.get("mouth_envelope_50hz", [])
+        choreo["beat_times"] = analysis["beat_times"]
+        choreo["drops"] = analysis["drops"]
+        choreo["amplitude_envelope_50hz"] = analysis["amplitude_envelope_50hz"]
+        choreo["mouth_envelope_50hz"] = analysis["mouth_envelope_50hz"]
 
         return choreo
 

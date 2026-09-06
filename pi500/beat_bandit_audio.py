@@ -162,8 +162,12 @@ class BeatBanditAudioClient:
                 raise RuntimeError(f"Mac Audio Service returned HTTP {resp.status}")
             analysis = json.loads(resp.read().decode("utf-8"))
 
-        if not analysis or "mouth_envelope_50hz" not in analysis:
-            raise RuntimeError("Mac Audio Service returned invalid or empty analysis payload")
+        if not analysis:
+            raise RuntimeError("Mac Audio Service returned empty analysis payload")
+        if "mouth_envelope_50hz" not in analysis:
+            raise KeyError("Fail-Fast Error: 'mouth_envelope_50hz' missing in Mac audio analysis payload")
+        if "amplitude_envelope_50hz" not in analysis:
+            raise KeyError("Fail-Fast Error: 'amplitude_envelope_50hz' missing in Mac audio analysis payload")
 
         return analysis
 
