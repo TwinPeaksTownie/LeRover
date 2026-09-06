@@ -143,7 +143,9 @@ class VoskHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        load_dur = round((_loaded_time - _start_time), 1) if _loaded_time else 0.0
+        if _loaded_time is None:
+            raise RuntimeError("Model is marked ready but _loaded_time is None")
+        load_dur = round((_loaded_time - _start_time), 1)
         payload = {
             "status": "ready",
             "model": CONFIG["model_path"],
@@ -216,7 +218,7 @@ class VoskHandler(BaseHTTPRequestHandler):
             # Feed PCM data to recognizer
             rec.AcceptWaveform(pcm_data)
             res = json.loads(rec.FinalResult())
-        text = res["text"] if "text" in res else ""
+        text = str(res["text"]).strip()
         elapsed_ms = round((time.time() - t0) * 1000, 1)
         logger.info("Transcribed (%d bytes, %.1f ms): '%s'", len(pcm_data), elapsed_ms, text)
 

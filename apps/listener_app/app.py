@@ -173,6 +173,7 @@ class ListenerApp(BaseApp):
         self.kws_engine: Any = None
         self.calib_limits: Dict[int, Dict[str, int]] = {}
         self.last_analyzed_track: Optional[Dict[str, Any]] = None
+        self._vosk_ready: bool = False
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured status dictionary for Master API inspection."""
@@ -396,7 +397,7 @@ class ListenerApp(BaseApp):
         if not pcm_chunks:
             return ""
 
-        if not getattr(self, "_vosk_ready", True):
+        if not self._vosk_ready:
             self.logger.warning("Rejecting transcription: Vosk standby server not ready.")
             return ""
 
