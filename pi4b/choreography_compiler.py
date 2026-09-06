@@ -46,7 +46,7 @@ def get_dance_presets_path() -> Path:
 def load_dance_presets() -> Dict[str, Dict[str, float]]:
     """Loads empirical 0-100% ROM joint postures strictly from presets_dance.json."""
     fpath = get_dance_presets_path()
-    with open(fpath, "r", encoding="utf-8") as f:
+    with open(fpath, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
     clean_poses = {}
@@ -95,7 +95,7 @@ def load_choreography_probabilities(filepath: Optional[str] = None) -> Dict[str,
         fpath = filepath
     if not os.path.exists(fpath):
         raise FileNotFoundError(f"Choreography probabilities configuration file not found at: {fpath}")
-    with open(fpath, "r", encoding="utf-8") as f:
+    with open(fpath, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
     return validate_probabilities_schema(data, source_desc=fpath)
 
@@ -203,7 +203,7 @@ def load_choreo_settings(filepath: Optional[str] = None) -> Dict[str, Any]:
         fpath = filepath
     if not os.path.exists(fpath):
         raise FileNotFoundError(f"Choreography settings configuration file not found at: {fpath}")
-    with open(fpath, "r", encoding="utf-8") as f:
+    with open(fpath, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
     required_keys = [
         "smoothing_alpha_pan",

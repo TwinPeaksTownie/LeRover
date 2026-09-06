@@ -14,13 +14,13 @@
     "enforce_word_limit_error": true
   },
   "audit": {
-    "active_backend": "local",
-    "model": "moonshotai/kimi-k3",
+    "active_backend": "nim",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b",
     "lm_studio_url": "http://127.0.0.1:1234/v1/chat/completions",
     "nim_url": "https://integrate.api.nvidia.com/v1/chat/completions",
     "max_tokens": 16384,
-    "temperature": 1.0,
-    "reasoning_effort": "low",
+    "temperature": 0.2,
+    "reasoning_effort": null,
     "default_speak_verdict": true,
     "max_diff_chars": 12000,
     "uncommitted_fallback_commits": 4,
@@ -34,10 +34,10 @@
       },
       "nim": {
         "url": "https://integrate.api.nvidia.com/v1/chat/completions",
-        "model": "moonshotai/kimi-k3",
-        "max_tokens": 16384,
-        "temperature": 1.0,
-        "reasoning_effort": "low",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b",
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "reasoning_effort": null,
         "seed": 0
       }
     }

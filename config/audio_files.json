@@ -48,6 +48,10 @@
       "file": "smw_pause.wav",
       "description": "Peripheral disconnected"
     },
+    "correct": {
+      "file": "smw_save_menu.wav",
+      "description": "Operation or track action completed successfully"
+    },
     "incorrect": {
       "file": "smw_incorrect.wav",
       "description": "Action failed or invalid input"

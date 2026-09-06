@@ -99,6 +99,7 @@ class BeatBanditApp(BaseApp):
             self.logger.error(f"Failed to save manifest: {e}")
 
     def list_tracks(self) -> List[Dict[str, Any]]:
+        self.manifest = self._load_manifest()
         tracks = []
         for tid, meta in self.manifest.items():
             if "wav_path" not in meta:
@@ -275,29 +276,39 @@ class BeatBanditApp(BaseApp):
         else:
             track_id = clean_id
 
-        # 1. Check local cache
+        # 1. Reload manifest dynamically from disk to detect newly analyzed tracks
+        self.manifest = self._load_manifest()
+
+        # 2. Check local cache
         if track_id in self.manifest:
             track_meta = self.manifest[track_id]
-            wav_path = track_meta.get("wav_path")
-            if not wav_path or not os.path.exists(wav_path):
+            if "wav_path" not in track_meta:
                 cand_path = str(self.library_dir / f"{track_id}.wav")
                 if os.path.exists(cand_path):
-                    wav_path = cand_path
                     track_meta["wav_path"] = cand_path
+                else:
+                    raise KeyError(f"Track '{track_id}' missing mandatory 'wav_path' in manifest")
+            wav_path = track_meta["wav_path"]
+            if not os.path.exists(wav_path):
+                raise FileNotFoundError(f"WAV audio file for track '{track_id}' not found at: {wav_path}")
 
-            if wav_path and os.path.exists(wav_path):
-                self.logger.info(f"Loading cached track '{track_meta.get('title')}' ({track_id})...")
-                self.active_track = track_meta
-                self.active_analysis = track_meta.get("analysis")
-                self._start_player_session(backend, start_sec=start_sec, end_sec=end_sec, loop=loop)
-                return {
-                    "status": "ok",
-                    "mode": "cached_instant",
-                    "track": self.active_track,
-                    "start_sec": start_sec,
-                    "end_sec": end_sec,
-                    "loop": loop
-                }
+            if "title" not in track_meta:
+                raise KeyError(f"Track '{track_id}' missing mandatory 'title' in manifest")
+            if "analysis" not in track_meta:
+                raise KeyError(f"Track '{track_id}' missing mandatory 'analysis' in manifest")
+
+            self.logger.info(f"Loading cached track '{track_meta['title']}' ({track_id})...")
+            self.active_track = track_meta
+            self.active_analysis = track_meta["analysis"]
+            self._start_player_session(backend, start_sec=start_sec, end_sec=end_sec, loop=loop)
+            return {
+                "status": "ok",
+                "mode": "cached_instant",
+                "track": self.active_track,
+                "start_sec": start_sec,
+                "end_sec": end_sec,
+                "loop": loop
+            }
 
         # 2. Download and Analyze asynchronously
         self.current_state = "DOWNLOADING"

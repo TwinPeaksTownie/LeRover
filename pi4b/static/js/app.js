@@ -82,6 +82,9 @@ import {
 import * as api from './api.js';
 import * as ui from './ui.js?v=2.6';
 
+let previousListenerState = 'IDLE';
+let lastHandledAnalysisTimestamp = 0.0;
+
 // ==========================================
 // Action Handlers
 // ==========================================
@@ -415,7 +418,7 @@ export function startBeatBanditTrack(urlOrId) {
             setIsBeatBanditAppRunning(true);
             setIsBeatBanditDancing(true);
             ui.renderButtonStates();
-            fetchBeatBanditTracks();
+            fetchBeatBanditTracks(undefined);
         })
         .catch(() => {
             if (btn) btn.style.opacity = '1.0';
@@ -481,7 +484,7 @@ export function startBeatBanditSectionPlay() {
         });
 }
 
-export function fetchBeatBanditTracks() {
+export function fetchBeatBanditTracks(targetTrackId) {
     if (isFetchingTracks) return;
     setIsFetchingTracks(true);
     api.fetchBeatBanditTracksApi()
@@ -491,7 +494,13 @@ export function fetchBeatBanditTracks() {
             setCachedBeatBanditTracks(tracks);
             ui.renderBeatBanditTracksList(tracks);
             loadBeatBanditProbabilities();
-            if ((!selectedBeatBanditTrackId || !activeChoreoData) && tracks.length > 0) {
+            if (typeof targetTrackId === 'string' && targetTrackId.length > 0) {
+                const trk = tracks.find(t => t.track_id === targetTrackId);
+                if (trk) {
+                    ui.selectBeatBanditTrack(trk.track_id, trk.title, trk.artist);
+                    loadChoreographyForTrack(trk.track_id);
+                }
+            } else if ((!selectedBeatBanditTrackId || !activeChoreoData) && tracks.length > 0) {
                 const selId = selectedBeatBanditTrackId || tracks[0].track_id;
                 const trk = tracks.find(t => t.track_id === selId) || tracks[0];
                 ui.selectBeatBanditTrack(trk.track_id, trk.title, trk.artist);
@@ -923,10 +932,43 @@ export function pollTelemetry() {
             return r.json();
         })
         .then(data => {
-            ui.updateTelemetryUI(data);
+            if (data) {
+                ui.updateTelemetryUI(data);
 
-            if (currentAppsMode === 'presets' || isClackPoseRunning) {
-                fetchPresetsList(false);
+                const lData = data.listener;
+                if (lData) {
+                    const curState = lData.state;
+                    const lastTrack = lData.last_analyzed_track;
+                    const prevListeningState = previousListenerState;
+                    previousListenerState = curState;
+
+                    const completedByStateTransition = (prevListeningState === 'ANALYZING' && curState === 'IDLE');
+                    let hasNewTrack = false;
+                    if (lastTrack && typeof lastTrack.timestamp === 'number') {
+                        if (lastTrack.timestamp > lastHandledAnalysisTimestamp) {
+                            hasNewTrack = true;
+                        }
+                    }
+
+                    if (completedByStateTransition || hasNewTrack) {
+                        if (hasNewTrack) {
+                            lastHandledAnalysisTimestamp = lastTrack.timestamp;
+                        }
+                        let newTrackId = undefined;
+                        if (lastTrack && typeof lastTrack.track_id === 'string') {
+                            newTrackId = lastTrack.track_id;
+                        }
+                        console.log(`[BeatBandit] Live update: Mac analysis finished (${newTrackId})`);
+                        fetchBeatBanditTracks(newTrackId);
+                        if (lastTrack && typeof lastTrack.title === 'string' && lastTrack.title.length > 0) {
+                            ui.setHeaderAlert('READY: ' + lastTrack.title.toUpperCase());
+                        }
+                    }
+                }
+
+                if (currentAppsMode === 'presets' || isClackPoseRunning) {
+                    fetchPresetsList(false);
+                }
             }
         })
         .catch(() => {
@@ -1003,7 +1045,7 @@ function bindEventListeners() {
     });
     if (launchBeatBandit) launchBeatBandit.addEventListener('click', () => {
         ui.openAppsSubView('beat_bandit');
-        fetchBeatBanditTracks();
+        fetchBeatBanditTracks(undefined);
     });
     if (launchListener) launchListener.addEventListener('click', () => {
         ui.openAppsSubView('listener');
@@ -2120,7 +2162,7 @@ function initApp() {
         }
         const savedAppsSub = params.get('apps_sub') || localStorage.getItem('apps_subview') || 'launcher';
         ui.openAppsSubView(savedAppsSub);
-        fetchBeatBanditTracks();
+        fetchBeatBanditTracks(undefined);
         const reqTrack = params.get('track');
         if (reqTrack) {
             setSelectedBeatBanditTrackId(reqTrack);

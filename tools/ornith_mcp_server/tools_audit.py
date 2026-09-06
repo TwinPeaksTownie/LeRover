@@ -489,18 +489,52 @@ def query_ornith_for_review(
         dep = contract_res["deployment_status"]
         deployment_info = f"Files checked: {dep['checked_files']}, Parity Mismatches: {dep['has_mismatch']}, All Verified: {dep['all_verified']}"
 
-    # State 4 Daemon Log Inspection
+    # State 4 Daemon Log Inspection & Remote Smoke Tests
     daemon_log_info = "Daemon logs clean."
     target_node = "pi4b"
     try:
-        d_logs = tools_hardware.query_daemon_logs(target_node, "backend.service", lines=25)
-        if not d_logs["clean"]:
+        d_logs = tools_hardware.query_daemon_logs(target_node, "backend.service", since="10 minutes ago")
+        if "clean" in d_logs and not d_logs["clean"]:
             daemon_log_info = f"Errors found ({d_logs['error_count']}): " + "; ".join(d_logs["detected_errors"][:3])
             violations_detail += f"\n- [DAEMON_LOG_ERROR] {target_node} backend.service logs:\n  " + "\n  ".join(d_logs["detected_errors"][:3])
         else:
             daemon_log_info = f"0 exceptions or timeouts in recent journalctl on {target_node}."
     except Exception as e:
         _log_debug(f"Daemon log query warning: {e}")
+
+    # Remote Python Import Smoke Test
+    try:
+        import_cmd = "python3 -c \"import sys; sys.path.insert(0, '/home/carson/touch_ui'); import apps.beat_bandit.app; import apps.listener_app.app; print('IMPORTS_OK')\""
+        import_res = tools_hardware.ssh_run_command(target_node, import_cmd)
+        is_ok = ("status" in import_res and import_res["status"] == "success" and "stdout" in import_res and "IMPORTS_OK" in import_res["stdout"])
+        if not is_ok:
+            err_msg = "Import failed"
+            if "stderr" in import_res and import_res["stderr"]:
+                err_msg = import_res["stderr"]
+            elif "stdout" in import_res and import_res["stdout"]:
+                err_msg = import_res["stdout"]
+            violations_detail += f"\n- [REMOTE_IMPORT_SMOKE_TEST] {target_node} Python import smoke test failed:\n  {err_msg[:300].strip()}"
+    except Exception as e:
+        _log_debug(f"Import smoke test warning: {e}")
+
+    # App Registry Parity Check
+    try:
+        status_cmd = "curl -s http://127.0.0.1:8082/api/status"
+        status_res = tools_hardware.ssh_run_command(target_node, status_cmd)
+        if "status" in status_res and status_res["status"] == "success" and "stdout" in status_res and status_res["stdout"].strip():
+            s_data = json.loads(status_res["stdout"])
+            apps_list = []
+            if "apps" in s_data and isinstance(s_data["apps"], list):
+                apps_list = s_data["apps"]
+            elif "hardware_telemetry" in s_data and isinstance(s_data["hardware_telemetry"], dict) and "apps" in s_data["hardware_telemetry"]:
+                apps_list = s_data["hardware_telemetry"]["apps"]
+            app_names = [a["name"] for a in apps_list if "name" in a]
+            expected_apps = ["beat_bandit_app", "listener_app"]
+            missing_apps = [ea for ea in expected_apps if ea not in app_names]
+            if missing_apps:
+                violations_detail += f"\n- [APP_REGISTRY_PARITY] Missing registered apps in /api/status on {target_node}: {missing_apps}. Discovered apps: {app_names}"
+    except Exception as e:
+        _log_debug(f"App registry parity warning: {e}")
 
     system_prompt = """You are Ornith, the adversarial code reviewer and hardware supervisor for the SO-101 robotic arm and touch UI system.
 Your job is to strictly enforce the following rules:

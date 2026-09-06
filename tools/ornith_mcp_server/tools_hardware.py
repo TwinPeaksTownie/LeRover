@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import urllib.request
+from typing import Optional, List, Dict, Any
 
 NODE_MAP = {
     "pi500": "user@192.168.0.130",
@@ -228,15 +229,18 @@ def sample_motor_telemetry(
 def query_daemon_logs(
     node: str = "pi500",
     service_name: str = "backend.service",
-    lines: int = 50
+    lines: Optional[int] = None,
+    since: str = "10 minutes ago"
 ) -> dict:
     """
     Scans systemd journal logs on the target node for serial timeouts, exceptions, and errors (State 4).
+    Uses a time window query (--since) by default to prevent access log spam from flushing crash traces.
     
     Args:
         node: Remote node alias (defaults to 'pi500').
         service_name: Systemd service name to query.
-        lines: Number of recent log lines to inspect.
+        lines: Optional line count limit. If None, queries entire --since window.
+        since: Time window for log query (defaults to '10 minutes ago').
         
     Returns:
         Dict with clean flag, detected errors, and log output.
@@ -244,7 +248,11 @@ def query_daemon_logs(
     if service_name == "backend.service" and node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
         service_name = "sewer-daemon.service"
 
-    cmd = f"journalctl -u {service_name} -n {lines} --no-pager"
+    if lines is not None and since is None:
+        cmd = f"journalctl -u {service_name} -n {lines} --no-pager"
+    else:
+        cmd = f'journalctl -u {service_name} --since "{since}" --no-pager'
+
     res = ssh_run_command(node, cmd)
     if res.get("status") != "success":
         return res
@@ -259,16 +267,25 @@ def query_daemon_logs(
         "KeyError:",
         "FileNotFoundError:",
         "TimeoutError",
+        "JSONDecodeError",
         "Device or resource busy",
         "Permission denied",
         "CRITICAL",
-        "Fatal error"
+        "Fatal error",
+        "ERROR:",
+        "Cannot start unknown app",
+        "Failed to auto-discover app",
+        "Unexpected UTF-8 BOM",
     ]
     
     for line in log_text.splitlines():
+        clean_line = line.strip()
+        # Filter out benign HTTP access log entries from rapid polling (e.g. GET /api/status HTTP/1.1" 200 -)
+        if ' "GET /' in clean_line or ' "POST /' in clean_line:
+            continue
         for marker in error_markers:
-            if marker.lower() in line.lower():
-                detected_errors.append(line.strip())
+            if marker.lower() in clean_line.lower():
+                detected_errors.append(clean_line)
                 break
 
     return {

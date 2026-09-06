@@ -170,6 +170,7 @@ class ListenerApp(BaseApp):
         self.asr_model: Any = None
         self.kws_engine: Any = None
         self.calib_limits: Dict[int, Dict[str, int]] = {}
+        self.last_analyzed_track: Optional[Dict[str, Any]] = None
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured status dictionary for Master API inspection."""
@@ -182,6 +183,7 @@ class ListenerApp(BaseApp):
                 "search_query": self.search_query,
                 "search_results": list(self.search_results),
                 "selected_index": self.selected_index,
+                "last_analyzed_track": self.last_analyzed_track,
                 "error": self.error,
             }
 
@@ -288,6 +290,12 @@ class ListenerApp(BaseApp):
 
                 self.logger.info("Successfully analyzed and saved track '%s' (ID: %s) to %s", song_title, vid, wav_path)
                 with self._selection_lock:
+                    self.last_analyzed_track = {
+                        "track_id": vid,
+                        "title": song_title,
+                        "artist": artist,
+                        "timestamp": time.time(),
+                    }
                     self.state = "IDLE"
                 self._play_chime("commit")
             except Exception as e:

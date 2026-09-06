@@ -363,6 +363,115 @@ def scan_html_code(code: str, filename: str) -> List[Dict[str, Any]]:
         violations.extend(js_violations)
     return violations
 
+def scan_json_file(full_path: str, filename: str) -> List[Dict[str, Any]]:
+    violations = []
+    # 1. Inspect raw bytes for UTF-8 BOM
+    try:
+        with open(full_path, "rb") as f:
+            raw_bytes = f.read()
+    except Exception as e:
+        return [{
+            "rule": "FILE_READ_ERROR",
+            "file": filename,
+            "line": 1,
+            "snippet": "",
+            "reason": f"Failed to read file: {e}"
+        }]
+
+    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+        violations.append({
+            "rule": "JSON_BOM_DETECTED",
+            "file": filename,
+            "line": 1,
+            "snippet": "\\xef\\xbb\\xbf",
+            "reason": "Forbidden UTF-8 Byte Order Mark (BOM) detected in JSON file. Must be clean UTF-8 without BOM."
+        })
+
+    # 2. Validate JSON syntax strictly with utf-8 decode
+    try:
+        text = raw_bytes.decode("utf-8")
+        data = json.loads(text)
+    except UnicodeDecodeError as e:
+        violations.append({
+            "rule": "JSON_ENCODING_ERROR",
+            "file": filename,
+            "line": 1,
+            "snippet": str(e),
+            "reason": f"JSON file failed UTF-8 decoding: {e}"
+        })
+        return violations
+    except json.JSONDecodeError as e:
+        snippet_text = ""
+        lines = e.doc.splitlines()
+        if 0 <= e.lineno - 1 < len(lines):
+            snippet_text = lines[e.lineno - 1]
+        violations.append({
+            "rule": "JSON_SYNTAX_ERROR",
+            "file": filename,
+            "line": e.lineno,
+            "snippet": snippet_text,
+            "reason": f"JSON syntax validation failed: {e.msg} (line {e.lineno} col {e.colno})"
+        })
+        return violations
+
+    # 3. Known file fail-fast schema key validation
+    base_name = os.path.basename(filename).lower()
+    if base_name == "choreo_settings.json":
+        required_keys = [
+            "smoothing_alpha_pan",
+            "smoothing_alpha_roll",
+            "neutral_pose",
+            "jaw_gate_threshold",
+            "jaw_max_open_rom",
+            "head_nod_depth_rom",
+            "vibrato_amplitude",
+            "groove_max_sway_rom",
+            "head_tilt_max_rom",
+            "gantry_default_speed"
+        ]
+        for k in required_keys:
+            if k not in data:
+                violations.append({
+                    "rule": "JSON_SCHEMA_CONTRACT",
+                    "file": filename,
+                    "line": 1,
+                    "snippet": k,
+                    "reason": f"choreo_settings.json missing mandatory top-level key '{k}'"
+                })
+    elif base_name == "choreography_probabilities.json":
+        required_sections = ["pedestal_s7", "gantry_s8", "torso_s1", "head_tilt_s5", "neck_pitch_s4", "spine_gaze", "bounce_modifier"]
+        for sec in required_sections:
+            if sec not in data:
+                violations.append({
+                    "rule": "JSON_SCHEMA_CONTRACT",
+                    "file": filename,
+                    "line": 1,
+                    "snippet": sec,
+                    "reason": f"choreography_probabilities.json missing mandatory section '{sec}'"
+                })
+    elif base_name == "audio_files.json":
+        if "events" not in data:
+            violations.append({
+                "rule": "JSON_SCHEMA_CONTRACT",
+                "file": filename,
+                "line": 1,
+                "snippet": "events",
+                "reason": "audio_files.json missing mandatory 'events' section"
+            })
+        else:
+            for ev in ["correct", "incorrect"]:
+                if ev not in data["events"]:
+                    violations.append({
+                        "rule": "JSON_SCHEMA_CONTRACT",
+                        "file": filename,
+                        "line": 1,
+                        "snippet": ev,
+                        "reason": f"audio_files.json missing mandatory audio event '{ev}'"
+                    })
+
+    return violations
+
+
 def scan_source_file(file_path: str, repo_path: str = None) -> List[Dict[str, Any]]:
     if repo_path and not os.path.isabs(file_path):
         full_path = os.path.join(repo_path, file_path)
@@ -371,6 +480,10 @@ def scan_source_file(file_path: str, repo_path: str = None) -> List[Dict[str, An
 
     if not os.path.isfile(full_path):
         return []
+
+    lower_name = file_path.lower()
+    if lower_name.endswith(".json"):
+        return scan_json_file(full_path, file_path)
 
     try:
         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
@@ -384,7 +497,6 @@ def scan_source_file(file_path: str, repo_path: str = None) -> List[Dict[str, An
             "reason": f"Failed to read file: {e}"
         }]
 
-    lower_name = file_path.lower()
     if lower_name.endswith(".py"):
         return scan_python_code(content, file_path)
     elif lower_name.endswith(".js"):
