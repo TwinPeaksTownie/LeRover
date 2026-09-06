@@ -17,6 +17,9 @@ from typing import Dict, Any, Tuple, Optional, List, Union
 from aux_servo_controller import AuxiliaryServoController
 from power_manager import BusPowerManager
 from telemetry_proxies import _ServoFieldProxy, _ServoMotorStatesProxy, MOTOR_NAMES
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
+
 try:
     from lerobot.motors import Motor, MotorCalibration, MotorNormMode
     from lerobot.motors.feetech import FeetechMotorsBus
@@ -27,9 +30,6 @@ except ImportError:
     MotorNormMode = Any
     FeetechMotorsBus = Any
     LEROBOT_AVAILABLE = False
-
-sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
-sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 from audio_resolver import dispatch_audio_event
 
