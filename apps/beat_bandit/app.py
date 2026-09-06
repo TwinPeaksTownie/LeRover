@@ -23,14 +23,14 @@ try:
     from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
     from beat_studio import BeatStudioManager
     from choreography_player import ChoreographyPlayer
-    from choreography_compiler import load_dance_presets, load_choreography_probabilities
+    from choreography_compiler import load_dance_presets, load_choreography_probabilities, load_choreo_settings
 except ImportError:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
     from beat_studio import BeatStudioManager
     from choreography_player import ChoreographyPlayer
-    from choreography_compiler import load_dance_presets, load_choreography_probabilities
+    from choreography_compiler import load_dance_presets, load_choreography_probabilities, load_choreo_settings
 
 APP_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = APP_DIR / "config.json"
@@ -401,6 +401,14 @@ class BeatBanditApp(BaseApp):
         track_id = self.active_track["track_id"]
         choreo = self.studio_manager.get_track_choreography(track_id)
         self.active_track["choreography"] = choreo
+
+        canonical_settings = load_choreo_settings()
+        if "settings" not in choreo or not isinstance(choreo["settings"], dict):
+            choreo["settings"] = dict(canonical_settings)
+        else:
+            for k, v in canonical_settings.items():
+                if k not in choreo["settings"]:
+                    choreo["settings"][k] = v
 
         if "probabilities" not in choreo or not isinstance(choreo["probabilities"], dict):
             choreo["probabilities"] = load_choreography_probabilities()

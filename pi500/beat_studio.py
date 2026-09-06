@@ -22,6 +22,7 @@ try:
         load_dance_presets,
         load_choreography_probabilities,
         get_choreography_probabilities_path,
+        load_choreo_settings,
         ROM_POSES,
         CHOREO_SCHEMA_VERSION,
         DEFAULT_CHOREO_SETTINGS,
@@ -35,6 +36,7 @@ except ImportError:
         load_dance_presets,
         load_choreography_probabilities,
         get_choreography_probabilities_path,
+        load_choreo_settings,
         ROM_POSES,
         CHOREO_SCHEMA_VERSION,
         DEFAULT_CHOREO_SETTINGS,
@@ -91,6 +93,22 @@ class BeatStudioManager:
         if not choreo or not choreo.get("tracks") or choreo.get("version") != CHOREO_SCHEMA_VERSION:
             self.logger.info(f"Auto-compiling choreography for '{track_meta.get('title')}' ({track_id})...")
             choreo = compile_default_choreography(analysis, duration, existing_choreo=choreo)
+            track_meta["choreography"] = choreo
+            manifest[track_id] = track_meta
+            self._save_manifest(manifest)
+
+        # Ensure settings is hydrated for fail-fast ChoreographyPlayer contract
+        canonical_settings = load_choreo_settings()
+        settings_modified = False
+        if "settings" not in choreo or not isinstance(choreo["settings"], dict):
+            choreo["settings"] = dict(canonical_settings)
+            settings_modified = True
+        else:
+            for k, v in canonical_settings.items():
+                if k not in choreo["settings"]:
+                    choreo["settings"][k] = v
+                    settings_modified = True
+        if settings_modified:
             track_meta["choreography"] = choreo
             manifest[track_id] = track_meta
             self._save_manifest(manifest)
