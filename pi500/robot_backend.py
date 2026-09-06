@@ -103,7 +103,7 @@ def calc_next_s7_preset(curr_deg: float, direction: str) -> Tuple[float, bool]:
 def load_calibration(fpath: Path) -> dict[str, MotorCalibration]:
     if not fpath.exists():
         raise FileNotFoundError(f"Calibration file not found at {fpath}")
-    with open(fpath) as f:
+    with open(fpath, "r", encoding="utf-8-sig") as f:
         raw = json.load(f)
     return {motor: MotorCalibration(**vals) for motor, vals in raw.items()}
 

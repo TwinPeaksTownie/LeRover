@@ -19,7 +19,7 @@ class AuxiliaryServoController:
         self.baudrate = baudrate
         self.ser = ser
         self.bus_lock = bus_lock if bus_lock is not None else threading.RLock()
-        if self.ser is None:
+        if self.ser is None or not self.ser.is_open:
             self.connect()
 
     def connect(self):
