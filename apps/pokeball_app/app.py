@@ -26,10 +26,8 @@ from typing import Optional, Dict, Any, Tuple
 # Ensure repo root and rover package are importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-config_dir = os.path.join(workspace_root, "config")
-for p in [workspace_root, config_dir]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
+if workspace_root not in sys.path:
+    sys.path.insert(0, workspace_root)
 
 try:
     from rover.rover_controller import RoverController
@@ -72,6 +70,8 @@ def load_pokeball_config() -> dict:
     _ = cfg["gestures"]["arm_drivetrain_sec"]
     _ = cfg["gestures"]["arm_lockout_sec"]
     _ = cfg["gestures"]["b_hold_sec"]
+    _ = cfg["gestures"]["a_hold_sec"]
+    _ = cfg["gestures"]["auto_arm_on_start"]
     _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["ble_connect"]
     _ = cfg["chimes"]["ble_disconnect"]
@@ -150,7 +150,8 @@ class PokeballService:
         mac_address: str = MAC_ADDRESS,
         api_url: str = API_URL,
         backend: Optional[RobotBackend] = None,
-        voice_bridge_url: Optional[str] = None
+        voice_bridge_url: Optional[str] = None,
+        app_manager: Optional[Any] = None
     ) -> None:
         self.mac_address = mac_address
         self.api_url = api_url
@@ -170,7 +171,7 @@ class PokeballService:
         self.config = _CONFIG
 
         self.is_connected = False
-        self.app_manager = None
+        self.app_manager = app_manager
         self.button_b_click_event = threading.Event()
         self.abort_audio_event = threading.Event()
         self.b_hold_triggered = False
@@ -191,6 +192,8 @@ class PokeballService:
         self.is_armed = False
         self.arm_lockout_until = 0.0
         self.stick_press_start_time: Optional[float] = None
+        self.btn_a_press_start_time: Optional[float] = None
+        self.a_hold_triggered = False
         self.last_btn_stick_press_time = 0.0
         self.last_rover_interaction_time = 0.0
         self.rover_drive_active_time = 0.0
@@ -241,7 +244,12 @@ class PokeballService:
             self.logger.debug("Telemetry write error: %s", e)
 
     def get_telemetry(self) -> Dict[str, Any]:
-        return dict(self.telemetry)
+        data = dict(self.telemetry)
+        data["is_armed"] = self.is_armed
+        data["teleop_enabled"] = self.teleop_enabled
+        if hasattr(self, "rover_ctrl") and self.rover_ctrl:
+            data["rover"] = self.rover_ctrl.get_telemetry()
+        return data
 
     def prompt_connect_announcement(self) -> None:
         """Plays startup blarg sound over Pi 4B audio service upon daemon startup."""
@@ -373,20 +381,41 @@ class PokeballService:
                     self.telemetry["hold_progress"] = 0.0
 
             # --- 3. BUTTON A (JOYSTICK CLICK) HANDLING (When not in chord) ---
+            a_hold_sec = float(_CONFIG["gestures"]["a_hold_sec"])
             if btn_a and not btn_b:
-                if self.stick_press_start_time is None:
-                    self.stick_press_start_time = now
-                hold_duration_a = now - self.stick_press_start_time
+                if self.btn_a_press_start_time is None:
+                    self.btn_a_press_start_time = now
+                hold_duration_a = now - self.btn_a_press_start_time
 
-                # When PokeballApp is active: hold arms rover drivetrain
-                if self.teleop_enabled:
-                    if hold_duration_a >= arm_drivetrain_sec and not self.is_armed:
+                # 3-second hold regardless of whether PokeballApp is started:
+                # Kills other apps, starts PokeballApp, and arms rover drivetrain immediately
+                if hold_duration_a >= a_hold_sec and not self.a_hold_triggered:
+                    self.a_hold_triggered = True
+                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Launching Poké Ball Teleop for rover control...", hold_duration_a)
+                    if self.app_manager:
+                        if self.app_manager.current_app_name != "pokeball_teleop_app":
+                            def _launch_rover():
+                                self.logger.info("Terminating active app and launching pokeball_teleop_app...")
+                                self.app_manager.start_app_by_name("pokeball_teleop_app")
+                                self.teleop_enabled = True
+                                self.is_armed = True
+                                self.arm_lockout_until = 0.0
+                            threading.Thread(target=_launch_rover, daemon=True).start()
+                        else:
+                            self.teleop_enabled = True
+                            self.is_armed = True
+                            self.arm_lockout_until = 0.0
+                            self.logger.info("PokeballApp already active; re-armed rover drivetrain.")
+                        play_chime(_CONFIG["chimes"]["arm_rover"])
+                    else:
+                        self.teleop_enabled = True
                         self.is_armed = True
-                        self.arm_lockout_until = now + arm_lockout_sec
-                        self.logger.info("🏎️ Drivetrain Arming triggered! Playing Mario Kart countdown (lockout until %.1f)...", self.arm_lockout_until)
+                        self.arm_lockout_until = 0.0
                         play_chime(_CONFIG["chimes"]["arm_rover"])
             else:
+                self.btn_a_press_start_time = None
                 self.stick_press_start_time = None
+                self.a_hold_triggered = False
 
             # --- 4. TELEOPERATION ACTUATION (When PokeballApp is Active) ---
             if self.teleop_enabled:
@@ -575,7 +604,8 @@ class PokeballApp(BaseApp):
         self.pokeball_service = service
 
         service.teleop_enabled = True
-        service.is_armed = False
+        auto_arm = bool(_CONFIG["gestures"]["auto_arm_on_start"])
+        service.is_armed = auto_arm
         service.arm_lockout_until = 0.0
 
         if self.rover_ctrl is None:
@@ -585,7 +615,10 @@ class PokeballApp(BaseApp):
             self.rover_ctrl.start()
         service.rover_ctrl = self.rover_ctrl
 
-        self.logger.info("PokeballApp enabled teleoperation on intrinsic PokeballService (Unarmed baseline).")
+        self.logger.info(
+            "PokeballApp enabled teleoperation on intrinsic PokeballService (Armed: %s).",
+            service.is_armed
+        )
         while not stop_event.is_set():
             time.sleep(0.5)
 

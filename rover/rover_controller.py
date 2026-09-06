@@ -218,7 +218,9 @@ class RoverController:
             if not self.mock_mode and ser is None:
                 try:
                     import serial
-                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=0.01)
+                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=0.01, write_timeout=1.0)
+                    ser.dtr = True
+                    ser.rts = True
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)
@@ -240,9 +242,9 @@ class RoverController:
                                 idx = rx_buf.find(b'\n')
                                 line_bytes = rx_buf[:idx]
                                 rx_buf = rx_buf[idx + 1:]
-                                line = line_bytes.decode('utf-8', errors='ignore').strip()
-                                if line.startswith("STAT:"):
-                                    self._parse_stat_line(line)
+                                line = line_bytes.decode('utf-8', errors='replace').strip()
+                                if "STAT:" in line:
+                                    self._parse_stat_line(line[line.find("STAT:"):])
                 except Exception as e:
                     logger.warning("Serial read error on %s: %s", self.serial_port, e)
                     try:
@@ -340,10 +342,15 @@ class RoverController:
     def _parse_stat_line(self, line: str) -> None:
         """Parses telemetry feedback string from KB2040."""
         try:
-            parts = line.replace("STAT:", "").split(",")
+            clean = line.strip()
+            if "STAT:" in clean:
+                clean = clean[clean.find("STAT:") + 5:]
+            parts = clean.split(",")
             if len(parts) >= 8:
                 with self._lock:
-                    self.telemetry["mode"] = parts[0]
+                    self.telemetry["mode"] = parts[0].strip()
+                    self.telemetry["left_out"] = int(parts[1])
+                    self.telemetry["right_out"] = int(parts[2])
                     self.telemetry["sbus_active"] = int(parts[3])
                     self.telemetry["web_active"] = int(parts[4])
                     self.telemetry["ch1"] = int(parts[5])
