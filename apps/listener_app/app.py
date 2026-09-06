@@ -46,7 +46,13 @@ import network_resolver
 import audio_resolver
 
 from apps.listener_app.intent_parser import parse_intent
-from apps.listener_app.song_pipeline import download_and_compile, find_compiled_sequence, find_beat_bandit_track, fetch_search_candidates
+from apps.listener_app.song_pipeline import (
+    download_and_compile,
+    find_compiled_sequence,
+    find_beat_bandit_track,
+    fetch_search_candidates,
+    get_beat_bandit_manifest_path,
+)
 
 CONFIG_PATH = APP_DIR / "config.json"
 
@@ -159,6 +165,7 @@ class ListenerApp(BaseApp):
         self.search_results: List[Dict[str, Any]] = []
         self.selected_index: int = 0
         self._selection_lock = threading.RLock()
+        self._stream_resp: Any = None
         self.app_manager: Any = None
         self.asr_model: Any = None
         self.kws_engine: Any = None
@@ -189,61 +196,108 @@ class ListenerApp(BaseApp):
             self.logger.info("Track selection navigated to index %d: %s", self.selected_index, self.search_results[self.selected_index]["title"])
             return self.selected_index
 
-    def select_track(self, index: Optional[int] = None, track_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Selects a track by index or track_id and dispatches download & compilation."""
+    def select_track(self, index: int) -> Dict[str, Any]:
+        """Selects a candidate track by index without triggering download.
+        Strict fail-fast bounds checking and Rule 13 compliance.
+        """
         with self._selection_lock:
-            if self.state == "DOWNLOADING":
-                self.logger.warning("select_track rejected: download and compilation already active")
-                return None
             if not self.search_results:
-                self.logger.warning("select_track called with empty search_results")
-                return None
+                raise ValueError("select_track called with empty search_results")
+            if index < 0 or index >= len(self.search_results):
+                raise IndexError(f"Track selection index {index} out of bounds (total: {len(self.search_results)})")
+            self.selected_index = index
+            target_track = self.search_results[index]
+            _ = target_track["video_id"]
+            _ = target_track["title"]
+            self.logger.info("Track selected at index %d: '%s' (%s)", index, target_track["title"], target_track["video_id"])
+            return target_track
 
-            target_track = None
-            if index is not None:
-                if 0 <= index < len(self.search_results):
-                    self.selected_index = index
-                    target_track = self.search_results[index]
-                else:
-                    self.logger.warning("Invalid track index %d (out of range)", index)
-                    return None
-            elif track_id is not None:
-                for i, t in enumerate(self.search_results):
-                    if t["id"] == track_id:
-                        self.selected_index = i
-                        target_track = t
-                        break
-                if target_track is None:
-                    self.logger.warning("Track ID '%s' not found in search results", track_id)
-                    return None
-            else:
-                if 0 <= self.selected_index < len(self.search_results):
-                    target_track = self.search_results[self.selected_index]
-                else:
-                    return None
+    def trigger_analysis(self, index: Optional[int] = None) -> Dict[str, Any]:
+        """Triggers YouTube download and neural analysis on Mac Mini for selected candidate.
+        Strict fail-fast schema compliance and single ANALYZING state (Rule 13).
+        """
+        with self._selection_lock:
+            if self.state == "ANALYZING":
+                raise RuntimeError("trigger_analysis rejected: Mac analysis already active")
+            if not self.search_results:
+                raise ValueError("trigger_analysis called with empty search_results")
 
-            self.logger.info("Track selected: '%s' (%s), initiating download...", target_track["title"], target_track["id"])
-            self.state = "DOWNLOADING"
+            if index is None:
+                index = self.selected_index
+            if index < 0 or index >= len(self.search_results):
+                raise IndexError(f"Analysis index {index} out of bounds (total: {len(self.search_results)})")
+
+            self.selected_index = index
+            target_track = self.search_results[index]
+            _ = target_track["video_id"]
+            _ = target_track["title"]
+
+            self.logger.info("Triggering Mac analysis for track index %d: '%s' (%s)...", index, target_track["title"], target_track["video_id"])
+            self.state = "ANALYZING"
             self._play_chime("commit")
 
-        def _do_download_and_compile():
+        def _do_mac_analysis():
             try:
-                out_path = download_and_compile(
-                    title=target_track["title"],
-                    video_id=target_track["id"],
-                )
-                self.logger.info("Choreography ready at: %s", out_path)
+                vid = str(target_track["video_id"])
+                raw_title = str(target_track["title"])
+                url = f"https://youtu.be/{vid}"
+
+                # 1. Initialize BeatBanditAudioClient pointing to canonical Beat Bandit library
+                from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
+                manifest_path = get_beat_bandit_manifest_path()
+                if manifest_path is not None:
+                    lib_dir = manifest_path.parent
+                else:
+                    if os.name == "nt":
+                        lib_dir = WORKSPACE_ROOT / "library" / "beat_bandit"
+                    else:
+                        lib_dir = Path.home() / "so101" / "library" / "beat_bandit"
+                lib_dir.mkdir(parents=True, exist_ok=True)
+                audio_client = BeatBanditAudioClient(lib_dir)
+
+                # 2. Request analysis from Mac Mini (blocks until Demucs + Essentia complete)
+                self.logger.info("Calling Mac Mini /api/analyze_track for '%s' (%s)...", raw_title, vid)
+                analysis = audio_client.fetch_analysis(url_or_id=url, track_id=vid)
+
+                # 3. Download finished WAV from Mac Mini to local Beat Bandit library
+                self.logger.info("Downloading analyzed WAV for '%s' (%s) from Mac Mini...", raw_title, vid)
+                wav_path = audio_client.download_wav(track_id=vid)
+
+                # 4. Extract sanitized metadata
+                song_title, artist = sanitize_title_and_artist(raw_title)
+
+                # 5. Commit to manifest.json fail-fast
+                manifest_file = lib_dir / "manifest.json"
+                manifest_data: Dict[str, Any] = {}
+                if manifest_file.exists():
+                    with open(manifest_file, "r", encoding="utf-8") as f:
+                        manifest_data = json.load(f)
+
+                manifest_data[vid] = {
+                    "track_id": vid,
+                    "title": song_title,
+                    "artist": artist,
+                    "duration": float(analysis["duration"]),
+                    "bpm": float(analysis["bpm"]),
+                    "wav_path": wav_path,
+                    "analysis": analysis,
+                    "created_at": time.time(),
+                }
+                with open(manifest_file, "w", encoding="utf-8") as f:
+                    json.dump(manifest_data, f, indent=2)
+
+                self.logger.info("Successfully analyzed and saved track '%s' (ID: %s) to %s", song_title, vid, wav_path)
                 with self._selection_lock:
                     self.state = "IDLE"
-                self._play_chime("wake")
+                self._play_chime("commit")
             except Exception as e:
-                self.logger.error("Download and compile error: %s", e, exc_info=True)
+                self.logger.error("Mac analysis error for track '%s': %s", target_track["title"], e, exc_info=True)
                 with self._selection_lock:
                     self.error = str(e)
                     self.state = "IDLE"
                 self._play_chime("cancel")
 
-        threading.Thread(target=_do_download_and_compile, daemon=True).start()
+        threading.Thread(target=_do_mac_analysis, daemon=True).start()
         return target_track
 
     def setup(self, backend: RobotBackend) -> None:
@@ -368,27 +422,27 @@ class ListenerApp(BaseApp):
 
         pre_roll_buffer: deque[bytes] = deque(maxlen=4)  # 4 * 80ms = 320ms pre-roll buffer
 
-        stream_resp = None
+        self._stream_resp = None
         try:
             try:
-                stream_resp = self._connect_daemon_audio_stream()
+                self._stream_resp = self._connect_daemon_audio_stream()
                 self.logger.info("Successfully bound to live daemon microphone stream.")
             except Exception as e:
                 self.logger.warning("Could not open daemon audio stream (%s), entering command polling mode...", e, exc_info=True)
 
             # Utterance capture loop
             while not stop_event.is_set():
-                if stream_resp is not None:
-                    chunk = stream_resp.read(chunk_bytes)
+                if self._stream_resp is not None:
+                    chunk = self._stream_resp.read(chunk_bytes)
                     if not chunk:
                         self.logger.warning("Daemon audio stream EOF, attempting stream reconnect...")
                         try:
-                            stream_resp.close()
+                            self._stream_resp.close()
                         except (OSError, ValueError) as close_err:
                             self.logger.debug("Closing stream on EOF: %s", close_err)
                         time.sleep(1.0)
                         try:
-                            stream_resp = self._connect_daemon_audio_stream()
+                            self._stream_resp = self._connect_daemon_audio_stream()
                             self.logger.info("Reconnected to daemon audio stream.")
                         except Exception as rec_err:
                             self.logger.error("Failed to reconnect to daemon audio stream: %s", rec_err, exc_info=True)
@@ -417,7 +471,7 @@ class ListenerApp(BaseApp):
 
                     # Capture spoken command until silence
                     while not stop_event.is_set():
-                        c = stream_resp.read(chunk_bytes)
+                        c = self._stream_resp.read(chunk_bytes)
                         if not c:
                             break
                         command_chunks.append(c)
@@ -459,8 +513,8 @@ class ListenerApp(BaseApp):
 
                         elif intent_type == "DOWNLOAD_SONG":
                             with self._selection_lock:
-                                if self.state == "DOWNLOADING":
-                                    self.logger.warning("Rejecting search query: track download and compilation active")
+                                if self.state == "ANALYZING":
+                                    self.logger.warning("Rejecting search query: track analysis active on Mac")
                                     self._play_chime("cancel")
                                     continue
                             title = intent["title"]
@@ -482,7 +536,7 @@ class ListenerApp(BaseApp):
                                 self.logger.error("Search query failed for '%s': %s", query_str, e, exc_info=True)
                                 with self._selection_lock:
                                     self.error = str(e)
-                                    self.state = "LISTENING"
+                                    self.state = "IDLE"
                                 self._play_chime("cancel")
 
                         elif intent_type == "PLAY_SONG":
@@ -536,51 +590,49 @@ class ListenerApp(BaseApp):
                             self.stop()
                             return
 
-                    # Return to listening for next trigger if not waiting for user track selection
+                    # If waiting for user track selection or Mac analysis, close microphone and wait
                     with self._selection_lock:
-                        is_selecting = (self.state in ("SELECTING", "DOWNLOADING"))
+                        is_selecting = (self.state in ("SELECTING", "ANALYZING"))
                     if is_selecting:
-                        if stream_resp is not None:
+                        if self._stream_resp is not None:
                             try:
-                                stream_resp.close()
+                                self._stream_resp.close()
                             except Exception as e:
                                 self.logger.debug("Closing stream during track selection: %s", e)
-                            stream_resp = None
+                            self._stream_resp = None
                         while not stop_event.is_set():
                             with self._selection_lock:
-                                if self.state not in ("SELECTING", "DOWNLOADING"):
+                                if self.state not in ("SELECTING", "ANALYZING"):
                                     break
                             time.sleep(0.1)
                         if stop_event.is_set():
                             break
 
-                    if stream_resp is not None:
+                    # Single turn complete: close stream and transition to IDLE without looping wake chime
+                    if self._stream_resp is not None:
                         try:
-                            stream_resp.close()
+                            self._stream_resp.close()
                         except Exception as e:
-                            self.logger.debug("Closing stream before chime settle: %s", e)
-                        stream_resp = None
+                            self.logger.debug("Closing stream after command completion: %s", e)
+                        self._stream_resp = None
 
-                    pre_roll_buffer.clear()
-                    self.state = "LISTENING"
-                    self._play_chime("wake")
-                    if stop_event.wait(timeout=settle_delay):
-                        break
-                    try:
-                        stream_resp = self._connect_daemon_audio_stream()
-                        self.logger.info("Re-opened daemon audio stream after chime settle.")
-                    except Exception as e:
-                        self.logger.warning("Could not re-open daemon audio stream (%s), entering polling mode...", e)
+                    with self._selection_lock:
+                        if self.state not in ("SELECTING", "ANALYZING"):
+                            self.state = "IDLE"
+                    self.logger.info("ListenerApp single turn completed. Remaining in IDLE state.")
+                    stop_event.wait()
+                    break
 
         except Exception as e:
             self.logger.error("ListenerApp run error: %s", e, exc_info=True)
             self.error = str(e)
         finally:
-            if stream_resp is not None:
+            if self._stream_resp is not None:
                 try:
-                    stream_resp.close()
+                    self._stream_resp.close()
                 except Exception as e:
                     self.logger.warning("Error closing daemon stream response: %s", e, exc_info=True)
+                self._stream_resp = None
             self.state = "IDLE"
             self._play_chime("exit")
             self.logger.info("ListenerApp execution loop exited.")
@@ -589,3 +641,9 @@ class ListenerApp(BaseApp):
         """Signals the application loop to stop and release all hardware."""
         self.logger.info("Stopping ListenerApp...")
         self.stop_event.set()
+        if self._stream_resp is not None:
+            try:
+                self._stream_resp.close()
+            except Exception as e:
+                self.logger.debug("Error closing stream on stop: %s", e)
+            self._stream_resp = None

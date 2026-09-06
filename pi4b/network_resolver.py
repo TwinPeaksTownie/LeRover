@@ -19,8 +19,9 @@ _CONFIG_CACHE: Optional[Dict[str, Any]] = None
 _CONFIG_LOAD_TIME: float = 0.0
 _IP_CACHE: Dict[str, Tuple[str, float]] = {}
 CACHE_TTL_SEC: float = 2.5
+_HOTSPOT_CACHE: Optional[Tuple[bool, float]] = None
 
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: Dict[str, Any] = {
     "direct_ethernet": {
         "pi500_ip": "10.0.0.1",
         "pi4b_ip": "10.0.0.2",
@@ -30,9 +31,11 @@ DEFAULT_CONFIG = {
         "pi500_ip": "192.168.0.130",
         "pi4b_ip": "192.168.0.86",
         "mac_ip": "192.168.0.149",
+        "pc_ip": "192.168.0.194",
         "pi500_host": "pi500.local",
         "pi4b_host": "raspberrypi.local",
-        "mac_host": "mac-mini.local"
+        "mac_host": "mac-mini.local",
+        "pc_host": "workstation.local"
     },
     "ports": {
         "pi4b_http": 8082,
@@ -40,6 +43,7 @@ DEFAULT_CONFIG = {
         "pi4b_audio_udp": 5004,
         "pi500_http": 8085,
         "mac_http": 8086,
+        "voice_bridge_http": 8058,
         "teleop_zmq": 5555,
         "teleop_zmq_heartbeat": 5556
     },
@@ -62,9 +66,38 @@ DEFAULT_CONFIG = {
 }
 
 
+def validate_network_config(cfg: Dict[str, Any]) -> None:
+    """Validates mandatory network configuration schema fail-fast."""
+    required_sections = ["direct_ethernet", "wifi_defaults", "ports", "wifi_modes", "auth"]
+    for sec in required_sections:
+        if sec not in cfg:
+            raise KeyError(f"Missing required section '{sec}' in network configuration")
+
+    for k in ["pi500_ip", "pi4b_ip", "subnet"]:
+        if k not in cfg["direct_ethernet"]:
+            raise KeyError(f"Missing required key 'direct_ethernet.{k}' in network configuration")
+
+    for k in ["pi500_ip", "pi4b_ip", "mac_ip", "pc_ip", "pi500_host", "pi4b_host", "mac_host", "pc_host"]:
+        if k not in cfg["wifi_defaults"]:
+            raise KeyError(f"Missing required key 'wifi_defaults.{k}' in network configuration")
+
+    for k in ["pi4b_http", "pi4b_video", "pi4b_audio_udp", "pi500_http", "mac_http", "voice_bridge_http", "teleop_zmq", "teleop_zmq_heartbeat"]:
+        if k not in cfg["ports"]:
+            raise KeyError(f"Missing required key 'ports.{k}' in network configuration")
+
+    if "priority_list" not in cfg["wifi_modes"]:
+        raise KeyError("Missing required key 'wifi_modes.priority_list' in network configuration")
+
+    for idx, m in enumerate(cfg["wifi_modes"]["priority_list"]):
+        for mk in ["mode_name", "ssid", "is_cloud_enabled"]:
+            if mk not in m:
+                raise KeyError(f"Missing required key '{mk}' in wifi_modes.priority_list[{idx}]")
+
+
 def find_config_path() -> str:
+    if "NETWORK_CONFIG_PATH" in os.environ and os.environ["NETWORK_CONFIG_PATH"]:
+        return os.environ["NETWORK_CONFIG_PATH"]
     search_paths = [
-        os.environ.get("NETWORK_CONFIG_PATH", ""),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "network_config.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "network_config.json"),
         "/home/carson/touch_ui/config/network_config.json",
@@ -92,103 +125,24 @@ def load_network_config() -> Dict[str, Any]:
                 loaded = json.load(f)
                 res = dict(DEFAULT_CONFIG)
                 res.update(loaded)
+                validate_network_config(res)
                 _CONFIG_CACHE = res
                 _CONFIG_LOAD_TIME = now
                 return _CONFIG_CACHE
         except Exception as e:
             logger.warning("Failed reading %s: %s, using defaults", cfg_path, e)
 
-    _CONFIG_CACHE = dict(DEFAULT_CONFIG)
+    res = dict(DEFAULT_CONFIG)
+    validate_network_config(res)
+    _CONFIG_CACHE = res
     _CONFIG_LOAD_TIME = now
     return _CONFIG_CACHE
 
 
-def is_socket_open(ip: str, port: int, timeout: float = 0.15) -> bool:
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        result = sock.connect_ex((ip, port))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
-
-
-def is_host_pingable(ip: str, timeout_sec: int = 1) -> bool:
-    try:
-        cmd = ["ping", "-n", "1", "-w", str(timeout_sec * 1000), ip] if os.name == 'nt' else ["ping", "-c", "1", "-W", str(timeout_sec), ip]
-        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        return res.returncode == 0
-    except Exception:
-        return False
-
-
-def resolve_target(candidates: List[Tuple[str, Optional[int]]], cache_key: str) -> str:
-    now = time.time()
-    if cache_key in _IP_CACHE:
-        cached_ip, ts = _IP_CACHE[cache_key]
-        if (now - ts) < CACHE_TTL_SEC:
-            return cached_ip
-
-    for ip, port in candidates:
-        if not ip:
-            continue
-        if port is not None:
-            if is_socket_open(ip, port, timeout=0.15):
-                _IP_CACHE[cache_key] = (ip, now)
-                return ip
-        else:
-            if is_host_pingable(ip, timeout_sec=1):
-                _IP_CACHE[cache_key] = (ip, now)
-                return ip
-
-    if candidates and candidates[0][0]:
-        fallback_ip = candidates[0][0]
-        _IP_CACHE[cache_key] = (fallback_ip, now)
-        return fallback_ip
-
-    raise RuntimeError(f"Network resolution failed for '{cache_key}'. No candidate addresses configured.")
-
-
-def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
-    cfg = load_network_config()
-    eth_ip = cfg.get("direct_ethernet", {}).get("pi500_ip", "10.0.0.1")
-    wifi_ip = cfg.get("wifi_defaults", {}).get("pi500_ip", "192.168.0.130")
-    m_host = cfg.get("wifi_defaults", {}).get("pi500_host", "pi500.local")
-
-    candidates: List[Tuple[str, Optional[int]]] = [
-        (eth_ip, prefer_port),
-        (eth_ip, 22),
-        (wifi_ip, prefer_port),
-        (wifi_ip, 22),
-        (m_host, prefer_port),
-        (eth_ip, None),
-        (wifi_ip, None)
-    ]
-    return resolve_target(candidates, "pi500_ip")
-
-
-def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
-    cfg = load_network_config()
-    eth_ip = cfg.get("direct_ethernet", {}).get("pi4b_ip", "10.0.0.2")
-    wifi_ip = cfg.get("wifi_defaults", {}).get("pi4b_ip", "192.168.0.86")
-    m_host = cfg.get("wifi_defaults", {}).get("pi4b_host", "raspberrypi.local")
-
-    candidates: List[Tuple[str, Optional[int]]] = [
-        (eth_ip, prefer_port),
-        (eth_ip, 22),
-        (wifi_ip, prefer_port),
-        (wifi_ip, 22),
-        (m_host, prefer_port),
-        (eth_ip, None),
-        (wifi_ip, None)
-    ]
-    return resolve_target(candidates, "pi4b_ip")
-
-
 def find_secrets_path() -> str:
+    if "SECRETS_CONFIG_PATH" in os.environ and os.environ["SECRETS_CONFIG_PATH"]:
+        return os.environ["SECRETS_CONFIG_PATH"]
     search_paths = [
-        os.environ.get("SECRETS_CONFIG_PATH", ""),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "secrets.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "secrets.json"),
         "/home/carson/touch_ui/config/secrets.json",
@@ -230,18 +184,215 @@ def get_interface_ip(ifname: str = "wlan0") -> Optional[str]:
                 parts = line.split()
                 if len(parts) >= 4:
                     return parts[3].split("/")[0]
-        except Exception:
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as err:
+            logger.warning("Subprocess error resolving IP for interface %s: %s", ifname, err)
+            return None
+        except Exception as err:
+            logger.error("Unexpected error in get_interface_ip(%s): %s", ifname, err, exc_info=True)
+            return None
     return None
 
 
-def get_mac_ip(prefer_port: Optional[int] = 8086) -> str:
-    cfg = load_network_config()
-    wifi_ip = cfg.get("wifi_defaults", {}).get("mac_ip", "192.168.0.149")
-    m_host = cfg.get("wifi_defaults", {}).get("mac_host", "mac-mini.local")
-    pub_ip = get_home_public_ip()
+def get_active_ssid() -> str:
+    """Returns the SSID/connection name of the active wireless interface."""
+    if os.name != 'nt':
+        try:
+            res = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+                capture_output=True, text=True, timeout=1.5
+            )
+            for line in res.stdout.strip().splitlines():
+                parts = line.split(":")
+                if len(parts) >= 3 and parts[1] == "802-11-wireless" and "wlan" in parts[2]:
+                    return parts[0].strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as err:
+            logger.warning("Subprocess error resolving active SSID: %s", err)
+            return ""
+        except Exception as err:
+            logger.error("Unexpected error in get_active_ssid: %s", err, exc_info=True)
+            return ""
+    return ""
 
-    candidates: List[Tuple[str, Optional[int]]] = [
+
+def is_hotspot_active() -> bool:
+    """Determines whether the system is connected via a cellular Wi-Fi hotspot.
+    Checks active SSID, hotspot profiles in network_config.json, and wlan0 IP subnet.
+    Caches the result for CACHE_TTL_SEC to avoid subprocess latency.
+    """
+    global _HOTSPOT_CACHE
+    now = time.time()
+    if _HOTSPOT_CACHE is not None and (now - _HOTSPOT_CACHE[1]) < CACHE_TTL_SEC:
+        return _HOTSPOT_CACHE[0]
+
+    active = False
+    ssid = get_active_ssid()
+    if ssid:
+        cfg = load_network_config()
+        for m in cfg["wifi_modes"]["priority_list"]:
+            if m["mode_name"] == "IPHONE_HOTSPOT" and (m["ssid"] == ssid or ssid in m["ssid"]):
+                active = True
+                break
+        if not active and any(k in ssid.lower() for k in ["iphone", "hotspot", "pixel"]):
+            active = True
+
+    if not active:
+        wlan_ip = get_interface_ip("wlan0")
+        if wlan_ip:
+            if wlan_ip.startswith("172.20.10.") or (not wlan_ip.startswith("192.168.") and not wlan_ip.startswith("127.")):
+                active = True
+
+    _HOTSPOT_CACHE = (active, now)
+    return active
+
+
+def is_socket_open(ip: str, port: int, timeout: Optional[float] = None) -> bool:
+    hotspot = is_hotspot_active()
+    # Strictly forbid any 192.168. or .local calls when on hotspot
+    if hotspot and (ip.startswith("192.168.") or ip.endswith(".local")):
+        return False
+
+    if timeout is None:
+        timeout = 0.6 if hotspot else 0.15
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        return result == 0
+    except (socket.timeout, OSError) as err:
+        logger.debug("Socket probe to %s:%d failed: %s", ip, port, err)
+        return False
+    except Exception as err:
+        logger.error("Unexpected error in is_socket_open(%s:%d): %s", ip, port, err, exc_info=True)
+        return False
+
+
+def is_host_pingable(ip: str, timeout_sec: int = 1) -> bool:
+    if is_hotspot_active() and (ip.startswith("192.168.") or ip.endswith(".local")):
+        return False
+    try:
+        cmd = ["ping", "-n", "1", "-w", str(timeout_sec * 1000), ip] if os.name == 'nt' else ["ping", "-c", "1", "-W", str(timeout_sec), ip]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        return res.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as err:
+        logger.warning("Ping subprocess error for %s: %s", ip, err)
+        return False
+    except Exception as err:
+        logger.error("Unexpected error in is_host_pingable(%s): %s", ip, err, exc_info=True)
+        return False
+
+
+def resolve_target(candidates: List[Tuple[str, Optional[int]]], cache_key: str) -> str:
+    now = time.time()
+    hotspot = is_hotspot_active()
+    probe_timeout = 0.6 if hotspot else 0.15
+
+    # Strictly strip all 192.168. and .local candidates when hotspot is active
+    if hotspot:
+        candidates = [c for c in candidates if not c[0].startswith("192.168.") and not c[0].endswith(".local")]
+
+    if not candidates:
+        raise RuntimeError(f"Network resolution failed for '{cache_key}'. No valid candidates available while on Wi-Fi hotspot.")
+
+    if cache_key in _IP_CACHE:
+        cached_ip, ts = _IP_CACHE[cache_key]
+        if (now - ts) < CACHE_TTL_SEC:
+            if not (hotspot and (cached_ip.startswith("192.168.") or cached_ip.endswith(".local"))):
+                return cached_ip
+
+    for ip, port in candidates:
+        if not ip:
+            continue
+        if port is not None:
+            if is_socket_open(ip, port, timeout=probe_timeout):
+                _IP_CACHE[cache_key] = (ip, now)
+                return ip
+        else:
+            if is_host_pingable(ip, timeout_sec=1):
+                _IP_CACHE[cache_key] = (ip, now)
+                return ip
+
+    if candidates and candidates[0][0]:
+        fallback_ip = candidates[0][0]
+        if hotspot and (fallback_ip.startswith("192.168.") or fallback_ip.endswith(".local")):
+            raise RuntimeError(f"Network resolution failed for '{cache_key}': fallback '{fallback_ip}' is prohibited on hotspot.")
+        _IP_CACHE[cache_key] = (fallback_ip, now)
+        return fallback_ip
+
+    raise RuntimeError(f"Network resolution failed for '{cache_key}'. No candidate addresses reachable.")
+
+
+def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
+    cfg = load_network_config()
+    eth_ip = cfg["direct_ethernet"]["pi500_ip"]
+
+    if is_hotspot_active():
+        candidates: List[Tuple[str, Optional[int]]] = [
+            (eth_ip, prefer_port),
+            (eth_ip, 22),
+            (eth_ip, None)
+        ]
+        return resolve_target(candidates, "pi500_ip")
+
+    wifi_ip = cfg["wifi_defaults"]["pi500_ip"]
+    m_host = cfg["wifi_defaults"]["pi500_host"]
+
+    candidates = [
+        (eth_ip, prefer_port),
+        (eth_ip, 22),
+        (wifi_ip, prefer_port),
+        (wifi_ip, 22),
+        (m_host, prefer_port),
+        (eth_ip, None),
+        (wifi_ip, None)
+    ]
+    return resolve_target(candidates, "pi500_ip")
+
+
+def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
+    cfg = load_network_config()
+    eth_ip = cfg["direct_ethernet"]["pi4b_ip"]
+
+    if is_hotspot_active():
+        candidates: List[Tuple[str, Optional[int]]] = [
+            (eth_ip, prefer_port),
+            (eth_ip, 22),
+            (eth_ip, None)
+        ]
+        return resolve_target(candidates, "pi4b_ip")
+
+    wifi_ip = cfg["wifi_defaults"]["pi4b_ip"]
+    m_host = cfg["wifi_defaults"]["pi4b_host"]
+
+    candidates = [
+        (eth_ip, prefer_port),
+        (eth_ip, 22),
+        (wifi_ip, prefer_port),
+        (wifi_ip, 22),
+        (m_host, prefer_port),
+        (eth_ip, None),
+        (wifi_ip, None)
+    ]
+    return resolve_target(candidates, "pi4b_ip")
+
+
+def get_mac_ip(prefer_port: Optional[int] = 8086) -> str:
+    pub_ip = get_home_public_ip()
+    if is_hotspot_active():
+        if not pub_ip:
+            raise RuntimeError("Wi-Fi hotspot active but 'home_public_ip' not configured in secrets.json")
+        candidates: List[Tuple[str, Optional[int]]] = [
+            (pub_ip, prefer_port),
+            (pub_ip, None)
+        ]
+        return resolve_target(candidates, "mac_ip")
+
+    cfg = load_network_config()
+    wifi_ip = cfg["wifi_defaults"]["mac_ip"]
+    m_host = cfg["wifi_defaults"]["mac_host"]
+
+    candidates = [
         (wifi_ip, prefer_port),
         (m_host, prefer_port),
     ]
@@ -255,6 +406,8 @@ def get_mac_ip(prefer_port: Optional[int] = 8086) -> str:
 
 
 def get_pc_ip(prefer_port: Optional[int] = 8058) -> str:
+    if is_hotspot_active():
+        raise RuntimeError("PC workstation is unreachable while on Wi-Fi hotspot.")
     cfg = load_network_config()
     wifi_ip = cfg["wifi_defaults"]["pc_ip"]
     m_host = cfg["wifi_defaults"]["pc_host"]
@@ -269,32 +422,21 @@ def get_pc_ip(prefer_port: Optional[int] = 8058) -> str:
 
 def get_ports() -> Dict[str, int]:
     cfg = load_network_config()
-    return cfg.get("ports", DEFAULT_CONFIG["ports"])
+    return cfg["ports"]
 
 
 def get_active_connection_mode() -> Dict[str, Any]:
     """Determines the current operating connection mode."""
-    active_ssid = ""
-    if os.name != 'nt':
-        try:
-            res = subprocess.run(["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"], capture_output=True, text=True, timeout=1.5)
-            for line in res.stdout.strip().splitlines():
-                parts = line.split(":")
-                if len(parts) >= 3 and parts[1] == "802-11-wireless" and "wlan" in parts[2]:
-                    active_ssid = parts[0]
-                    break
-        except Exception:
-            pass
-
+    active_ssid = get_active_ssid()
     cfg = load_network_config()
-    modes = cfg.get("wifi_modes", {}).get("priority_list", [])
+    modes = cfg["wifi_modes"]["priority_list"]
 
     for m in modes:
-        if active_ssid and (m.get("ssid") == active_ssid or active_ssid in m.get("ssid", "")):
+        if active_ssid and (m["ssid"] == active_ssid or active_ssid in m["ssid"]):
             return {
-                "mode": m.get("mode_name", "ONLINE_WIFI"),
+                "mode": m["mode_name"],
                 "ssid": active_ssid,
-                "is_cloud_enabled": m.get("is_cloud_enabled", True),
+                "is_cloud_enabled": m["is_cloud_enabled"],
                 "is_offline": False,
                 "pi500_ip": get_pi500_ip(),
                 "pi4b_ip": get_pi4b_ip()
@@ -321,6 +463,7 @@ def get_active_connection_mode() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    print("Hotspot Active:", is_hotspot_active())
     print("Pi 500 IP:", get_pi500_ip())
     print("Pi 4B IP:", get_pi4b_ip())
     print("Mac IP:", get_mac_ip())

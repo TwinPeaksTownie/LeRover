@@ -681,18 +681,27 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
             if not l_app or not hasattr(l_app, "select_track"):
                 return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
-            idx = None
-            if "index" in body and body["index"] is not None:
-                idx = int(body["index"])
-            tid = None
-            if "id" in body and body["id"]:
-                tid = str(body["id"])
-            elif "track_id" in body and body["track_id"]:
-                tid = str(body["track_id"])
-            if idx is None and tid is None:
-                return self._send_json({"status": "error", "message": "Missing required 'index' or 'id' field in select payload"}, 400)
-            res_track = l_app.select_track(index=idx, track_id=tid)
-            self._send_json({"status": "ok" if res_track else "error", "selected_index": l_app.selected_index, "track": res_track})
+            if "index" not in body or body["index"] is None:
+                return self._send_json({"status": "error", "message": "Missing required 'index' field in select payload"}, 400)
+            idx = int(body["index"])
+            try:
+                res_track = l_app.select_track(index=idx)
+                self._send_json({"status": "ok", "selected_index": idx, "track": res_track})
+            except (IndexError, ValueError) as err:
+                self._send_json({"status": "error", "message": str(err)}, 400)
+
+        elif parsed.path == "/api/apps/listener/analyze":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            if not l_app or not hasattr(l_app, "trigger_analysis"):
+                return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
+            if "index" not in body or body["index"] is None:
+                return self._send_json({"status": "error", "message": "Missing required 'index' field in analyze payload"}, 400)
+            idx = int(body["index"])
+            try:
+                res_track = l_app.trigger_analysis(index=idx)
+                self._send_json({"status": "ok", "action": "analyze", "selected_index": idx, "track": res_track})
+            except (IndexError, ValueError, RuntimeError) as err:
+                self._send_json({"status": "error", "message": str(err)}, 400)
 
         elif parsed.path == "/api/apps/listener/navigate":
             l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None

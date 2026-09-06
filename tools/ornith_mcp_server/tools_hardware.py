@@ -33,6 +33,26 @@ def _log_debug(msg: str):
     sys.stderr.write(f"[HARDWARE] {msg}\n")
     sys.stderr.flush()
 
+def _ssh_via_proxy(command: str, timeout_sec: int = 15) -> subprocess.CompletedProcess:
+    """Executes an SSH command to Pi 500 via Pi 4B ProxyJump."""
+    proxy_cmd = [
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=no",
+        "-J", "carson@192.168.0.86",
+        "user@10.0.0.1",
+        command
+    ]
+    return subprocess.run(
+        proxy_cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout_sec
+    )
+
 def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
     """
     Executes a non-interactive command over SSH on a target system node.
@@ -67,6 +87,11 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
             errors="replace",
             timeout=timeout_sec
         )
+        if proc.returncode != 0 and node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
+            _log_debug(f"Direct SSH to {target} failed (code {proc.returncode}). Trying ProxyJump via Pi 4B (10.0.0.1)...")
+            proc = _ssh_via_proxy(command, timeout_sec=timeout_sec)
+            target = "user@10.0.0.1 (via Pi 4B)"
+
         return {
             "status": "success",
             "node": target,
@@ -76,6 +101,20 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
             "command": command
         }
     except subprocess.TimeoutExpired:
+        if node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
+            _log_debug(f"Direct SSH timed out. Trying ProxyJump via Pi 4B...")
+            try:
+                proc = _ssh_via_proxy(command, timeout_sec=timeout_sec)
+                return {
+                    "status": "success",
+                    "node": "user@10.0.0.1 (via Pi 4B)",
+                    "exit_code": proc.returncode,
+                    "stdout": proc.stdout.strip(),
+                    "stderr": proc.stderr.strip(),
+                    "command": command
+                }
+            except Exception as e2:
+                return {"status": "error", "error": f"SSH command timed out on direct and ProxyJump failed: {e2}"}
         return {"status": "error", "error": f"SSH command timed out after {timeout_sec}s on {target}"}
     except Exception as e:
         return {"status": "error", "error": f"SSH execution failed on {target}: {str(e)}"}

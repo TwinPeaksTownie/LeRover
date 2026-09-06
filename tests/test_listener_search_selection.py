@@ -8,6 +8,7 @@ Verifies:
   4. PokeballApp joystick Y-tilt navigates listener track selection and Button A confirms.
 """
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -28,23 +29,29 @@ from apps.pokeball_app.app import PokeballApp
 class TestListenerSearchSelection(unittest.TestCase):
 
     def test_fetch_search_candidates_mocked(self):
-        mock_output = (
-            '{"id": "vid1", "title": "Song One - Artist A", "duration": 210, "uploader": "Artist A", "webpage_url": "https://youtu.be/vid1"}\n'
-            '{"id": "vid2", "title": "Song Two - Artist B", "duration": 180, "uploader": "Artist B", "webpage_url": "https://youtu.be/vid2"}\n'
-            '{"id": "vid3", "title": "Song Three - Artist C", "duration": 240, "uploader": "Artist C", "webpage_url": "https://youtu.be/vid3"}\n'
-            '{"id": "vid4", "title": "Song Four - Artist D", "duration": 195, "uploader": "Artist D", "webpage_url": "https://youtu.be/vid4"}\n'
-            '{"id": "vid5", "title": "Song Five - Artist E", "duration": 300, "uploader": "Artist E", "webpage_url": "https://youtu.be/vid5"}\n'
-        )
+        import io
+        mock_response_data = json.dumps({
+            "status": "ok",
+            "candidates": [
+                {"id": "vid1", "video_id": "vid1", "title": "Song One - Artist A", "duration": 210, "channel": "Artist A"},
+                {"id": "vid2", "video_id": "vid2", "title": "Song Two - Artist B", "duration": 180, "channel": "Artist B"},
+                {"id": "vid3", "video_id": "vid3", "title": "Song Three - Artist C", "duration": 240, "channel": "Artist C"},
+                {"id": "vid4", "video_id": "vid4", "title": "Song Four - Artist D", "duration": 195, "channel": "Artist D"},
+            ]
+        }).encode("utf-8")
 
-        with patch("subprocess.run") as mock_run:
-            mock_proc = MagicMock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = mock_output
-            mock_run.return_value = mock_proc
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.status = 200
+            mock_resp.read.return_value = mock_response_data
+            mock_resp.__enter__.return_value = mock_resp
+            mock_resp.__exit__.return_value = None
+            mock_urlopen.return_value = mock_resp
 
             candidates = fetch_search_candidates("test query", limit=4)
             self.assertEqual(len(candidates), 4)
             self.assertEqual(candidates[0]["id"], "vid1")
+            self.assertEqual(candidates[0]["video_id"], "vid1")
             self.assertEqual(candidates[0]["title"], "Song One - Artist A")
             self.assertEqual(candidates[0]["duration"], "3:30")
             self.assertEqual(candidates[0]["duration_sec"], 210)
@@ -62,10 +69,10 @@ class TestListenerSearchSelection(unittest.TestCase):
 
         # Manually populate 4 results
         app.search_results = [
-            {"id": "1", "title": "Track 1", "duration": 100, "uploader": "Up 1", "url": ""},
-            {"id": "2", "title": "Track 2", "duration": 200, "uploader": "Up 2", "url": ""},
-            {"id": "3", "title": "Track 3", "duration": 300, "uploader": "Up 3", "url": ""},
-            {"id": "4", "title": "Track 4", "duration": 400, "uploader": "Up 4", "url": ""},
+            {"id": "1", "video_id": "1", "title": "Track 1", "duration": 100, "uploader": "Up 1", "url": ""},
+            {"id": "2", "video_id": "2", "title": "Track 2", "duration": 200, "uploader": "Up 2", "url": ""},
+            {"id": "3", "video_id": "3", "title": "Track 3", "duration": 300, "uploader": "Up 3", "url": ""},
+            {"id": "4", "video_id": "4", "title": "Track 4", "duration": 400, "uploader": "Up 4", "url": ""},
         ]
         app.state = "SELECTING"
 
@@ -96,22 +103,28 @@ class TestListenerSearchSelection(unittest.TestCase):
     def test_listener_app_select_track_dispatch(self):
         app = ListenerApp(running_on_pi=False)
         app.search_results = [
-            {"id": "vid1", "title": "Track 1", "duration": 100, "uploader": "Up 1", "url": ""},
-            {"id": "vid2", "title": "Track 2", "duration": 200, "uploader": "Up 2", "url": ""},
+            {"id": "vid1", "video_id": "vid1", "title": "Track 1", "duration": 100, "uploader": "Up 1", "url": ""},
+            {"id": "vid2", "video_id": "vid2", "title": "Track 2", "duration": 200, "uploader": "Up 2", "url": ""},
         ]
         app.state = "SELECTING"
 
+        # 1. select_track selects index
+        selected = app.select_track(index=1)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["video_id"], "vid2")
+        self.assertEqual(app.selected_index, 1)
+
+        # 2. trigger_analysis transitions to ANALYZING and launches thread
         with patch("threading.Thread") as mock_thread:
-            selected = app.select_track(index=1)
-            self.assertIsNotNone(selected)
-            self.assertEqual(selected["id"], "vid2")
-            self.assertEqual(app.state, "DOWNLOADING")
+            analyzing = app.trigger_analysis(index=1)
+            self.assertEqual(analyzing["video_id"], "vid2")
+            self.assertEqual(app.state, "ANALYZING")
             self.assertTrue(mock_thread.called)
 
     def test_listener_app_status_telemetry(self):
         app = ListenerApp(running_on_pi=False)
         app.search_query = "pink pony club"
-        app.search_results = [{"id": "v1", "title": "PPC", "duration": 180, "uploader": "CR", "url": ""}]
+        app.search_results = [{"id": "v1", "video_id": "v1", "title": "PPC", "duration": 180, "uploader": "CR", "url": ""}]
         app.selected_index = 0
         app.state = "SELECTING"
 
@@ -128,6 +141,7 @@ class TestListenerSearchSelection(unittest.TestCase):
         mock_mgr.current_app_name = "listener_app"
         mock_listener = MagicMock()
         mock_listener.state = "SELECTING"
+        mock_listener.selected_index = 0
         mock_mgr.active_app = mock_listener
         service.app_manager = mock_mgr
 
@@ -156,7 +170,7 @@ class TestListenerSearchSelection(unittest.TestCase):
         # 3. Drive actual notification_handler with Button A click (buttons=0x02)
         btn_a_pkt = make_packet(buttons=0x02, x=service.joystick_center_x, y=service.joystick_center_y)
         service.notification_handler(None, btn_a_pkt)
-        mock_listener.select_track.assert_called_once()
+        mock_listener.trigger_analysis.assert_called_once_with(0)
 
 
 if __name__ == "__main__":

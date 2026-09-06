@@ -156,7 +156,12 @@ class PokeballService:
         self.api_url = api_url
         self.backend = backend
         if voice_bridge_url is None:
-            voice_bridge_url = f"http://{network_resolver.get_pc_ip()}:8058"
+            try:
+                pc_ip = network_resolver.get_pc_ip()
+                voice_bridge_url = f"http://{pc_ip}:8058"
+            except RuntimeError as re:
+                self.logger.info("Voice bridge disabled on hotspot: %s", re)
+                voice_bridge_url = ""
         self.voice_bridge_url = voice_bridge_url
         self.client: Optional[BleakClient] = None
         self.stop_event = threading.Event()
@@ -411,10 +416,13 @@ class PokeballService:
                             l_app.navigate_selection(1)
                             self.last_listener_nav_time = now
 
-                    # Button A Click: confirm selection
+                    # Button A Click: confirm selection & trigger Mac analysis
                     if btn_a and not self.last_btn_a_listener:
-                        self.logger.info("🔘 Button A click detected in SELECTING state! Triggering select_track()...")
-                        l_app.select_track()
+                        self.logger.info("🔘 Button A click detected in SELECTING state! Triggering Mac analysis...")
+                        if hasattr(l_app, "trigger_analysis"):
+                            l_app.trigger_analysis(l_app.selected_index)
+                        elif hasattr(l_app, "select_track"):
+                            l_app.select_track(l_app.selected_index)
                     self.last_btn_a_listener = btn_a
             else:
                 self.last_btn_a_listener = False

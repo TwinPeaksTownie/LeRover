@@ -16,8 +16,9 @@ import os
 import re
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger("so101.listener_app.song_pipeline")
 
@@ -25,6 +26,8 @@ WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
 PI500_DIR = WORKSPACE_ROOT / "pi500"
 if str(PI500_DIR) not in sys.path:
     sys.path.insert(0, str(PI500_DIR))
+
+import network_resolver
 
 try:
     from choreography_compiler import compile_choreography_tracks, load_choreography_probabilities
@@ -322,40 +325,59 @@ def fetch_search_candidates(query: str, limit: int = 4) -> List[Dict[str, Any]]:
         raise ValueError("Search query cannot be empty or whitespace.")
     clean_query = query.strip()
 
-    logger.info("Querying search candidates for '%s' (limit=%d)...", clean_query, limit)
-    cmd = [
-        "yt-dlp",
-        f"ytsearch{limit}:{clean_query}",
-        "--dump-json",
-        "--flat-playlist",
-        "--no-playlist",
-        "--quiet",
-        "--no-warnings",
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode != 0:
-        logger.error("yt-dlp search query failed: %s", res.stderr)
-        raise RuntimeError(f"yt-dlp search query failed: {res.stderr}")
+    mac_ip = network_resolver.get_mac_ip(prefer_port=8086)
+    search_url = f"http://{mac_ip}:8086/api/search"
+    logger.info("Querying search candidates from Mac Mini (%s) for '%s' (limit=%d)...", search_url, clean_query, limit)
+
+    req_data = json.dumps({"query": clean_query, "limit": limit}).encode("utf-8")
+    req = urllib.request.Request(search_url, data=req_data, headers={"Content-Type": "application/json"})
+
+    try:
+        with urllib.request.urlopen(req, timeout=15.0) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"Mac search microservice returned HTTP {resp.status}")
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        logger.error("Failed to query search microservice at %s: %s", search_url, e, exc_info=True)
+        raise RuntimeError(f"Mac search microservice query failed: {e}") from e
+
+    if not isinstance(payload, dict) or "candidates" not in payload:
+        raise ValueError(f"Malformed response payload from Mac search microservice: {payload}")
+
+    raw_candidates = payload["candidates"]
+    if not isinstance(raw_candidates, list):
+        raise ValueError(f"Expected list for 'candidates', got {type(raw_candidates)}")
 
     candidates: List[Dict[str, Any]] = []
-    for line in res.stdout.strip().splitlines():
-        line = line.strip()
-        if not line:
+    for item in raw_candidates:
+        if not isinstance(item, dict):
             continue
-        try:
-            item = json.loads(line)
-        except Exception as e:
-            logger.error("JSON parse error on yt-dlp search line '%s': %s", line, e, exc_info=True)
-            raise ValueError(f"yt-dlp emitted malformed JSON line: {line}") from e
+        video_id = str(item["video_id"]).strip()
+        title = str(item["title"]).strip()
+        channel = str(item["channel"]).strip()
+        duration = float(item["duration"])
+        if not video_id:
+            raise ValueError(f"Missing required 'video_id' in candidate item: {item}")
+        if not title:
+            raise ValueError(f"Missing required 'title' in candidate item: {item}")
 
-        try:
-            candidate = _validate_candidate(item)
-            candidates.append(candidate)
-            if len(candidates) >= limit:
-                break
-        except (KeyError, ValueError) as e:
-            logger.error("Candidate contract validation failed: %s", e, exc_info=True)
-            raise
+        dur_sec = int(duration)
+        mins = dur_sec // 60
+        secs = dur_sec % 60
+        duration_str = f"{mins}:{secs:02d}"
+
+        candidates.append({
+            "id": video_id,
+            "video_id": video_id,
+            "title": title,
+            "channel": channel,
+            "uploader": channel,
+            "duration": duration_str,
+            "duration_sec": dur_sec,
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+        })
+        if len(candidates) >= limit:
+            break
 
     return candidates
 

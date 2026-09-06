@@ -2129,10 +2129,10 @@ export function renderListenerTracks(query, tracks, selectedIndex, stateStr) {
             pillEl.style.borderColor = '#00ff66';
             pillEl.style.color = '#00ff66';
             pillEl.style.background = 'rgba(0, 255, 102, 0.15)';
-        } else if (stateStr === 'DOWNLOADING' || stateStr === 'COMPILING') {
-            pillEl.style.borderColor = '#ffaa00';
-            pillEl.style.color = '#ffaa00';
-            pillEl.style.background = 'rgba(255, 170, 0, 0.15)';
+        } else if (stateStr === 'ANALYZING') {
+            pillEl.style.borderColor = '#d533ff';
+            pillEl.style.color = '#f2a8ff';
+            pillEl.style.background = 'rgba(213, 51, 255, 0.25)';
         } else if (stateStr === 'ERROR') {
             pillEl.style.borderColor = '#ff3344';
             pillEl.style.color = '#ff3344';
@@ -2144,9 +2144,25 @@ export function renderListenerTracks(query, tracks, selectedIndex, stateStr) {
         }
     }
 
+    const macBtn = document.getElementById('listenerAnalyzeMacBtn');
+    if (macBtn) {
+        if (stateStr === 'SELECTING' && Array.isArray(tracks) && tracks.length > 0) {
+            macBtn.style.display = 'flex';
+            macBtn.disabled = false;
+            macBtn.innerText = '⚡ ANALYZE ON MAC';
+        } else if (stateStr === 'ANALYZING') {
+            macBtn.style.display = 'flex';
+            macBtn.disabled = true;
+            macBtn.innerText = '⌛ ANALYZING ON MAC...';
+        } else {
+            macBtn.style.display = 'none';
+        }
+    }
+
     const emptyEl = document.getElementById('listenerEmptyState');
     if (!Array.isArray(tracks) || tracks.length === 0) {
         if (emptyEl) emptyEl.style.display = 'flex';
+        if (macBtn) macBtn.style.display = 'none';
         for (let i = 0; i < 4; i++) {
             const rowBtn = document.getElementById(`listenerTrackRow${i}`);
             if (rowBtn) rowBtn.style.display = 'none';

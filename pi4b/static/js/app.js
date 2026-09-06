@@ -307,6 +307,28 @@ export function selectListenerTrack(index) {
     if (rowBtn) {
         rowBtn.style.opacity = '0.5';
     }
+    // Update local visual highlight immediately for crisp responsive touch feedback
+    for (let i = 0; i < 4; i++) {
+        const r = document.getElementById(`listenerTrackRow${i}`);
+        if (r) {
+            if (i === index) {
+                r.style.borderColor = '#00f2fe';
+                r.style.background = 'linear-gradient(90deg, rgba(0, 242, 254, 0.25), #0c1b1e)';
+                r.style.boxShadow = '0 0 14px rgba(0, 242, 254, 0.45)';
+            } else {
+                r.style.borderColor = '#19464d';
+                r.style.background = '#0c1b1e';
+                r.style.boxShadow = 'none';
+            }
+        }
+    }
+    const macBtn = document.getElementById('listenerAnalyzeMacBtn');
+    if (macBtn) {
+        macBtn.style.display = 'flex';
+        macBtn.disabled = false;
+        macBtn.innerText = '⚡ ANALYZE ON MAC';
+    }
+
     api.sendListenerSelect(index)
         .then(r => r.json())
         .then(d => {
@@ -316,6 +338,37 @@ export function selectListenerTrack(index) {
         })
         .catch(err => {
             if (rowBtn) rowBtn.style.opacity = '1.0';
+            api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+        });
+}
+
+export function triggerListenerAnalyze() {
+    const macBtn = document.getElementById('listenerAnalyzeMacBtn');
+    if (macBtn) {
+        macBtn.disabled = true;
+        macBtn.innerText = '⌛ ANALYZING ON MAC...';
+    }
+    let selectedIdx = 0;
+    for (let i = 0; i < 4; i++) {
+        const r = document.getElementById(`listenerTrackRow${i}`);
+        if (r && r.style.boxShadow && r.style.boxShadow !== 'none') {
+            selectedIdx = i;
+            break;
+        }
+    }
+    api.sendListenerAnalyze(selectedIdx)
+        .then(r => r.json())
+        .then(d => {
+            api.sendPlaySound({ event: 'correct', stop_previous: false, delay_sec: 0.0, wav_path: '' })
+                .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
+        })
+        .catch(err => {
+            console.error('Trigger analyze failed:', err);
+            if (macBtn) {
+                macBtn.disabled = false;
+                macBtn.innerText = '⚡ ANALYZE ON MAC';
+            }
             api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' })
                 .catch(soundErr => console.error('Audio cue dispatch failed:', soundErr));
         });
@@ -1071,6 +1124,11 @@ function bindEventListeners() {
         if (rowBtn) {
             rowBtn.addEventListener('click', () => selectListenerTrack(i));
         }
+    }
+
+    const listenerAnalyzeMacBtn = document.getElementById('listenerAnalyzeMacBtn');
+    if (listenerAnalyzeMacBtn) {
+        listenerAnalyzeMacBtn.addEventListener('click', () => triggerListenerAnalyze());
     }
 
     // Event Delegation for dynamically rendered Beat Bandit Tracks

@@ -347,15 +347,26 @@ export function sendPlaySound(payload) {
     }, 1000);
 }
 
-// Voice Listener Track Selection & Navigation
-export function sendListenerSelect(index, trackId = null) {
-    const payload = {};
-    if (index !== undefined && index !== null) payload.index = parseInt(index, 10);
-    if (trackId) payload.id = trackId;
+// Voice Listener Track Selection, Analysis & Navigation
+export function sendListenerSelect(index) {
+    if (index === undefined || index === null) {
+        throw new Error("sendListenerSelect requires valid integer index");
+    }
     return safeFetch('/api/apps/listener/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ index: parseInt(index, 10) })
+    }, 4000);
+}
+
+export function sendListenerAnalyze(index) {
+    if (index === undefined || index === null) {
+        throw new Error("sendListenerAnalyze requires valid integer index");
+    }
+    return safeFetch('/api/apps/listener/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: parseInt(index, 10) })
     }, 4000);
 }
 

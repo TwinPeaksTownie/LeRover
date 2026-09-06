@@ -58,6 +58,7 @@ LEROBOT_PYTHON = "/Users/twinpeakstownie/lerobot/.venv/bin/python"
 
 CACHE_DIR = BASE_DIR / "audio_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_CACHED_WHISPER_MODEL = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("unified_mac_daemon")
@@ -181,6 +182,58 @@ def download_audio_from_youtube(url: str, track_id: str) -> Path:
     logger.info(f"Standardized audio to 44.1kHz stereo: {target_wav}")
     return target_wav
 
+def search_youtube_candidates(query: str, limit: int = 4) -> list:
+    """Queries YouTube search results via yt-dlp without downloading audio."""
+    import yt_dlp
+    logger.info(f"Searching YouTube candidates for '{query}' (limit={limit})...")
+    ydl_opts = {
+        'extract_flat': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web']
+            }
+        }
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        res = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+
+    if "entries" not in res or not isinstance(res["entries"], list):
+        raise KeyError("Missing or invalid required key 'entries' in yt-dlp search payload")
+
+    entries = res["entries"]
+    candidates = []
+    for item in entries:
+        if not item:
+            continue
+        if "id" not in item:
+            raise KeyError("Missing required key 'id' in yt-dlp search entry")
+        if "title" not in item:
+            raise KeyError("Missing required key 'title' in yt-dlp search entry")
+        if "channel" in item and item["channel"]:
+            channel = str(item["channel"])
+        elif "uploader" in item and item["uploader"]:
+            channel = str(item["uploader"])
+        else:
+            raise KeyError("Missing required key 'channel' or 'uploader' in yt-dlp search entry")
+        if "duration" not in item or item["duration"] is None:
+            raise KeyError("Missing required key 'duration' in yt-dlp search entry")
+
+        video_id = str(item["id"])
+        title = str(item["title"])
+        duration = float(item["duration"])
+        candidates.append({
+            "video_id": video_id,
+            "title": title,
+            "channel": channel,
+            "duration": duration,
+        })
+        if len(candidates) >= limit:
+            break
+    logger.info(f"Found {len(candidates)} candidates for query '{query}'")
+    return candidates
+
 def infer_section_labels(segments: list[dict], total_duration: float, first_vocal_sec: Optional[float] = None) -> list[dict]:
     """Infers structural labels (intro, verse, chorus, bridge, outro) from segment energy z-scores,
     timeline position, and empirical vocal onset timestamp.
@@ -244,26 +297,43 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
 
     # 2. Text transcription via Whisper
     raw_text = ""
+    segments = []
     try:
         try:
             from faster_whisper import WhisperModel
             whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
-            segments, _ = whisper_model.transcribe(y_16k, beam_size=1, condition_on_previous_text=False)
-            raw_text = " ".join(s.text for s in segments).strip()
+            segments_gen, _ = whisper_model.transcribe(y_16k, beam_size=1, condition_on_previous_text=False)
+            for s in segments_gen:
+                t = s.text.strip()
+                if t:
+                    segments.append({"start": float(s.start), "end": float(s.end), "text": t})
+            raw_text = " ".join(s["text"] for s in segments).strip()
         except ImportError:
             import whisper
-            model = whisper.load_model("base.en")
-            result = model.transcribe(str(vocals_wav_path), condition_on_previous_text=False, verbose=False)
-            raw_text = result.get("text", "").strip()
+            global _CACHED_WHISPER_MODEL
+            if _CACHED_WHISPER_MODEL is None:
+                _CACHED_WHISPER_MODEL = whisper.load_model("base.en")
+            result = _CACHED_WHISPER_MODEL.transcribe(y_16k, fp16=False)
+            if "segments" not in result:
+                raise KeyError("Missing required key 'segments' in whisper transcription result")
+            for s in result["segments"]:
+                if "text" not in s:
+                    raise KeyError("Missing required key 'text' in whisper segment")
+                t = s["text"].strip()
+                if t:
+                    segments.append({"start": float(s["start"]), "end": float(s["end"]), "text": t})
+            if "text" not in result:
+                raise KeyError("Missing required key 'text' in whisper transcription result")
+            raw_text = result["text"].strip()
     except Exception as e:
         logger.error(f"Whisper transcription failed on {vocals_wav_path}: {e}")
         return []
 
-    if not raw_text:
+    if not raw_text or not segments:
         logger.warning(f"No spoken words transcribed in {vocals_wav_path}")
         return []
 
-    # 3. MMS_FA CTC Forced Alignment
+    # 3. Padded Phrase-Grouped MMS_FA CTC Forced Alignment (~20-30s batches with song-edge padding)
     all_words = []
     try:
         bundle = torchaudio.pipelines.MMS_FA
@@ -271,32 +341,59 @@ def extract_lyrics_and_breath(vocals_wav_path: Path, mouth_envelope: list, fps: 
         tokenizer = bundle.get_tokenizer()
         aligner = bundle.get_aligner()
 
-        waveform_16k = torch.from_numpy(y_16k).unsqueeze(0).float()
-        with torch.inference_mode():
-            emissions, _ = fa_model(waveform_16k)
-            emissions = torch.log_softmax(emissions, dim=-1)
+        total_duration = len(y_16k) / 16000.0
 
-        emission = emissions[0].cpu().detach()
-        raw_words = [w.strip() for w in raw_text.split() if w.strip()]
-        
-        cleaned_words = []
-        valid_indices = []
-        for idx, w in enumerate(raw_words):
-            cw = re.sub(r"[^a-zA-Z']", "", w).lower()
-            if cw:
-                cleaned_words.append(cw)
-                valid_indices.append(idx)
+        batches = []
+        current_batch = []
+        for s in segments:
+            current_batch.append(s)
+            batch_span = current_batch[-1]["end"] - current_batch[0]["start"]
+            if batch_span >= 25.0:
+                batches.append(current_batch)
+                current_batch = []
+        if current_batch:
+            batches.append(current_batch)
 
-        if cleaned_words:
+        for b_idx, batch_segs in enumerate(batches):
+            batch_text = " ".join(s["text"] for s in batch_segs).strip()
+            raw_words = [w.strip() for w in batch_text.split() if w.strip()]
+            cleaned_words = []
+            valid_indices = []
+            for idx, w in enumerate(raw_words):
+                cw = re.sub(r"[^a-zA-Z']", "", w).lower()
+                if cw:
+                    cleaned_words.append(cw)
+                    valid_indices.append(idx)
+
+            if not cleaned_words:
+                continue
+
+            # Generous 3.0s pad at song boundaries; contiguous boundaries between batches to prevent token smearing
+            pad_st = max(0.0, batch_segs[0]["start"] - 3.0) if b_idx == 0 else batch_segs[0]["start"]
+            pad_en = min(total_duration, batch_segs[-1]["end"] + 3.0) if b_idx == len(batches) - 1 else batch_segs[-1]["end"]
+
+            chunk_st_sample = int(pad_st * 16000)
+            chunk_en_sample = int(pad_en * 16000)
+            chunk_y = y_16k[chunk_st_sample:chunk_en_sample]
+
+            if len(chunk_y) < 1600:
+                continue
+
+            chunk_waveform = torch.from_numpy(chunk_y).unsqueeze(0).float()
+            with torch.inference_mode():
+                emissions, _ = fa_model(chunk_waveform)
+                emissions = torch.log_softmax(emissions, dim=-1)
+
+            emission = emissions[0].cpu().detach()
             tokens = tokenizer(cleaned_words)
             aligned_tokens_list = aligner(emission, tokens)
-            ratio = len(y_16k) / emission.shape[0] / 16000.0
+            ratio = len(chunk_y) / emission.shape[0] / 16000.0
 
             for word_spans, orig_idx in zip(aligned_tokens_list, valid_indices):
                 if not word_spans:
                     continue
-                w_start = round(float(word_spans[0].start * ratio), 2)
-                w_end = round(float(word_spans[-1].end * ratio), 2)
+                w_start = round(pad_st + float(word_spans[0].start * ratio), 2)
+                w_end = round(pad_st + float(word_spans[-1].end * ratio), 2)
                 all_words.append({
                     "word": raw_words[orig_idx],
                     "start": w_start,
@@ -785,6 +882,25 @@ class UnifiedDaemonHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(manifest)
             except Exception as e:
                 logger.error(f"Analysis error: {e}", exc_info=True)
+                self._send_json({"error": str(e)}, 500)
+
+        elif parsed.path == "/api/search":
+            if "query" not in body:
+                self._send_json({"error": "Missing required parameter 'query'"}, 400)
+                return
+            query = str(body["query"]).strip()
+            if not query:
+                self._send_json({"error": "Query cannot be empty"}, 400)
+                return
+            if "limit" not in body:
+                self._send_json({"error": "Missing required parameter 'limit'"}, 400)
+                return
+            limit = int(body["limit"])
+            try:
+                candidates = search_youtube_candidates(query, limit=limit)
+                self._send_json({"status": "ok", "query": query, "candidates": candidates})
+            except Exception as e:
+                logger.error(f"Search API failure for '{query}': {e}", exc_info=True)
                 self._send_json({"error": str(e)}, 500)
         else:
             self._send_json({"error": "Endpoint not found"}, 404)
