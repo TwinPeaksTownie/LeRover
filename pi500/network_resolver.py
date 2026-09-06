@@ -22,6 +22,29 @@ CACHE_TTL_SEC: float = 2.5
 _HOTSPOT_CACHE: Optional[Tuple[bool, float]] = None
 
 DEFAULT_CONFIG: Dict[str, Any] = {
+    "topology_mode": "STANDALONE_PI4B",
+    "endpoints": {
+        "master_backend": {
+            "host": "127.0.0.1",
+            "port": 8085
+        },
+        "touch_ui": {
+            "host": "127.0.0.1",
+            "port": 8082
+        },
+        "mac_teleop": {
+            "host": "192.168.0.149",
+            "port": 8086
+        },
+        "voice_bridge": {
+            "host": "192.168.0.194",
+            "port": 8058
+        }
+    },
+    "hardware": {
+        "serial_port": "/dev/ttyACM0",
+        "baudrate": 1000000
+    },
     "direct_ethernet": {
         "pi500_ip": "10.0.0.1",
         "pi4b_ip": "10.0.0.2",
@@ -68,10 +91,24 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
 def validate_network_config(cfg: Dict[str, Any]) -> None:
     """Validates mandatory network configuration schema fail-fast."""
-    required_sections = ["direct_ethernet", "wifi_defaults", "ports", "wifi_modes", "auth"]
+    required_sections = ["topology_mode", "endpoints", "hardware", "direct_ethernet", "wifi_defaults", "ports", "wifi_modes", "auth"]
     for sec in required_sections:
         if sec not in cfg:
             raise KeyError(f"Missing required section '{sec}' in network configuration")
+
+    if cfg["topology_mode"] not in ["STANDALONE_PI4B", "DUAL_SBC"]:
+        raise ValueError(f"Invalid topology_mode '{cfg['topology_mode']}'. Permitted: ['STANDALONE_PI4B', 'DUAL_SBC']")
+
+    for k in ["master_backend", "touch_ui", "mac_teleop", "voice_bridge"]:
+        if k not in cfg["endpoints"]:
+            raise KeyError(f"Missing required key 'endpoints.{k}' in network configuration")
+        for sub_k in ["host", "port"]:
+            if sub_k not in cfg["endpoints"][k]:
+                raise KeyError(f"Missing required key 'endpoints.{k}.{sub_k}' in network configuration")
+
+    for k in ["serial_port", "baudrate"]:
+        if k not in cfg["hardware"]:
+            raise KeyError(f"Missing required key 'hardware.{k}' in network configuration")
 
     for k in ["pi500_ip", "pi4b_ip", "subnet"]:
         if k not in cfg["direct_ethernet"]:
@@ -100,11 +137,13 @@ def find_config_path() -> str:
     search_paths = [
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "network_config.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "network_config.json"),
-        "/home/user/so101/config/network_config.json",
         "/home/carson/touch_ui/config/network_config.json",
+        "/home/carson/so101/config/network_config.json",
+        "/home/user/so101/config/network_config.json",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_config.json"),
-        "/home/user/so101/pi500/network_config.json",
         "/home/carson/touch_ui/network_config.json",
+        "/home/carson/so101/pi500/network_config.json",
+        "/home/user/so101/pi500/network_config.json",
     ]
     for p in search_paths:
         if p and os.path.exists(p):
@@ -119,20 +158,19 @@ def load_network_config() -> Dict[str, Any]:
         return _CONFIG_CACHE
 
     cfg_path = find_config_path()
-    if cfg_path and os.path.exists(cfg_path):
-        try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                res = dict(DEFAULT_CONFIG)
-                res.update(loaded)
-                validate_network_config(res)
-                _CONFIG_CACHE = res
-                _CONFIG_LOAD_TIME = now
-                return _CONFIG_CACHE
-        except Exception as e:
-            logger.warning("Failed reading %s: %s, using defaults", cfg_path, e)
+    if not cfg_path:
+        res = dict(DEFAULT_CONFIG)
+        validate_network_config(res)
+        _CONFIG_CACHE = res
+        _CONFIG_LOAD_TIME = now
+        return _CONFIG_CACHE
 
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        loaded = json.load(f)
+    if not isinstance(loaded, dict):
+        raise TypeError(f"Network config at {cfg_path} must be a JSON object, got {type(loaded).__name__}")
     res = dict(DEFAULT_CONFIG)
+    res.update(loaded)
     validate_network_config(res)
     _CONFIG_CACHE = res
     _CONFIG_LOAD_TIME = now
@@ -323,8 +361,34 @@ def resolve_target(candidates: List[Tuple[str, Optional[int]]], cache_key: str) 
     raise RuntimeError(f"Network resolution failed for '{cache_key}'. No candidate addresses reachable.")
 
 
+def get_master_backend_ip() -> str:
+    cfg = load_network_config()
+    if cfg["topology_mode"] == "STANDALONE_PI4B":
+        return str(cfg["endpoints"]["master_backend"]["host"])
+    return get_pi500_ip(prefer_port=int(cfg["endpoints"]["master_backend"]["port"]))
+
+
+def get_touch_ui_ip() -> str:
+    cfg = load_network_config()
+    if cfg["topology_mode"] == "STANDALONE_PI4B":
+        return str(cfg["endpoints"]["touch_ui"]["host"])
+    return get_pi4b_ip(prefer_port=int(cfg["endpoints"]["touch_ui"]["port"]))
+
+
+def get_hardware_serial_port() -> str:
+    cfg = load_network_config()
+    return str(cfg["hardware"]["serial_port"])
+
+
+def get_hardware_baudrate() -> int:
+    cfg = load_network_config()
+    return int(cfg["hardware"]["baudrate"])
+
+
 def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
     cfg = load_network_config()
+    if cfg["topology_mode"] == "STANDALONE_PI4B":
+        return str(cfg["endpoints"]["master_backend"]["host"])
     eth_ip = cfg["direct_ethernet"]["pi500_ip"]
 
     if is_hotspot_active():
@@ -352,6 +416,8 @@ def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
 
 def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
     cfg = load_network_config()
+    if cfg["topology_mode"] == "STANDALONE_PI4B":
+        return str(cfg["endpoints"]["touch_ui"]["host"])
     eth_ip = cfg["direct_ethernet"]["pi4b_ip"]
 
     if is_hotspot_active():

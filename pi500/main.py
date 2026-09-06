@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
+import network_resolver
 from robot_backend import RobotBackend
 from app_manager import AppManager
 from pokeball_app import PokeballService
@@ -24,11 +25,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 def main() -> None:
+    cfg = network_resolver.load_network_config()
+    default_port = network_resolver.get_hardware_serial_port()
+    default_http_port = int(cfg["endpoints"]["master_backend"]["port"])
+
     ap = argparse.ArgumentParser(description="SO-101 Master Daemon Orchestrator")
-    ap.add_argument("--port", default="/dev/ttyACM0", help="Serial port for motors")
+    ap.add_argument("--port", default=default_port, help=f"Serial port for motors (default: {default_port})")
     ap.add_argument("--id", default="follower", help="Robot follower ID")
     ap.add_argument("--no-zmq", action="store_true", help="Disable ZMQ teleoperation listener")
-    ap.add_argument("--http-port", type=int, default=8085, help="HTTP API port")
+    ap.add_argument("--http-port", type=int, default=default_http_port, help=f"HTTP API port (default: {default_http_port})")
     args = ap.parse_args()
 
     # Clean up stale processes holding serial port prior to connection

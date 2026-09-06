@@ -200,9 +200,11 @@ def poll_status_loop():
         mac_ip = get_current_mac_ip(port=8086)
         conn_mode = network_resolver.get_active_connection_mode() if network_resolver else {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
 
-        # 1. Check Pi 500 physical host network reachability
+        # 1. Check physical/local host reachability
         pi500_host_online = False
-        if network_resolver:
+        if p500_ip == "127.0.0.1":
+            pi500_host_online = True
+        elif network_resolver:
             pi500_host_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
         else:
             try:
@@ -217,7 +219,8 @@ def poll_status_loop():
         STATUS_CACHE["resolved_mac_ip"] = mac_ip
         STATUS_CACHE["pi4b_wlan_ip"] = network_resolver.get_interface_ip("wlan0") if network_resolver else None
 
-        # 2. Poll Pi 500 Master Daemon over HTTP 8085
+        # 2. Poll Master Daemon over HTTP 8085
+        backend_connected = False
         try:
             req = urllib.request.Request(f"http://{p500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
             with urllib.request.urlopen(req, timeout=0.35) as response:
@@ -227,6 +230,7 @@ def poll_status_loop():
                     STATUS_CACHE["last_telemetry_time"] = time.time()
                     STATUS_CACHE["daemon_running"] = True
                     STATUS_CACHE["hardware_connected"] = bool(data.get("hardware_connected", False))
+                    backend_connected = True
                     if isinstance(data, dict):
                         if "wlan0_ip" in data:
                             STATUS_CACHE["pi500_wlan_ip"] = data["wlan0_ip"]
@@ -246,6 +250,10 @@ def poll_status_loop():
             STATUS_CACHE["daemon_running"] = False
             STATUS_CACHE["follower"] = {"running": False, "pid": ""}
             STATUS_CACHE["hardware_telemetry"] = None
+
+        STATUS_CACHE["backend_online"] = backend_connected
+        if p500_ip == "127.0.0.1":
+            STATUS_CACHE["pi500_online"] = backend_connected
 
         # 3. Poll Mac Leader directly over HTTP 8086
         try:
@@ -656,14 +664,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                             subprocess.run(["sudo", "nmcli", "connection", "up", "Maestas Mansion"], check=False)
                         except Exception as e:
                             logging.warning(f"Error restoring Pi 4B home wifi: {e}")
-                        try:
-                            pi500_cmd = "sudo rfkill unblock wifi; sudo nmcli radio wifi on; sudo nmcli connection up 'Maestas Mansion' || nmcli connection up 'Maestas Mansion'"
-                            subprocess.run([
-                                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
-                                "user@10.0.0.1", pi500_cmd
-                            ], capture_output=True, timeout=10)
-                        except Exception as e:
-                            logging.warning(f"Error restoring Pi 500 home wifi: {e}")
 
                     threading.Thread(target=_restore_home_wifi, daemon=True).start()
                     play_sound_helper(kind="connect")
@@ -744,15 +744,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     logging.warning(f"Error connecting Pi 4B to hotspot: {e}")
 
-                try:
-                    pi500_cmd = "sudo rfkill unblock wifi; sudo nmcli radio wifi on; sudo nmcli connection up iPhone || nmcli connection up iPhone"
-                    subprocess.run([
-                        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
-                        "user@10.0.0.1", pi500_cmd
-                    ], capture_output=True, timeout=10)
-                except Exception as e:
-                    logging.warning(f"Error connecting Pi 500 to hotspot: {e}")
-
             threading.Thread(target=_switch_to_hotspot, daemon=True).start()
             play_sound_helper(kind="connect")
 
@@ -761,7 +752,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({
                 "status": "ok",
-                "message": "Initiated connection to iPhone hotspot across Pi 4B and Pi 500"
+                "message": "Initiated connection to iPhone hotspot on Pi 4B"
             }).encode('utf-8'))
             return
 
@@ -769,10 +760,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             # Legacy alias redirected to connect_hotspot
             def _switch_to_hotspot_legacy():
                 subprocess.run(["sudo", "nmcli", "connection", "up", "iPhone"], check=False)
-                subprocess.run([
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
-                    "user@10.0.0.1", "sudo nmcli connection up iPhone || nmcli connection up iPhone"
-                ], capture_output=True, timeout=10)
 
             threading.Thread(target=_switch_to_hotspot_legacy, daemon=True).start()
             play_sound_helper(kind="connect")

@@ -32,7 +32,7 @@ def find_audio_config_path() -> str:
     search_paths.extend([
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_files.json"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "audio_files.json"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "audio_files.json"),
+        "/home/carson/so101/config/audio_files.json",
         "/home/user/so101/config/audio_files.json",
         "/home/carson/touch_ui/config/audio_files.json",
         "i:/aux_servo_interface/config/audio_files.json",

@@ -1148,7 +1148,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             cfg_dict = {"max_speed_pct": pct, "max_pulse_offset": offset}
             cfg_json = json.dumps(cfg_dict, indent=2)
 
-            for target_path in ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json"]:
+            for target_path in ["/tmp/rover_config.json", str(Path.home() / "so101" / "config" / "rover_config.json"), "/home/user/so101/config/rover_config.json"]:
                 try:
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
                     tmp_target = target_path + ".tmp"

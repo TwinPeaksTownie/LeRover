@@ -8,13 +8,10 @@ from pathlib import Path
 # Resolve base_dir dynamically for both local workspace and remote deployment
 base_dir = Path(__file__).resolve().parent.parent
 if not (base_dir / "library" / "beat_bandit" / "manifest.json").exists():
-    p2 = Path("/home/user/so101")
-    if (p2 / "library" / "beat_bandit" / "manifest.json").exists():
-        base_dir = p2
-    else:
-        p3 = Path("/home/carson/touch_ui")
-        if (p3 / "library" / "beat_bandit" / "manifest.json").exists():
-            base_dir = p3
+    for cand in [Path.home() / "so101", Path("/home/carson/so101"), Path("/home/user/so101"), Path("/home/carson/touch_ui")]:
+        if (cand / "library" / "beat_bandit" / "manifest.json").exists():
+            base_dir = cand
+            break
 
 sys.path.insert(0, str(base_dir / "pi500"))
 from choreography_compiler import compile_choreography_tracks, CHOREO_SCHEMA_VERSION

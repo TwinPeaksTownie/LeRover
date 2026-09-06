@@ -90,7 +90,7 @@ class StandalonePokeballRover:
         self.steering_trim: float = 0.0
         self.trim_stick_latched: bool = False
 
-        config_paths = ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json", os.path.join(workspace_root, "config", "rover_config.json")]
+        config_paths = ["/tmp/rover_config.json", str(Path.home() / "so101" / "config" / "rover_config.json"), "/home/user/so101/config/rover_config.json", os.path.join(workspace_root, "config", "rover_config.json")]
         for cp in config_paths:
             if os.path.exists(cp):
                 try:
@@ -154,7 +154,7 @@ class StandalonePokeballRover:
             "max_pulse_offset": self.rover_ctrl.max_pulse_offset if self.rover_ctrl else 175,
             "steering_trim": self.steering_trim
         }
-        for path in ["/tmp/rover_config.json", "/home/user/so101/config/rover_config.json"]:
+        for path in ["/tmp/rover_config.json", str(Path.home() / "so101" / "config" / "rover_config.json"), "/home/user/so101/config/rover_config.json"]:
             try:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w") as f:

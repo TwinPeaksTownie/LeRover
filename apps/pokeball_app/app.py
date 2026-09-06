@@ -108,7 +108,7 @@ def load_joystick_calibration() -> Tuple[int, int]:
     """
     aux_path = os.path.join(workspace_root, "calibration_aux.json")
     if not os.path.exists(aux_path):
-        aux_path = "/home/user/so101/calibration_aux.json"
+        aux_path = str(Path.home() / "so101" / "calibration_aux.json")
     if os.path.exists(aux_path):
         with open(aux_path, "r", encoding="utf-8") as f:
             calib = json.load(f)

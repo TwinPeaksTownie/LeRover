@@ -1,4 +1,27 @@
 {
+  "topology_mode": "STANDALONE_PI4B",
+  "endpoints": {
+    "master_backend": {
+      "host": "127.0.0.1",
+      "port": 8085
+    },
+    "touch_ui": {
+      "host": "127.0.0.1",
+      "port": 8082
+    },
+    "mac_teleop": {
+      "host": "192.168.0.149",
+      "port": 8086
+    },
+    "voice_bridge": {
+      "host": "192.168.0.194",
+      "port": 8058
+    }
+  },
+  "hardware": {
+    "serial_port": "/dev/ttyACM0",
+    "baudrate": 1000000
+  },
   "direct_ethernet": {
     "pi500_ip": "10.0.0.1",
     "pi4b_ip": "10.0.0.2",

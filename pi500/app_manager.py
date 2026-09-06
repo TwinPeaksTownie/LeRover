@@ -104,6 +104,8 @@ class AppManager:
         if apps_dir is None:
             possible = [
                 Path(__file__).resolve().parent.parent / "apps",
+                Path.home() / "so101" / "apps",
+                Path("/home/carson/so101/apps"),
                 Path("/home/user/so101/apps"),
                 Path.cwd() / "apps",
             ]
