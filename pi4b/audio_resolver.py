@@ -7,7 +7,17 @@ Enforces strict fail-fast schema validation without arbitrary fallbacks.
 import json
 import logging
 import os
+import threading
+import time
+import urllib.request
 from typing import Dict, Any, Optional
+
+try:
+    import network_resolver
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import network_resolver
 
 logger = logging.getLogger("audio_resolver")
 
@@ -65,3 +75,38 @@ def get_audio_filename(event_name: str) -> str:
     if "file" not in event:
         raise KeyError(f"Audio event '{event_name}' missing required 'file' attribute.")
     return event["file"]
+
+
+def get_pi4b_sound_url() -> str:
+    """Returns the audio dispatch URL on the Pi 4B."""
+    pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
+    return f"http://{pi4b_ip}:8082/api/play_sound"
+
+
+def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
+    """Dispatches sound playback event to Pi 4B audio service asynchronously."""
+    sound_file = get_audio_filename(kind)
+    event_name = kind
+
+    def _work():
+        try:
+            if delay_sec > 0:
+                time.sleep(delay_sec)
+            payload = json.dumps({
+                "kind": sound_file,
+                "event": event_name,
+                "wav_path": wav_path or "",
+                "stop_previous": stop_previous,
+                "delay_sec": 0.0
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                get_pi4b_sound_url(),
+                data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                pass
+        except Exception as e:
+            logger.exception("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
+    threading.Thread(target=_work, daemon=True).start()
+

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 import network_resolver
 from robot_backend import RobotBackend
 from app_manager import AppManager
-from pokeball_app import PokeballService
+from apps.pokeball_app.app import PokeballService
 from api_server import create_master_http_server
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

@@ -488,13 +488,14 @@ def query_ornith_for_review(
 
     # State 4 Daemon Log Inspection
     daemon_log_info = "Daemon logs clean."
+    target_node = "pi4b"
     try:
-        d_logs = tools_hardware.query_daemon_logs("pi500", "backend.service", lines=25)
+        d_logs = tools_hardware.query_daemon_logs(target_node, "backend.service", lines=25)
         if not d_logs.get("clean"):
             daemon_log_info = f"Errors found ({d_logs.get('error_count')}): " + "; ".join(d_logs.get("detected_errors", [])[:3])
-            violations_detail += f"\n- [DAEMON_LOG_ERROR] pi500 backend.service logs:\n  " + "\n  ".join(d_logs.get("detected_errors", [])[:3])
+            violations_detail += f"\n- [DAEMON_LOG_ERROR] {target_node} backend.service logs:\n  " + "\n  ".join(d_logs.get("detected_errors", [])[:3])
         else:
-            daemon_log_info = "0 exceptions or timeouts in recent journalctl."
+            daemon_log_info = f"0 exceptions or timeouts in recent journalctl on {target_node}."
     except Exception as e:
         _log_debug(f"Daemon log query warning: {e}")
 
@@ -515,6 +516,7 @@ Your job is to strictly enforce the following rules:
 13. ANTI-SLOP & FALSE TRI-STATES: Zero tolerance for logic padded to satisfy the LLM 'rule of three'. When diffs introduce three-state machines, three-way branching, or trios of options, rigorously verify that all three states are mutually exclusive and required. Reject synthetic third states fabricated for aesthetic balance.
 
 Evaluate the git diff, contract violations, and deployment status against the task summary and these strict rules.
+Keep internal reasoning concise (under 80 words) and deliver the structured response directly.
 
 You MUST structure your response strictly using these exact markdown headers:
 
@@ -531,20 +533,24 @@ Keep the SPOKEN_SUMMARY strictly under 60 words, natural for text-to-speech, wit
 ### DETAILED_AUDIT
 Explain the exact technical reasons, line-by-line violations in the diff, and recommended corrections for Antigravity."""
 
+    trimmed_diff = diff_text
+    if len(trimmed_diff) > MAX_DIFF_CHARS:
+        trimmed_diff = trimmed_diff[:MAX_DIFF_CHARS] + f"\n\n... [Diff truncated to {MAX_DIFF_CHARS} characters to fit context window] ..."
+
     user_prompt = f"""Task Summary: {task_summary}
 
 Contract Scan Result:
 - Clean: {contract_res.get('clean')}
 - Rule Violations: {len(contract_res.get('violations', []))}
 - Deployment Status: {deployment_info}
-- Pi 500 Daemon Logs: {daemon_log_info}
+- Pi 4B Daemon Logs: {daemon_log_info}
 
 Contract Violations Detail:
 {violations_detail}
 
 Repository Changes (Git Diff):
 ```diff
-{diff_text if diff_text.strip() else 'No unstaged or staged diffs.'}
+{trimmed_diff if trimmed_diff.strip() else 'No unstaged or staged diffs.'}
 ```
 
 Provide your adversarial audit:"""
@@ -627,6 +633,8 @@ Provide your adversarial audit:"""
                 content = str(msg_obj["content"])
             if "reasoning_content" in msg_obj and msg_obj["reasoning_content"] is not None:
                 reasoning = str(msg_obj["reasoning_content"])
+
+        _log_debug(f"=== MODEL RAW OUTPUT ===\nContent: {content}\nReasoning preview: {reasoning[:200]}\n========================")
 
         if not content and reasoning:
             content = reasoning

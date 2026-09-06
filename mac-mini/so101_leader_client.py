@@ -26,13 +26,37 @@ def create_zmq_sockets(ctx, host):
     obs_sock.connect(f"tcp://{host}:{PORT_ZMQ_OBS}")
     return cmd_sock, obs_sock
 
+import socket
+
+def resolve_follower_host(cli_host: Optional[str] = None) -> str:
+    """Dynamically resolves follower robot host IP (Pi 4B) based on network environment."""
+    if cli_host and cli_host not in ["192.168.0.130", "default", ""]:
+        return cli_host
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        if local_ip.startswith("172.20.10."):
+            try:
+                resolved = socket.gethostbyname("raspberrypi.local")
+                if resolved:
+                    return resolved
+            except Exception as e:
+                logging.debug("Could not resolve raspberrypi.local on hotspot: %s", e)
+    except Exception as e:
+        logging.debug("Could not probe local network interface: %s", e)
+    return "192.168.0.86"
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="192.168.0.130")
+    ap.add_argument("--host", default="192.168.0.86")
     ap.add_argument("--port", default="/dev/cu.usbmodem5B415318721")
     ap.add_argument("--id", default="leader")
     args = ap.parse_args()
 
+    target_host = resolve_follower_host(args.host)
+    logging.info(f"Resolved follower host: {target_host}")
     logging.info(f"Initializing SO101Leader on {args.port} (Relative Percentage Mode)")
     config = SOLeaderTeleopConfig(port=args.port, id=args.id)
     config.use_degrees = False
@@ -47,7 +71,7 @@ def main():
     logging.info("Leader arm connected successfully with native motor normalization.")
 
     ctx = zmq.Context()
-    cmd_sock, obs_sock = create_zmq_sockets(ctx, args.host)
+    cmd_sock, obs_sock = create_zmq_sockets(ctx, target_host)
 
     logging.info("Streaming ZMQ relative percentage frames...")
     n = 0

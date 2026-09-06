@@ -1,56 +1,67 @@
-"""Pi 4B Touchscreen Kiosk UI & Router Server.
+#!/usr/bin/env python3
+"""Pi 4B Touchscreen Kiosk UI & Unified Robot Backend Server.
 Target Deployment: /home/carson/touch_ui/server.py on Pi 4B (192.168.0.86)
-Executed by: backend.service (Port 8082)
+Executed by: backend.service (Binds dual ports: 8082 for Touch UI, 8085 for Robot REST API)
 """
 
 import http.server
-import socketserver
-import urllib.parse
 import json
-import subprocess
-import os
-import time
-import threading
-import socket
-import urllib.request
-import random
-import sys
 import logging
+import os
+import signal
+import socket
+import socketserver
+import subprocess
+import sys
+import threading
+import time
 import traceback
+import urllib.parse
+import urllib.request
 from typing import Optional, Dict, Any, List
+
+# Ensure virtualenv site-packages are available even if started via system Python
+venv_site_candidates = [
+    "/home/carson/aux_servo_interface/.venv/lib/python3.11/site-packages",
+    "/home/carson/touch_ui/.venv/lib/python3.11/site-packages",
+    "/home/user/so101/.venv/lib/python3.11/site-packages",
+]
+for p in venv_site_candidates:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
 
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 if DIRECTORY not in sys.path:
     sys.path.insert(0, DIRECTORY)
 
-try:
-    import network_resolver
-except ImportError:
-    network_resolver = None
+# Ensure pi4b subfolder is available if server.py is at repository root
+pi4b_dir = os.path.join(DIRECTORY, "pi4b")
+if os.path.isdir(pi4b_dir) and pi4b_dir not in sys.path:
+    sys.path.insert(0, pi4b_dir)
 
+# If server.py is executing from inside the pi4b subfolder, include repo root
+if os.path.basename(DIRECTORY) == "pi4b":
+    repo_root = os.path.dirname(DIRECTORY)
+    if repo_root not in sys.path and os.path.abspath(repo_root) != os.path.abspath(os.path.expanduser("~")):
+        sys.path.insert(0, repo_root)
+
+import network_resolver
 import audio_resolver
+from robot_backend import RobotBackend
+from app_manager import AppManager
+from apps.pokeball_app.app import PokeballService
+from api_server import MasterApiHandler, set_chime_callback, ensure_leader_poller_started
 
-PORT = 8082
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+PORT_TOUCH_UI = 8082
+PORT_MASTER_API = 8085
 
-def get_current_pi500_ip(port=8085) -> str:
-    if not network_resolver:
-        raise RuntimeError("network_resolver module is not available")
-    return network_resolver.get_pi500_ip(prefer_port=port)
+GLOBAL_BACKEND: Optional[RobotBackend] = None
+GLOBAL_APP_MANAGER: Optional[AppManager] = None
+GLOBAL_POKEBALL: Optional[PokeballService] = None
 
-
-def get_current_mac_ip(port=8086) -> str:
-    if not network_resolver:
-        raise RuntimeError("network_resolver module is not available")
-    return network_resolver.get_mac_ip(prefer_port=port)
-
-
-def get_current_pc_ip(port=8058) -> str:
-    if not network_resolver:
-        raise RuntimeError("network_resolver module is not available")
-    return network_resolver.get_pc_ip(prefer_port=port)
-
-STATUS_CACHE = {
+STATUS_CACHE: Dict[str, Any] = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
     "follower": {"running": False, "pid": ""},
     "leader": {"running": False, "pid": ""},
@@ -63,7 +74,6 @@ STATUS_CACHE = {
     "last_telemetry_time": 0,
     "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False},
     "pi4b_wlan_ip": None,
-    "pi500_wlan_ip": None
 }
 
 TAP_DETECTOR = None
@@ -136,22 +146,8 @@ def sync_rover_speed_config(pct: int):
         cfg_dict = {"max_speed_pct": val, "max_pulse_offset": max_offset}
         with open("/tmp/rover_config.json", "w") as f:
             json.dump(cfg_dict, f, indent=2)
-        p500_ip = get_current_pi500_ip(port=8085)
-        post_data = json.dumps(cfg_dict).encode("utf-8")
-        req = urllib.request.Request(
-            f"http://{p500_ip}:8085/api/config/rover_speed",
-            data=post_data,
-            headers={"Content-Type": "application/json"}
-        )
-        def _post_cfg():
-            try:
-                with urllib.request.urlopen(req, timeout=1.5):
-                    pass
-            except Exception as p_err:
-                print(f"Error posting rover speed to Pi 500: {p_err}", flush=True)
-        threading.Thread(target=_post_cfg, daemon=True).start()
     except Exception as e:
-        print(f"Error syncing rover speed: {e}", flush=True)
+        print(f"Error syncing rover speed locally: {e}", flush=True)
 
 def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = ""):
     """Dispatches audio playback on Pi 4B PulseAudio daemon with fail-fast validation and full traceback logging."""
@@ -197,176 +193,94 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
             raise
     threading.Thread(target=_work, daemon=True).start()
 
-LOCAL_BACKEND_PROC = None
-LOCAL_BACKEND_LOCK = threading.Lock()
-
 def manage_local_backend(action: str) -> Optional[int]:
-    """Manages the local master hardware daemon (pi500/main.py) on Standalone Pi 4B.
+    """Manages the in-memory master hardware backend.
     Accepts explicit lifecycle actions: 'start', 'stop', 'restart'.
     """
-    global LOCAL_BACKEND_PROC
-    with LOCAL_BACKEND_LOCK:
-        if action in ["stop", "restart"]:
-            print(f"[BackendLifecycle] Stopping local master daemon...", flush=True)
-            if LOCAL_BACKEND_PROC is not None:
-                try:
-                    LOCAL_BACKEND_PROC.terminate()
-                    LOCAL_BACKEND_PROC.wait(timeout=2.0)
-                except Exception as ex:
-                    print(f"[BackendLifecycle] Terminate warning: {ex}", flush=True)
-                LOCAL_BACKEND_PROC = None
+    global GLOBAL_BACKEND
+    if action in ["stop", "restart"]:
+        logging.info("[BackendLifecycle] Stopping/disconnecting robot backend...")
+        try:
+            if GLOBAL_BACKEND is not None:
+                GLOBAL_BACKEND.disable_all_torque()
+                GLOBAL_BACKEND.follower_active = False
+                GLOBAL_BACKEND.disconnect()
+        except Exception as ex:
+            logging.warning(f"[BackendLifecycle] Backend disconnect warning: {ex}")
 
-            # Clean up processes holding main.py, port 8085, or /dev/ttyACM0
-            subprocess.run(["pkill", "-9", "-f", "main.py"], check=False)
-            subprocess.run(["fuser", "-k", "8085/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["fuser", "-k", "/dev/ttyACM0"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.5)
+        STATUS_CACHE["backend_online"] = False
+        STATUS_CACHE["follower"] = {"running": False, "pid": ""}
+        STATUS_CACHE["hardware_telemetry"] = None
 
-            STATUS_CACHE["backend_online"] = False
-            STATUS_CACHE["daemon_running"] = False
-            STATUS_CACHE["follower"] = {"running": False, "pid": ""}
-            STATUS_CACHE["hardware_telemetry"] = None
+        if action == "stop":
+            return None
 
-            if action == "stop":
-                return None
+    if action in ["start", "restart"]:
+        logging.info("[BackendLifecycle] Starting/reconnecting robot backend...")
+        try:
+            if GLOBAL_BACKEND is not None:
+                GLOBAL_BACKEND.connect()
+                STATUS_CACHE["backend_online"] = GLOBAL_BACKEND.hardware_active
+        except Exception as ex:
+            logging.error(f"[BackendLifecycle] Backend connect error: {ex}")
+        return os.getpid()
+    return None
 
-        if action in ["start", "restart"]:
-            print(f"[BackendLifecycle] Starting local master daemon...", flush=True)
-            # Find python binary
-            py_candidates = [
-                "/home/carson/aux_servo_interface/.venv/bin/python",
-                "/home/carson/touch_ui/.venv/bin/python",
-                "/home/user/so101/.venv/bin/python",
-                sys.executable
-            ]
-            py_bin = sys.executable
-            for cand in py_candidates:
-                if os.path.isfile(cand) and os.access(cand, os.X_OK):
-                    py_bin = cand
-                    break
 
-            # Find pi500/main.py
-            main_candidates = [
-                os.path.join(DIRECTORY, "pi500", "main.py"),
-                os.path.join(DIRECTORY, "..", "pi500", "main.py"),
-                "/home/carson/aux_servo_interface/pi500/main.py",
-                "/home/user/so101/pi500/main.py"
-            ]
-            main_script = None
-            for mc in main_candidates:
-                norm_mc = os.path.abspath(mc)
-                if os.path.isfile(norm_mc):
-                    main_script = norm_mc
-                    break
-
-            if not main_script:
-                raise FileNotFoundError("Could not find pi500/main.py entrypoint")
-
-            log_file = open("/tmp/so101_master.log", "a")
-            LOCAL_BACKEND_PROC = subprocess.Popen(
-                [py_bin, "-u", main_script],
-                cwd=os.path.dirname(main_script),
-                stdout=log_file,
-                stderr=log_file,
-                start_new_session=True
-            )
-            print(f"[BackendLifecycle] Master daemon started with PID {LOCAL_BACKEND_PROC.pid}", flush=True)
-            return LOCAL_BACKEND_PROC.pid
-
-def poll_status_loop():
+def poll_status_loop() -> None:
+    """Non-blocking background loop sampling live in-memory telemetry and Mac Leader state."""
     while True:
-        if not network_resolver:
-            raise RuntimeError("network_resolver module is not available")
-        cfg = network_resolver.load_network_config()
-        topology_mode = cfg["topology_mode"]
-        if topology_mode not in ["STANDALONE_PI4B", "DUAL_NODE"]:
-            raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
-        STATUS_CACHE["topology_mode"] = topology_mode
-
-        p500_ip = get_current_pi500_ip(port=8085)
-        mac_ip = get_current_mac_ip(port=8086)
-        conn_mode = network_resolver.get_active_connection_mode()
-
-        # 1. Check physical/local host reachability
-        pi500_host_online = False
-        if p500_ip == "127.0.0.1":
-            pi500_host_online = True
-        else:
-            pi500_host_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
-        
-        STATUS_CACHE["connection_mode"] = conn_mode
-        STATUS_CACHE["resolved_pi500_ip"] = p500_ip
-        STATUS_CACHE["resolved_mac_ip"] = mac_ip
-        STATUS_CACHE["pi4b_wlan_ip"] = network_resolver.get_interface_ip("wlan0") if network_resolver else None
-
-        # 2. Poll Master Daemon over HTTP 8085
-        backend_connected = False
         try:
-            req = urllib.request.Request(f"http://{p500_ip}:8085/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
-            with urllib.request.urlopen(req, timeout=0.35) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode())
-                    STATUS_CACHE["hardware_telemetry"] = data
-                    STATUS_CACHE["last_telemetry_time"] = time.time()
-                    STATUS_CACHE["daemon_running"] = True
-                    STATUS_CACHE["hardware_connected"] = bool(data.get("hardware_connected", False))
-                    backend_connected = True
-                    if isinstance(data, dict):
-                        if "wlan0_ip" in data:
-                            STATUS_CACHE["pi500_wlan_ip"] = data["wlan0_ip"]
-                        if "follower" in data and isinstance(data["follower"], dict):
-                            STATUS_CACHE["follower"] = data["follower"]
-                        else:
-                            STATUS_CACHE["follower"] = {"running": False, "pid": ""}
-                        if "pokeball" in data and isinstance(data["pokeball"], dict):
-                            STATUS_CACHE["pokeball"] = data["pokeball"]
-                        else:
-                            STATUS_CACHE["pokeball"] = {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""}
+            cfg = network_resolver.load_network_config()
+            topology_mode = cfg["topology_mode"]
+            if topology_mode not in ["STANDALONE_PI4B", "DUAL_NODE"]:
+                raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
+            STATUS_CACHE["topology_mode"] = topology_mode
+
+            conn_mode = network_resolver.get_active_connection_mode()
+            STATUS_CACHE["connection_mode"] = conn_mode
+            STATUS_CACHE["pi4b_wlan_ip"] = network_resolver.get_interface_ip("wlan0")
+
+            # Sample authoritative in-memory telemetry directly
+            ht = MasterApiHandler.build_status_dict()
+            STATUS_CACHE["hardware_telemetry"] = ht
+            STATUS_CACHE["last_telemetry_time"] = time.time()
+            STATUS_CACHE["daemon_running"] = True
+
+            is_connected = bool(GLOBAL_BACKEND and GLOBAL_BACKEND.hardware_active)
+            STATUS_CACHE["backend_online"] = is_connected
+            STATUS_CACHE["hardware_connected"] = is_connected
+            STATUS_CACHE["pi500_online"] = False
+
+            if isinstance(ht, dict) and "follower" in ht:
+                STATUS_CACHE["follower"] = ht["follower"]
+                STATUS_CACHE["leader"] = ht["leader"]
+                STATUS_CACHE["pokeball"] = ht["pokeball"]
+                STATUS_CACHE["servos"] = ht["servos"]
+
+            # Update Clack Pose telemetry
+            global TAP_DETECTOR
+            with TAP_DETECTOR_LOCK:
+                if TAP_DETECTOR is not None:
+                    STATUS_CACHE["clack_pose"] = TAP_DETECTOR.get_state()
                 else:
-                    STATUS_CACHE["daemon_running"] = False
-                    STATUS_CACHE["follower"] = {"running": False, "pid": ""}
-                    STATUS_CACHE["hardware_telemetry"] = None
-        except Exception:
-            STATUS_CACHE["daemon_running"] = False
-            STATUS_CACHE["follower"] = {"running": False, "pid": ""}
-            STATUS_CACHE["hardware_telemetry"] = None
+                    STATUS_CACHE["clack_pose"] = {"running": False, "mode": "CALIBRATION_DETECTION_ONLY"}
 
-        STATUS_CACHE["backend_online"] = backend_connected
-        # Transitional backward-compatibility: in standalone mirrors backend_online; in dual-node mirrors pi500_host_online
-        STATUS_CACHE["pi500_online"] = backend_connected if topology_mode == "STANDALONE_PI4B" else pi500_host_online
-
-        # 3. Poll Mac Leader directly over HTTP 8086
-        try:
-            req_mac = urllib.request.Request(f"http://{mac_ip}:8086/api/status", headers={'User-Agent': 'Pi4B-TouchUI'})
-            with urllib.request.urlopen(req_mac, timeout=0.35) as response_mac:
-                if response_mac.status == 200:
-                    mac_data = json.loads(response_mac.read().decode())
-                    leader_data = mac_data.get("leader", mac_data) if isinstance(mac_data.get("leader"), dict) else mac_data
-                    STATUS_CACHE["leader"] = {"running": bool(leader_data.get("running", False)), "pid": str(leader_data.get("pid", ""))}
-                else:
-                    STATUS_CACHE["leader"] = {"running": False, "pid": ""}
-        except Exception:
-            STATUS_CACHE["leader"] = {"running": False, "pid": ""}
-
-        # 4. Update Clack Pose telemetry
-        global TAP_DETECTOR
-        with TAP_DETECTOR_LOCK:
-            if TAP_DETECTOR is not None:
-                STATUS_CACHE["clack_pose"] = TAP_DETECTOR.get_state()
-            else:
-                STATUS_CACHE["clack_pose"] = {"running": False, "mode": "CALIBRATION_DETECTION_ONLY"}
+        except Exception as loop_err:
+            logging.error(f"[PollLoop] Error during status polling: {loop_err}")
 
         time.sleep(0.33)
 
-threading.Thread(target=poll_status_loop, daemon=True).start()
 
+class UnifiedHandler(MasterApiHandler):
+    """Unified HTTP Request Handler servicing both Touch UI (port 8082) and Robot REST API (port 8085).
+    Executes all robot hardware control and application lifecycle logic directly in-memory with zero proxying.
+    """
 
-class CustomHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=DIRECTORY, **kwargs)
-
-    def do_GET(self):
+    def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+
+        # 1. Static Web Assets & UI Pages
         if parsed.path in ["/", "/index.html", "/gantry_ui.html"]:
             static_file = os.path.join(DIRECTORY, "static", "index.html")
             if not os.path.exists(static_file):
@@ -413,26 +327,21 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(content)
                 return
 
+        # 2. Port-specific /api/status resolution
         if parsed.path == "/api/status":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            
-            resp = dict(STATUS_CACHE)
-            time_since_telem = time.time() - STATUS_CACHE.get("last_telemetry_time", 0)
-            resp["closed_loop_verified"] = bool(STATUS_CACHE.get("hardware_telemetry")) and (time_since_telem < 2.0)
-            self.wfile.write(json.dumps(resp).encode('utf-8'))
-            return
+            local_port = self.server.server_address[1]
+            if local_port == PORT_MASTER_API:
+                return self._send_json(self.build_status_dict())
 
+            resp = dict(STATUS_CACHE)
+            is_active = bool(GLOBAL_BACKEND and GLOBAL_BACKEND.hardware_active)
+            time_since_telem = time.time() - STATUS_CACHE["last_telemetry_time"]
+            resp["closed_loop_verified"] = is_active and (time_since_telem < 2.0)
+            return self._send_json(resp)
+
+        # 3. Touch UI configuration & media endpoints
         if parsed.path == "/api/get_config":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
-            return
+            return self._send_json({"status": "ok", "config": UI_CONFIG})
 
         if parsed.path == "/api/pending_audio":
             tmp_path = "/home/carson/pending_audio.wav"
@@ -440,11 +349,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             size = 0
             if exists:
                 size = os.path.getsize(tmp_path)
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "exists": exists, "bytes": size}).encode('utf-8'))
-            return
+            return self._send_json({"status": "ok", "exists": exists, "bytes": size})
 
         if parsed.path == "/api/microphone/stream":
             proc = None
@@ -456,11 +361,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     err_msg = ""
                     if proc.stderr:
                         err_msg = proc.stderr.read().decode("utf-8", "replace").strip()
-                    self.send_response(503)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"error": f"Failed to spawn parecord: {err_msg} (exit code {proc.returncode})"}).encode("utf-8"))
-                    return
+                    return self._send_json({"error": f"Failed to spawn parecord: {err_msg} (exit code {proc.returncode})"}, 503)
 
                 self.send_response(200)
                 self.send_header("Content-Type", "audio/x-raw;format=s16le;rate=16000;channels=1")
@@ -488,32 +389,15 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     try:
                         proc.terminate()
                         proc.wait(timeout=1.0)
-                    except (subprocess.TimeoutExpired, ProcessLookupError, OSError) as term_err:
-                        logging.warning(f"[ROBOT MIC STREAM] Process termination error, escalating to kill: {term_err}")
+                    except Exception:
                         proc.kill()
             return
 
-        if parsed.path.startswith("/api/apps") or parsed.path in ["/api/arm/presets", "/api/arm/sequences", "/api/pokeball_reconnect"]:
-            try:
-                p500_ip = get_current_pi500_ip(port=8085)
-                req = urllib.request.Request(f"http://{p500_ip}:8085{self.path}")
-                with urllib.request.urlopen(req, timeout=1.5) as resp:
-                    resp_body = resp.read()
-                    self.send_response(resp.status)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(resp_body)
-                    return
-            except Exception as e:
-                self.send_response(502)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Failed to proxy to Pi 500: {e}"}).encode('utf-8'))
-                return
-
+        # 4. Delegate all standard robot GET endpoints (/api/apps..., /api/arm/presets, etc.) to MasterApiHandler
         return super().do_GET()
 
-    def do_POST(self):
+
+    def do_POST(self) -> None:
         global TAP_DETECTOR, ROBOT_MIC_PROC
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -550,11 +434,19 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "bytes": len(raw_audio), "path": tmp_path}).encode('utf-8'))
                 return
 
-        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
-        try:
-            req_data = json.loads(body) if body else {}
-        except Exception:
-            req_data = {}
+        body_bytes = b""
+        if content_length > 0:
+            body_bytes = self.rfile.read(content_length)
+        body = ""
+        if body_bytes:
+            body = body_bytes.decode('utf-8')
+        req_data = {}
+        if body:
+            try:
+                req_data = json.loads(body)
+            except json.JSONDecodeError as err:
+                logging.warning("JSON decode failed on request body: %s", err)
+                req_data = {}
 
         if path == "/api/pending_audio/play":
             tmp_path = "/home/carson/pending_audio.wav"
@@ -956,17 +848,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": f"Invalid action '{action}'. Expected 'start', 'stop', or 'restart'", "status": "failed"}).encode())
                 return
 
-            if not network_resolver:
-                raise RuntimeError("network_resolver module is not available")
-            cfg = network_resolver.load_network_config()
-            topology_mode = cfg["topology_mode"]
-            if topology_mode != "STANDALONE_PI4B":
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Backend lifecycle management not supported in topology mode '{topology_mode}'", "status": "failed"}).encode())
-                return
-
             try:
                 pid = manage_local_backend(action)
                 self.send_response(200)
@@ -975,201 +856,142 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "action": action, "pid": pid}).encode())
                 return
             except Exception as ex:
-                logging.exception("Failed to execute backend action '%s': %s", action, ex)
+                logging.exception(f"Failed to execute backend action '{action}': {ex}")
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": f"Backend lifecycle failure: {ex}", "status": "failed"}).encode())
                 return
 
-        if path in ["/api/follower_toggle", "/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/beat_bandit_toggle", "/api/kill_all"]:
-            if "action" not in req_data:
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": "Schema contract violation: missing required 'action' key", "status": "failed"}).encode())
-                return
-            action = str(req_data["action"])
-            if path == "/api/kill_all":
-                play_sound_helper(kind="stop_audio", stop_previous=True)
-                with TAP_DETECTOR_LOCK:
-                    if TAP_DETECTOR is not None:
-                        try:
-                            TAP_DETECTOR.stop()
-                        except Exception as k_err:
-                            print(f"[KillAll] Tap detector stop warning: {k_err}", flush=True)
-                        TAP_DETECTOR = None
-                STATUS_CACHE["clack_pose"] = {"running": False}
+        # 3. Audio / Tap detector muting during motion sequences
+        if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
+            if path in ["/api/arm/attack_sequence", "/api/arm/attack", "/api/arm/execute_sequence"]:
+                TAP_DETECTOR.mute(12.0)
+            elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset", "/api/arm/move_norm"]:
+                TAP_DETECTOR.mute(2.5)
+            elif path in ["/api/slider", "/api/pedestal_step", "/api/move", "/api/nudge_physical"]:
+                TAP_DETECTOR.mute(1.5)
 
-            if path in ["/api/follower_toggle", "/api/pi500_follower_toggle", "/api/pokeball_teleop_toggle", "/api/servo_studio_toggle", "/api/beat_bandit_toggle"] and action != "stop":
-                with TAP_DETECTOR_LOCK:
-                    if TAP_DETECTOR is not None:
-                        try:
-                            TAP_DETECTOR.stop()
-                        except Exception as t_err:
-                            print(f"[Toggle] Tap detector stop warning: {t_err}", flush=True)
-                        TAP_DETECTOR = None
-                STATUS_CACHE["clack_pose"] = {"running": False}
+        if path == "/api/kill_all":
+            play_sound_helper(kind="stop_audio", stop_previous=True)
+            with TAP_DETECTOR_LOCK:
+                if TAP_DETECTOR is not None:
+                    try:
+                        TAP_DETECTOR.stop()
+                    except Exception as k_err:
+                        logging.warning(f"[KillAll] Tap detector stop warning: {k_err}")
+                    TAP_DETECTOR = None
+            STATUS_CACHE["clack_pose"] = {"running": False}
 
-            if path == "/api/beat_bandit_toggle" and action in ["stop", "kill"]:
-                play_sound_helper(kind="stop_audio", stop_previous=True)
+        # 4. Delegate all standard robot control POST endpoints to MasterApiHandler
+        import io
+        self.rfile = io.BytesIO(body_bytes)
+        return super().do_POST()
 
-            try:
-                p500_ip = get_current_pi500_ip(port=8085)
-                mac_ip = get_current_mac_ip(port=8086)
-                if path == "/api/mac_leader_toggle":
-                    url = f"http://{mac_ip}:8086/api/leader_toggle"
-                else:
-                    url = f"http://{p500_ip}:8085{path}"
-                
-                post_data = json.dumps({"action": action}).encode('utf-8')
-                req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=3.0) as resp:
-                    resp_body = resp.read()
-                    if path == "/api/kill_all":
-                        STATUS_CACHE["hardware_telemetry"] = None
-                    else:
-                        try:
-                            st_req = urllib.request.Request(f"http://{p500_ip}:8085/api/status")
-                            with urllib.request.urlopen(st_req, timeout=1.0) as st_resp:
-                                if st_resp.status == 200:
-                                    STATUS_CACHE["hardware_telemetry"] = json.loads(st_resp.read().decode())
-                        except Exception as st_err:
-                            print(f"[Telemetry] Status refresh warning: {st_err}", flush=True)
-                    self.send_response(resp.status)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(resp_body)
-                    return
-            except Exception as e:
-                if path == "/api/kill_all":
-                    STATUS_CACHE["hardware_telemetry"] = None
-                play_sound_helper(kind="incorrect")
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"HTTP endpoint error: {e}", "status": "failed"}).encode())
-                return
 
-        if path.startswith("/api/apps/"):
-            if path in ["/api/apps/beat_bandit/stop", "/api/apps/stop"]:
-                play_sound_helper(kind="stop_audio", stop_previous=True)
-                with TAP_DETECTOR_LOCK:
-                    if TAP_DETECTOR is not None:
-                        try:
-                            TAP_DETECTOR.stop()
-                        except Exception as b_err:
-                            print(f"[AppStop] Tap detector stop warning: {b_err}", flush=True)
-                        TAP_DETECTOR = None
-                STATUS_CACHE["clack_pose"] = {"running": False}
+CustomHandler = UnifiedHandler
 
-            app_req_name = req_data.get("name", "") if isinstance(req_data, dict) else ""
-            if path == "/api/apps/start":
-                if app_req_name in ["clack_pose_app", "piranha_pose_app"]:
-                    with TAP_DETECTOR_LOCK:
-                        if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
-                            try:
-                                from audio_tap_detector import AudioTapDetector
-                                TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
-                                TAP_DETECTOR.start()
-                                STATUS_CACHE["clack_pose"] = {"running": True}
-                            except Exception as te:
-                                print(f"[ClackPose] AudioTapDetector start error: {te}", flush=True)
-                else:
-                    with TAP_DETECTOR_LOCK:
-                        if TAP_DETECTOR is not None:
-                            try:
-                                TAP_DETECTOR.stop()
-                            except Exception as t_err:
-                                print(f"[AppStart] Tap detector stop warning: {t_err}", flush=True)
-                            TAP_DETECTOR = None
-                    STATUS_CACHE["clack_pose"] = {"running": False}
-
-            try:
-                p500_ip = get_current_pi500_ip(port=8085)
-                url = f"http://{p500_ip}:8085{path}"
-                post_data = body.encode('utf-8')
-                req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=8.0) as resp:
-                    resp_body = resp.read()
-                    self.send_response(resp.status)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(resp_body)
-                    return
-            except Exception as e:
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Error proxying to Pi 500: {e}"}).encode('utf-8'))
-                return
-
-        if path in [
-            "/api/slider",
-            "/api/nudge_physical",
-            "/api/pedestal_step",
-            "/api/pedestal",
-            "/api/move",
-            "/api/sync_position",
-            "/api/calibration",
-            "/api/torque",
-            "/api/arm/torque",
-            "/api/arm/capture_pose",
-            "/api/arm/commit_preset",
-            "/api/arm/overwrite_preset",
-            "/api/arm/delete_preset",
-            "/api/arm/resume_last_pose",
-            "/api/arm/move_to_preset",
-            "/api/arm/move_norm",
-            "/api/arm/execute_sequence",
-            "/api/arm/sequence",
-            "/api/arm/attack_sequence",
-            "/api/arm/attack",
-            "/api/arm/stop_sequence",
-        ]:
-            try:
-                if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
-                    if path in ["/api/arm/attack_sequence", "/api/arm/attack", "/api/arm/execute_sequence"]:
-                        TAP_DETECTOR.mute(12.0)
-                    elif path in ["/api/arm/resume_last_pose", "/api/arm/move_to_preset", "/api/arm/move_norm"]:
-                        TAP_DETECTOR.mute(2.5)
-                    else:
-                        TAP_DETECTOR.mute(1.5)
-                p500_ip = get_current_pi500_ip(port=8085)
-                url = f"http://{p500_ip}:8085{path}"
-                post_data = body.encode('utf-8')
-                req = urllib.request.Request(url, data=post_data, headers={'Content-Type': 'application/json'})
-                with urllib.request.urlopen(req, timeout=3.0) as resp:
-                    resp_body = resp.read()
-                    self.send_response(resp.status)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(resp_body)
-                    return
-            except urllib.error.HTTPError as e:
-                err_body = e.read()
-                self.send_response(e.code)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(err_body)
-                return
-            except Exception as e:
-                print(f"Error forwarding request {path}: {e}", flush=True)
-                play_sound_helper(kind="incorrect")
-                self.send_response(400)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Connection Error: {e}"}).encode())
-                return
-
-        self.send_response(404)
-        self.end_headers()
 
 class ReuseTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+
+def main() -> None:
+    global GLOBAL_BACKEND, GLOBAL_APP_MANAGER, GLOBAL_POKEBALL
+
+    cfg = network_resolver.load_network_config()
+    serial_port = network_resolver.get_hardware_serial_port()
+
+    # Clean up stale processes holding ports and serial device
+    logging.info("Cleaning up stale locks on serial port and HTTP endpoints...")
+    try:
+        subprocess.run(["fuser", "-k", serial_port], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["fuser", "-k", f"{PORT_TOUCH_UI}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["fuser", "-k", f"{PORT_MASTER_API}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        logging.warning(f"Port cleanup warning: {e}")
+
+    # 1. Initialize RobotBackend HAL
+    logging.info(f"Initializing RobotBackend on {serial_port}...")
+    GLOBAL_BACKEND = RobotBackend(port=serial_port, robot_id="follower")
+    GLOBAL_BACKEND.connect()
+
+    # 2. Initialize Pokeball BLE service
+    logging.info("Initializing PokeballService...")
+    GLOBAL_POKEBALL = PokeballService(backend=GLOBAL_BACKEND)
+    GLOBAL_POKEBALL.start()
+
+    # 3. Initialize AppManager & register applications
+    logging.info("Initializing AppManager & discovering modular applications...")
+    GLOBAL_APP_MANAGER = AppManager(GLOBAL_BACKEND)
+    GLOBAL_APP_MANAGER.pokeball_service = GLOBAL_POKEBALL
+    GLOBAL_POKEBALL.app_manager = GLOBAL_APP_MANAGER
+    GLOBAL_APP_MANAGER.discover_apps()
+
+    # 4. Bind MasterApiHandler class state
+    ensure_leader_poller_started()
+    set_chime_callback(play_sound_helper)
+    MasterApiHandler.backend = GLOBAL_BACKEND
+    MasterApiHandler.app_manager = GLOBAL_APP_MANAGER
+    MasterApiHandler.pokeball_service = GLOBAL_POKEBALL
+
+    # 5. Start background telemetry polling loop
+    threading.Thread(target=poll_status_loop, daemon=True, name="StatusPoller").start()
+
+    # 6. Start Master API Server on Port 8085
+    server_8085 = ReuseTCPServer(("", PORT_MASTER_API), UnifiedHandler)
+    t8085 = threading.Thread(target=server_8085.serve_forever, daemon=True, name="MasterApi8085")
+    t8085.start()
+    logging.info(f"Master API Server successfully bound on port {PORT_MASTER_API}")
+
+    # 7. Start Touch UI Server on Port 8082
+    server_8082 = ReuseTCPServer(("", PORT_TOUCH_UI), UnifiedHandler)
+    logging.info(f"Touch UI Server active on port {PORT_TOUCH_UI}")
+
+    shutdown_event = threading.Event()
+
+    def _sig_handler(signum, frame):
+        logging.info(f"Received signal {signum}, initiating graceful shutdown...")
+        shutdown_event.set()
+
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, _sig_handler)
+    signal.signal(signal.SIGINT, _sig_handler)
+
+    try:
+        server_thread = threading.Thread(target=server_8082.serve_forever, daemon=True, name="TouchUi8082")
+        server_thread.start()
+        while not shutdown_event.is_set():
+            shutdown_event.wait(timeout=0.5)
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Interrupted, shutting down servers...")
+
+    logging.info("Shutting down HTTP servers...")
+    try:
+        server_8082.shutdown()
+        server_8082.server_close()
+        server_8085.shutdown()
+        server_8085.server_close()
+    except Exception as e:
+        logging.warning(f"Error during server shutdown: {e}")
+
+    if GLOBAL_POKEBALL:
+        try:
+            GLOBAL_POKEBALL.stop()
+        except Exception as e:
+            logging.warning(f"Error stopping PokeballService: {e}")
+
+    if GLOBAL_BACKEND:
+        try:
+            GLOBAL_BACKEND.disable_all_torque()
+            GLOBAL_BACKEND.close()
+        except Exception as e:
+            logging.warning(f"Error disconnecting backend: {e}")
+
+    logging.info("SO-101 Unified Service shutdown complete.")
+
+
 if __name__ == "__main__":
-    with ReuseTCPServer(("", PORT), CustomHandler) as httpd:
-        print(f"Touch UI Server active on port {PORT}", flush=True)
-        httpd.serve_forever()
+    main()

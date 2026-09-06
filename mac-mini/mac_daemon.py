@@ -126,10 +126,11 @@ def kill_leader():
         logger.error(f"Error in kill_leader: {e}")
         return False
 
-def start_leader():
+def start_leader(target_host: Optional[str] = None):
     kill_leader()
     try:
-        cmd = f"export PYTHONUNBUFFERED=1; nohup {LEROBOT_PYTHON} {LEADER_SCRIPT} > /tmp/leader.log 2>&1 &"
+        host_arg = f"--host {target_host}" if target_host else ""
+        cmd = f"export PYTHONUNBUFFERED=1; nohup {LEROBOT_PYTHON} {LEADER_SCRIPT} {host_arg} > /tmp/leader.log 2>&1 &"
         subprocess.Popen(["zsh", "-c", cmd])
         time.sleep(0.5)
         running, pid = check_leader_running()
@@ -843,13 +844,23 @@ class UnifiedDaemonHandler(http.server.BaseHTTPRequestHandler):
             elif parsed.path == "/api/stop":
                 action = "stop"
 
+            target_host = body.get("target_host")
+            if not target_host:
+                client_ip = ""
+                if hasattr(self, "client_address") and self.client_address:
+                    client_ip = self.client_address[0]
+                if client_ip and client_ip not in ["127.0.0.1", "localhost"]:
+                    target_host = client_ip
+                else:
+                    target_host = "192.168.0.86"
+
             running, pid = check_leader_running()
             if action == "toggle":
                 action = "stop" if running else "start"
 
             if action == "start":
-                run_ok, new_pid = start_leader()
-                self._send_json({"status": "ok", "action": "start", "running": run_ok, "pid": new_pid})
+                run_ok, new_pid = start_leader(target_host=target_host)
+                self._send_json({"status": "ok", "action": "start", "running": run_ok, "pid": new_pid, "target_host": target_host})
             elif action in ["stop", "kill"]:
                 kill_leader()
                 self._send_json({"status": "ok", "action": "stop", "running": False, "pid": ""})

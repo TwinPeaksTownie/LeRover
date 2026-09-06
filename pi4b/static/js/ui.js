@@ -1055,14 +1055,8 @@ export function updateTelemetryUI(data) {
     // Power / Connection Mode Status (Tab 4)
     const pStatus = document.getElementById('powerStatus');
     const cm = data.connection_mode || {};
-    const pi4bWlan = data.pi4b_wlan_ip;
-    const pi500Wlan = data.pi500_wlan_ip;
-    let ipBadge = '';
-    if (pi4bWlan && pi500Wlan) {
-        ipBadge = ` [4B:${pi4bWlan} | 500:${pi500Wlan}]`;
-    } else if (pi4bWlan) {
-        ipBadge = ` [4B:${pi4bWlan}]`;
-    }
+    const hostIp = data.pi4b_wlan_ip || '127.0.0.1';
+    let ipBadge = ` [${hostIp}]`;
 
     let modeBadge = '🔵 OFFLINE (ETH)';
     if (cm.mode === 'IPHONE_HOTSPOT') {
@@ -1075,36 +1069,16 @@ export function updateTelemetryUI(data) {
 
     if (pStatus) {
         let pStatusHtml = '';
-        const isStandalone = (data.topology_mode === 'STANDALONE_PI4B') || (cm.pi500_ip === '127.0.0.1' && cm.pi4b_ip === '127.0.0.1');
         const isBackendUp = !!(data.backend_online !== undefined ? data.backend_online : data.daemon_running);
+        const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
+        const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
 
-        if (isStandalone) {
-            const hostIp = pi4bWlan || '127.0.0.1';
-            if (isBackendUp) {
-                const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
-                const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
-                pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | BACKEND: ACTIVE (8085) | 12V: ${volt} | ${pogoState}`;
-                pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
-            } else {
-                pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | <span style="color:#ff3344;">BACKEND: OFFLINE</span>`;
-                pStatus.style.color = '#ffaa00';
-            }
+        if (isBackendUp) {
+            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | BACKEND: ACTIVE | 12V: ${volt} | ${pogoState}`;
+            pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
         } else {
-            if (data.pi500_online) {
-                const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
-                const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
-                const targetIp = data.resolved_pi500_ip || '10.0.0.1';
-                if (data.daemon_running) {
-                    pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | 12V: ${volt} | ${pogoState}`;
-                    pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
-                } else {
-                    pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | <span style="color:#ffaa00;">DAEMON OFF</span>`;
-                    pStatus.style.color = '#ffaa00';
-                }
-            } else {
-                pStatusHtml = `PI 500 OFFLINE | ${modeBadge}`;
-                pStatus.style.color = '#ff3344';
-            }
+            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | <span style="color:#ff3344;">BACKEND: OFFLINE</span>`;
+            pStatus.style.color = '#ffaa00';
         }
         if (lastRenderedPowerText !== pStatusHtml) {
             setLastRenderedPowerText(pStatusHtml);
