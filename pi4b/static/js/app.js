@@ -90,7 +90,7 @@ let lastHandledAnalysisTimestamp = 0.0;
 // ==========================================
 
 export function rotatePedestal(direction) {
-    const dirStr = direction === 'left' ? 'LEFT (-45°)' : 'RIGHT (+45°)';
+    const dirStr = direction === 'left' ? 'LEFT' : 'RIGHT';
     const displayEl = document.getElementById('sliderValDisplay');
     if (displayEl) {
         displayEl.innerText = 'STEPPING ' + dirStr + '...';
@@ -1615,9 +1615,10 @@ function bindEventListeners() {
                 if (v) v.innerText = `${parsedVal.toFixed(1)}s`;
                 ui.renderTimeline();
             } else if (id === 'inspS7Slider') {
-                selectedMoveBlock.target_deg = parseFloat(val);
+                const s7Pct = parseFloat(val);
+                selectedMoveBlock.target_pct = s7Pct;
                 const v = document.getElementById('inspS7Val');
-                if (v) v.innerText = `${val > 0 ? '+' : ''}${val}°`;
+                if (v) v.innerText = `${s7Pct.toFixed(0)}%`;
                 ui.renderTimeline();
             } else if (id === 'inspS8Slider') {
                 selectedMoveBlock.target_pos = parseInt(val, 10);
@@ -1790,12 +1791,12 @@ function bindEventListeners() {
 
             const s7Preset = e.target.closest('.insp-s7-preset');
             if (s7Preset) {
-                const deg = parseFloat(s7Preset.getAttribute('data-deg') || '0');
-                selectedMoveBlock.target_deg = deg;
+                const pct = parseFloat(s7Preset.getAttribute('data-pct') || '50');
+                selectedMoveBlock.target_pct = pct;
                 const sl = document.getElementById('inspS7Slider');
                 const v = document.getElementById('inspS7Val');
-                if (sl) sl.value = deg;
-                if (v) v.innerText = `${deg > 0 ? '+' : ''}${deg}°`;
+                if (sl) sl.value = pct;
+                if (v) v.innerText = `${pct.toFixed(0)}%`;
                 ui.renderTimeline();
                 return;
             }
@@ -1865,18 +1866,12 @@ function bindEventListeners() {
         const uiWristF = parseFloat(document.getElementById('bbSliderWristFlex')?.value || '50');
         const uiWristR = parseFloat(document.getElementById('bbSliderWristRoll')?.value || '50');
 
-        const rawPan = (uiPan * 2.0) - 100.0;
-        const rawLift = (uiLift * 2.0) - 100.0;
-        const rawElbow = (uiElbow * 2.0) - 100.0;
-        const rawWristF = (uiWristF * 2.0) - 100.0;
-        const rawWristR = (uiWristR * 2.0) - 100.0;
-
         ui.updatePoseSliders({
-            shoulder_pan: rawPan,
-            shoulder_lift: rawLift,
-            elbow_flex: rawElbow,
-            wrist_flex: rawWristF,
-            wrist_roll: rawWristR
+            shoulder_pan: uiPan,
+            shoulder_lift: uiLift,
+            elbow_flex: uiElbow,
+            wrist_flex: uiWristF,
+            wrist_roll: uiWristR
         });
     }
 

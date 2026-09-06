@@ -64,7 +64,7 @@ def main():
     
     # Configure motor normalization modes natively prior to connection
     for mname, m in leader.bus.motors.items():
-        m.norm_mode = MotorNormMode.RANGE_0_100 if mname == "gripper" else MotorNormMode.RANGE_M100_100
+        m.norm_mode = MotorNormMode.RANGE_0_100
 
     # Official connect
     leader.connect(calibrate=False)

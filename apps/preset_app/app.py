@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List, Union
 
 from app_manager import BaseApp, AppMetadata
-from robot_backend import RobotBackend, SERIAL_LOCK, degrees_to_ticks_s7
+from robot_backend import RobotBackend, SERIAL_LOCK, pct_to_ticks_s7, ticks_to_pct_s7, degrees_to_ticks_s7
 
 try:
     import network_resolver
@@ -490,15 +490,15 @@ class PiranhaPoseApp(BaseApp):
     def _execute_arm_and_pedestal_sweep(
         self,
         backend: RobotBackend,
-        start_s7_deg: float,
-        end_s7_deg: float,
+        start_s7_pct: float,
+        end_s7_pct: float,
         target_arm_norm: Dict[str, float],
         duration_sec: float = 3.0,
         steps: int = 50,
         stop_event: Optional[threading.Event] = None,
     ) -> None:
         """Synchronously interpolates arm posture (Motors 1-6) and sweeps Servo 7 (pedestal) in lockstep under SERIAL_LOCK."""
-        center_s7 = backend.get_s7_center_ticks()
+        aux_calib = backend.aux_calibration
         with SERIAL_LOCK:
             if not backend.bus:
                 return
@@ -531,10 +531,11 @@ class PiranhaPoseApp(BaseApp):
                     t_val = float(target_arm_norm[k])
                 else:
                     t_val = s_val
-                arm_frame[k] = s_val + (t_val - s_val) * smooth_alpha
+                val = s_val + (t_val - s_val) * smooth_alpha
+                arm_frame[k] = max(0.0, min(100.0, val))
 
-            deg_s7 = start_s7_deg + (end_s7_deg - start_s7_deg) * smooth_alpha
-            s7_tick = degrees_to_ticks_s7(deg_s7, center_ticks=center_s7)
+            pct_s7 = start_s7_pct + (end_s7_pct - start_s7_pct) * smooth_alpha
+            s7_tick = pct_to_ticks_s7(pct_s7, aux_calib)
 
             with SERIAL_LOCK:
                 if backend.bus and hasattr(backend.bus, "sync_write"):
@@ -552,6 +553,7 @@ class PiranhaPoseApp(BaseApp):
                 with backend.lock:
                     backend.servos[7]["pos"] = s7_tick
                     backend.servos[7]["raw"] = s7_tick % 4096
+                    backend.servos[7]["normalized"] = round(float(pct_s7), 2)
                     backend.servos[7]["torque"] = True
                     backend.servos[7]["connected"] = True
 
@@ -560,12 +562,12 @@ class PiranhaPoseApp(BaseApp):
     def _execute_roar_pan_sweep(
         self,
         backend: RobotBackend,
-        target_pan: float = 100.0,
-        min_duration_sec: float = 1.5,
-        home_duration_sec: float = 1.5,
+        min_duration_sec: float = 1.0,
+        home_duration_sec: float = 1.0,
         stop_event: Optional[threading.Event] = None,
+        **kwargs: Any,
     ) -> None:
-        """Synchronously sweeps Motor 1 (shoulder_pan) target_pan->home across 3.0s without bus contention."""
+        """Synchronously sweeps Motor 1 (shoulder_pan) center(50%) -> right(100%) -> left(0%) -> center(50%) across 3.0s without bus contention."""
         with SERIAL_LOCK:
             if not backend.bus:
                 return
@@ -583,54 +585,74 @@ class PiranhaPoseApp(BaseApp):
         if "shoulder_pan" not in curr_norm:
             raise KeyError("Missing 'shoulder_pan' in curr_norm telemetry")
         start_pan = float(curr_norm["shoulder_pan"])
-        target_peak_pan = float(target_pan)
-        home_pan = 0.0
-        steps_1 = 30
-        steps_2 = 30
-        dt_1 = max(0.01, min_duration_sec / float(steps_1))
-        dt_2 = max(0.01, home_duration_sec / float(steps_2))
+        steps_per_phase = 25
+        dt = max(0.01, 1.0 / float(steps_per_phase))
 
-        # Half 1: Pan start -> target_peak_pan (+100.0)
-        for s in range(1, steps_1 + 1):
+        # Phase 1: start_pan -> 100.0% (Right limit)
+        for s in range(1, steps_per_phase + 1):
             if stop_event and stop_event.is_set():
                 return
-            alpha = s / float(steps_1)
+            alpha = s / float(steps_per_phase)
             smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            pan_val = start_pan + (target_peak_pan - start_pan) * smooth_alpha
+            pan_val = start_pan + (100.0 - start_pan) * smooth_alpha
 
             frame = dict(curr_norm)
-            frame["shoulder_pan"] = max(-100.0, min(100.0, pan_val))
+            frame["shoulder_pan"] = max(0.0, min(100.0, pan_val))
 
             with SERIAL_LOCK:
                 if backend.bus and hasattr(backend.bus, "sync_write"):
                     try:
                         backend.bus.sync_write("Goal_Position", frame)
                     except Exception as e:
-                        self.logger.exception("Sync write error in roar pan sweep: %s", e)
+                        self.logger.exception("Sync write error in roar pan sweep phase 1: %s", e)
                         raise
+            with backend.lock:
+                backend.servos[1]["normalized"] = round(float(frame["shoulder_pan"]), 2)
+            time.sleep(dt)
 
-            time.sleep(dt_1)
-
-        # Half 2: Pan target_peak_pan -> home (0.0)
-        for s in range(1, steps_2 + 1):
+        # Phase 2: 100.0% -> 0.0% (Full sweep to Left limit)
+        for s in range(1, steps_per_phase + 1):
             if stop_event and stop_event.is_set():
                 return
-            alpha = s / float(steps_2)
+            alpha = s / float(steps_per_phase)
             smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
-            pan_val = target_peak_pan + (home_pan - target_peak_pan) * smooth_alpha
+            pan_val = 100.0 + (0.0 - 100.0) * smooth_alpha
 
             frame = dict(curr_norm)
-            frame["shoulder_pan"] = max(-100.0, min(100.0, pan_val))
+            frame["shoulder_pan"] = max(0.0, min(100.0, pan_val))
 
             with SERIAL_LOCK:
                 if backend.bus and hasattr(backend.bus, "sync_write"):
                     try:
                         backend.bus.sync_write("Goal_Position", frame)
                     except Exception as e:
-                        self.logger.exception("Sync write error in roar pan sweep: %s", e)
+                        self.logger.exception("Sync write error in roar pan sweep phase 2: %s", e)
                         raise
+            with backend.lock:
+                backend.servos[1]["normalized"] = round(float(frame["shoulder_pan"]), 2)
+            time.sleep(dt)
 
-            time.sleep(dt_2)
+        # Phase 3: 0.0% -> 50.0% (Return to Center)
+        for s in range(1, steps_per_phase + 1):
+            if stop_event and stop_event.is_set():
+                return
+            alpha = s / float(steps_per_phase)
+            smooth_alpha = 0.5 * (1.0 - math.cos(math.pi * alpha))
+            pan_val = 0.0 + (50.0 - 0.0) * smooth_alpha
+
+            frame = dict(curr_norm)
+            frame["shoulder_pan"] = max(0.0, min(100.0, pan_val))
+
+            with SERIAL_LOCK:
+                if backend.bus and hasattr(backend.bus, "sync_write"):
+                    try:
+                        backend.bus.sync_write("Goal_Position", frame)
+                    except Exception as e:
+                        self.logger.exception("Sync write error in roar pan sweep phase 3: %s", e)
+                        raise
+            with backend.lock:
+                backend.servos[1]["normalized"] = round(float(frame["shoulder_pan"]), 2)
+            time.sleep(dt)
 
     def execute_sequence(self, backend: RobotBackend, sequence_name_or_dict: Any, mode: str = "demo") -> Tuple[bool, str]:
         """Executes a multi-step sequence timeline from JSON definition."""
@@ -693,18 +715,20 @@ class PiranhaPoseApp(BaseApp):
                 preset = None
                 if "preset" in step:
                     preset = step["preset"]
-                s7_deg = None
-                if "servo7_deg" in step:
-                    s7_deg = float(step["servo7_deg"])
+                s7_pct = None
+                if "servo7_pct" in step:
+                    s7_pct = float(step["servo7_pct"])
+                elif "servo7_deg" in step:
+                    s7_pct = float(step["servo7_deg"]) * (50.0 / 90.0) + 50.0
 
-                if preset and (s7_deg is not None):
+                if preset and (s7_pct is not None):
                     arm_dur = 1.5
                     if "arm_duration" in step:
                         arm_dur = float(step["arm_duration"])
                     elif "duration" in step:
                         arm_dur = float(step["duration"])
-                    target_s7 = degrees_to_ticks_s7(s7_deg, center_ticks=center_s7)
-                    speed_s7 = max(100, int(abs(s7_deg) / max(0.1, arm_dur) * 11.37))
+                    target_s7 = pct_to_ticks_s7(s7_pct, backend.aux_calibration)
+                    speed_s7 = 500
                     backend.move_target(7, target_s7, speed=speed_s7)
                     self.move_to_specific_arm_preset(backend, preset, duration=arm_dur, mode=mode)
                 elif preset:
@@ -714,7 +738,7 @@ class PiranhaPoseApp(BaseApp):
                     elif "duration" in step:
                         arm_dur = float(step["duration"])
                     self.move_to_specific_arm_preset(backend, preset, duration=arm_dur, mode=mode)
-                elif s7_deg is not None:
+                elif s7_pct is not None:
                     s7_dur = 0.5
                     if "servo7_duration" in step:
                         s7_dur = float(step["servo7_duration"])
@@ -723,7 +747,7 @@ class PiranhaPoseApp(BaseApp):
                     s7_speed = 500
                     if "servo7_speed" in step:
                         s7_speed = int(step["servo7_speed"])
-                    target_s7 = degrees_to_ticks_s7(s7_deg, center_ticks=center_s7)
+                    target_s7 = pct_to_ticks_s7(s7_pct, backend.aux_calibration)
                     backend.move_target(7, target_s7, speed=s7_speed)
                     time.sleep(s7_dur)
 
@@ -744,8 +768,6 @@ class PiranhaPoseApp(BaseApp):
         self._sequence_running = True
 
         try:
-            center_s7 = backend.get_s7_center_ticks()
-
             demo_presets = self.get_arm_presets(mode="demo")
             required_keyframes = ["lunge", "ready", "roar", "pose_1"]
             for rk in required_keyframes:
@@ -771,31 +793,31 @@ class PiranhaPoseApp(BaseApp):
             t_drive = threading.Thread(target=self._drive_burst_helper, kwargs={"throttle": 0.85, "duration_sec": 1.0}, daemon=True)
             t_drive.start()
 
-            # Step 2: Pedestal right (+90°)
+            # Step 2: Pedestal right (100.0%)
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
-            self.logger.info("[ATTACK SEQ] Step 2: Quick pedestal snap to +90°")
-            target_s7_r = degrees_to_ticks_s7(90.0, center_ticks=center_s7)
+            self.logger.info("[ATTACK SEQ] Step 2: Quick pedestal snap to 100.0%")
+            target_s7_r = pct_to_ticks_s7(100.0, backend.aux_calibration)
             backend.move_target(7, target_s7_r, speed=1000)
-            time.sleep(0.3)
-
-            # Step 3: Pedestal center (0.0°) + SMW blargg audio
-            if self._sequence_stop_event.is_set():
-                return False, "Aborted"
-            self.logger.info("[ATTACK SEQ] Step 3: Pedestal return to center 0.0°")
-            dispatch_audio_event(kind="smw_blargg", stop_previous=True)
-            target_s7_c = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
-            backend.move_target(7, target_s7_c, speed=1000)
             time.sleep(0.4)
 
-            # Step 4: Sweep pedestal left (-90°) while moving arm to 'ready' stance
+            # Step 3: Pedestal center (50.0%) + SMW blargg audio
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
-            self.logger.info("[ATTACK SEQ] Step 4: Coordinated sweep to -90° in 'ready' stance")
+            self.logger.info("[ATTACK SEQ] Step 3: Pedestal return to center 50.0%")
+            dispatch_audio_event(kind="smw_blargg", stop_previous=True)
+            target_s7_c = pct_to_ticks_s7(50.0, backend.aux_calibration)
+            backend.move_target(7, target_s7_c, speed=1000)
+            time.sleep(0.5)
+
+            # Step 4: Sweep pedestal left (0.0%) while moving arm to 'ready' stance
+            if self._sequence_stop_event.is_set():
+                return False, "Aborted"
+            self.logger.info("[ATTACK SEQ] Step 4: Coordinated sweep to 0.0% in 'ready' stance")
             self._execute_arm_and_pedestal_sweep(
                 backend=backend,
-                start_s7_deg=0.0,
-                end_s7_deg=-90.0,
+                start_s7_pct=50.0,
+                end_s7_pct=0.0,
                 target_arm_norm=ready_norm,
                 duration_sec=2.0,
                 steps=40,
@@ -814,14 +836,13 @@ class PiranhaPoseApp(BaseApp):
             self.logger.info("[ATTACK SEQ] Step 6: Triggering T-Rex Roar audio and coordinated pan sweep")
             dispatch_audio_event(kind="trex_roar", stop_previous=True)
 
-            target_s7_center = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
+            target_s7_center = pct_to_ticks_s7(50.0, backend.aux_calibration)
             backend.move_target(7, target_s7_center, speed=250)
 
             self._execute_roar_pan_sweep(
                 backend=backend,
-                target_pan=100.0,
-                min_duration_sec=1.5,
-                home_duration_sec=1.5,
+                min_duration_sec=1.0,
+                home_duration_sec=1.0,
                 stop_event=self._sequence_stop_event
             )
 
@@ -835,7 +856,7 @@ class PiranhaPoseApp(BaseApp):
             if self._sequence_stop_event.is_set():
                 return False, "Aborted"
             self.logger.info("[ATTACK SEQ] Step 8: Returning robot back to position 1")
-            target_s7_home = degrees_to_ticks_s7(0.0, center_ticks=center_s7)
+            target_s7_home = pct_to_ticks_s7(50.0, backend.aux_calibration)
             backend.move_target(7, target_s7_home, speed=400)
             backend.interpolate_arm_norm(home_norm, duration=1.2, steps=35, stop_event=self._sequence_stop_event)
 

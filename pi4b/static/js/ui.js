@@ -1745,19 +1745,21 @@ export function openMoveInspector(channel, block) {
             </div>
         `;
     } else if (channel === 's7_pedestal') {
-        const deg = Number(block.target_deg);
+        const pctVal = Number(block.target_pct);
+        const pct = Math.max(0, Math.min(100, pctVal));
+        const dispPct = Number.isFinite(pctVal) ? `${pct.toFixed(0)}%` : '--';
         controlsHtml += `
             <div style="display: flex; gap: 8px; align-items: center;">
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc;">
-                        <span>STAGE FACING:</span><strong id="inspS7Val" style="color: #00ff66;">${deg > 0 ? '+' : ''}${deg}°</strong>
+                        <span>STAGE FACING:</span><strong id="inspS7Val" style="color: #00ff66;">${dispPct}</strong>
                     </div>
-                    <input type="range" id="inspS7Slider" min="-90" max="90" step="5" value="${deg}">
+                    <input type="range" id="inspS7Slider" min="0" max="100" step="1" value="${pct}">
                 </div>
                 <div style="display: flex; gap: 3px;">
-                    <button class="btn-action insp-s7-preset" data-deg="-25" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">-25° Right</button>
-                    <button class="btn-action insp-s7-preset" data-deg="0" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">0° Center</button>
-                    <button class="btn-action insp-s7-preset" data-deg="25" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">+25° Left</button>
+                    <button class="btn-action insp-s7-preset" data-pct="0" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">0% Right</button>
+                    <button class="btn-action insp-s7-preset" data-pct="50" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">50% Center</button>
+                    <button class="btn-action insp-s7-preset" data-pct="100" style="padding: 2px 6px; font-size: 9px; height: 22px; min-height: 0; background: #1f1f2e; border: 1px solid #444; border-radius: 3px;">100% Left</button>
                 </div>
             </div>
         `;
@@ -1872,11 +1874,11 @@ export function updatePoseSliders(poseDict) {
     const rawWristF = Number(poseDict.wrist_flex);
     const rawWristR = Number(poseDict.wrist_roll);
 
-    const uiPan = Math.max(0, Math.min(100, (rawPan + 100) / 2.0));
-    const uiLift = Math.max(0, Math.min(100, (rawLift + 100) / 2.0));
-    const uiElbow = Math.max(0, Math.min(100, (rawElbow + 100) / 2.0));
-    const uiWristF = Math.max(0, Math.min(100, (rawWristF + 100) / 2.0));
-    const uiWristR = Math.max(0, Math.min(100, (rawWristR + 100) / 2.0));
+    const uiPan = Math.max(0, Math.min(100, rawPan));
+    const uiLift = Math.max(0, Math.min(100, rawLift));
+    const uiElbow = Math.max(0, Math.min(100, rawElbow));
+    const uiWristF = Math.max(0, Math.min(100, rawWristF));
+    const uiWristR = Math.max(0, Math.min(100, rawWristR));
 
     const sPan = document.getElementById('bbSliderPan');
     const sLift = document.getElementById('bbSliderLift');
@@ -1903,11 +1905,11 @@ export function updatePoseSliders(poseDict) {
     if (vWristR) vWristR.innerText = `${uiWristR.toFixed(1)}%`;
 
     setCurrentCustomPoseJoints({
-        shoulder_pan: rawPan,
-        shoulder_lift: rawLift,
-        elbow_flex: rawElbow,
-        wrist_flex: rawWristF,
-        wrist_roll: rawWristR
+        shoulder_pan: uiPan,
+        shoulder_lift: uiLift,
+        elbow_flex: uiElbow,
+        wrist_flex: uiWristF,
+        wrist_roll: uiWristR
     });
 }
 

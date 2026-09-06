@@ -2,11 +2,11 @@
   "pose_1": {
     "timestamp": 1724240000.0,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": 10.0,
-      "elbow_flex": -20.0,
-      "wrist_flex": 15.0,
-      "wrist_roll": 0.0,
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 55.0,
+      "elbow_flex": 40.0,
+      "wrist_flex": 57.5,
+      "wrist_roll": 50.0,
       "gripper": 30.0
     },
     "raw_ticks": {
@@ -25,11 +25,11 @@
   "pose_2": {
     "timestamp": 1724240001.0,
     "normalized": {
-      "shoulder_pan": -30.0,
-      "shoulder_lift": 25.0,
-      "elbow_flex": -35.0,
-      "wrist_flex": 40.0,
-      "wrist_roll": 20.0,
+      "shoulder_pan": 35.0,
+      "shoulder_lift": 62.5,
+      "elbow_flex": 32.5,
+      "wrist_flex": 70.0,
+      "wrist_roll": 60.0,
       "gripper": 90.0
     },
     "raw_ticks": {},
@@ -41,11 +41,11 @@
   "pose_3": {
     "timestamp": 1724240002.0,
     "normalized": {
-      "shoulder_pan": 30.0,
-      "shoulder_lift": 25.0,
-      "elbow_flex": -35.0,
-      "wrist_flex": 40.0,
-      "wrist_roll": -20.0,
+      "shoulder_pan": 65.0,
+      "shoulder_lift": 62.5,
+      "elbow_flex": 32.5,
+      "wrist_flex": 70.0,
+      "wrist_roll": 40.0,
       "gripper": 90.0
     },
     "raw_ticks": {},

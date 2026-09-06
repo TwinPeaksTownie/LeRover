@@ -18,15 +18,15 @@
     },
     {
       "step_name": "2_platform_spin_right_fast",
-      "description": "Platform servo 7 spins right to +90 degrees quickly",
-      "servo7_deg": 90.0,
+      "description": "Platform servo 7 spins right to 100.0% quickly",
+      "servo7_pct": 100.0,
       "servo7_duration": 0.4,
       "servo7_speed": 700
     },
     {
       "step_name": "3_blargg_audio_and_return_center",
-      "description": "Play smw_blargg audio and spin pedestal back left to center (0.0°)",
-      "servo7_deg": 0.0,
+      "description": "Play smw_blargg audio and spin pedestal back left to center (50.0%)",
+      "servo7_pct": 50.0,
       "servo7_duration": 1.0,
       "servo7_speed": 500,
       "audio": {
@@ -39,10 +39,10 @@
     },
     {
       "step_name": "4_platform_sweep_left_and_ready_pose",
-      "description": "Sweep pedestal left to -90° over 2.0s while arm moves into 'ready' posture",
+      "description": "Sweep pedestal left to 0.0% over 2.0s while arm moves into 'ready' posture",
       "preset": "ready",
       "arm_duration": 2.0,
-      "servo7_deg": -90.0,
+      "servo7_pct": 0.0,
       "servo7_duration": 2.0
     },
     {
@@ -60,7 +60,7 @@
     },
     {
       "step_name": "6_jaw_open_roar_audio_and_motor1_sweep",
-      "description": "Jaw opens quickly, pedestal rotates to center (-90 -> 0), and Motor 1 rotates max -> home over 3.0s",
+      "description": "Jaw opens quickly, pedestal rotates to center (0 -> 50%), and Motor 1 sweeps full range over 3.0s",
       "jaw_snap": 100.0,
       "pedestal_to_center": true,
       "pedestal_duration": 3.0,
@@ -81,7 +81,7 @@
       "description": "Robot returns back to position 1",
       "preset": "pose_1",
       "arm_duration": 1.2,
-      "servo7_deg": 0.0,
+      "servo7_pct": 50.0,
       "servo7_duration": 1.2
     }
   ]

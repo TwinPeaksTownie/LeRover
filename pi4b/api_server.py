@@ -16,7 +16,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any
 
-from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7
+from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7, pct_to_ticks_s7, ticks_to_pct_s7
 from app_manager import AppManager
 from apps.teleop_app.app import TeleopControlApp
 from apps.servo_studio.app import ServoStudioApp
@@ -224,8 +224,10 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             s7_raw = cls.backend.raw_positions.get(7)
             c7 = cls.backend.get_s7_center_ticks()
             s7_angle = None
+            s7_pct = None
             if s7_pos is not None:
                 s7_angle = ticks_to_degrees_s7(s7_pos, center_ticks=c7)
+                s7_pct = ticks_to_pct_s7(s7_pos, cls.backend.aux_calibration)
             s7_torque = True
             if 7 in cls.backend.torque_state:
                 s7_torque = cls.backend.torque_state[7]
@@ -236,6 +238,8 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 "pos": s7_pos,
                 "raw": s7_raw,
                 "angle": s7_angle,
+                "pct": s7_pct,
+                "normalized": s7_pct,
                 "torque": s7_torque,
                 "is_moving": s7_moving,
                 "connected": s7_pos is not None,

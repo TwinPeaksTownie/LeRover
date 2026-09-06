@@ -2,11 +2,11 @@
   "pose_1": {
     "timestamp": 1787353369.445704,
     "normalized": {
-      "shoulder_pan": -0.41,
-      "shoulder_lift": -61.32,
-      "elbow_flex": 8.9,
-      "wrist_flex": 69.45,
-      "wrist_roll": 0.26,
+      "shoulder_pan": 49.8,
+      "shoulder_lift": 19.34,
+      "elbow_flex": 54.45,
+      "wrist_flex": 84.72,
+      "wrist_roll": 50.13,
       "gripper": 9.0
     },
     "raw_ticks": {
@@ -25,11 +25,11 @@
   "lunge": {
     "timestamp": 1787354630.409301,
     "normalized": {
-      "shoulder_pan": -40.04,
-      "shoulder_lift": -61.24,
-      "elbow_flex": 94.22,
-      "wrist_flex": -38.3,
-      "wrist_roll": 0.52,
+      "shoulder_pan": 29.98,
+      "shoulder_lift": 19.38,
+      "elbow_flex": 97.11,
+      "wrist_flex": 30.85,
+      "wrist_roll": 50.26,
       "gripper": 41.04
     },
     "raw_ticks": {
@@ -48,11 +48,11 @@
   "ready": {
     "timestamp": 1724240002.0,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": -25.0,
-      "elbow_flex": 45.0,
-      "wrist_flex": -20.0,
-      "wrist_roll": 0.0,
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 37.5,
+      "elbow_flex": 72.5,
+      "wrist_flex": 40.0,
+      "wrist_roll": 50.0,
       "gripper": 20.0
     },
     "raw_ticks": {},
@@ -64,11 +64,11 @@
   "roar": {
     "timestamp": 1724240003.0,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": -50.0,
-      "elbow_flex": 60.0,
-      "wrist_flex": -50.0,
-      "wrist_roll": 0.0,
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 25.0,
+      "elbow_flex": 80.0,
+      "wrist_flex": 25.0,
+      "wrist_roll": 50.0,
       "gripper": 100.0
     },
     "raw_ticks": {},

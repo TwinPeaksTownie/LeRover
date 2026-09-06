@@ -55,6 +55,22 @@ def load_aux_calibration() -> Dict[str, Any]:
     return data
 
 
+def pct_to_ticks_s7(pct: float, aux_calib: dict) -> int:
+    """Converts unipolar percentage (0.0 to 100.0%) to Motor 7 hardware ticks dynamically from aux_calib."""
+    s7_min = int(aux_calib["7"]["min_ticks"])
+    s7_max = int(aux_calib["7"]["max_ticks"])
+    clamped = max(0.0, min(100.0, float(pct)))
+    return int(round(s7_min + (clamped / 100.0) * (s7_max - s7_min)))
+
+
+def ticks_to_pct_s7(ticks: int, aux_calib: dict) -> float:
+    """Converts Motor 7 hardware ticks to unipolar percentage (0.0 to 100.0%) dynamically from aux_calib."""
+    s7_min = int(aux_calib["7"]["min_ticks"])
+    s7_max = int(aux_calib["7"]["max_ticks"])
+    span = max(1, s7_max - s7_min)
+    return round(max(0.0, min(100.0, ((int(ticks) - s7_min) / span) * 100.0)), 1)
+
+
 def ticks_to_degrees_s7(ticks: int, center_ticks: Optional[int] = None) -> float:
     """Converts reported Motor 7 hardware ticks (0-4095) to intuitive degrees relative to calibrated center_ticks."""
     if center_ticks is None:
@@ -78,16 +94,16 @@ def degrees_to_ticks_s7(deg: float, center_ticks: Optional[int] = None) -> int:
     return max(min_s7_ticks, min(max_s7_ticks, ticks))
 
 
-PEDESTAL_PRESETS = [-165.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 165.0]
+PEDESTAL_PRESETS = [0.0, 12.5, 25.0, 37.5, 50.0, 62.5, 75.0, 87.5, 100.0]
 
 
-def calc_next_s7_preset(curr_deg: float, direction: str) -> Tuple[float, bool]:
-    """Calculates next clean preset angle relative to current physical hardware position
+def calc_next_s7_preset(curr_pct: float, direction: str) -> Tuple[float, bool]:
+    """Calculates next clean preset percentage relative to current physical hardware position
     using nearest-slot snapping and hard bumper stops.
-    Returns (target_deg, at_limit).
+    Returns (target_pct, at_limit).
     """
     direction = str(direction).lower()
-    curr_idx = min(range(len(PEDESTAL_PRESETS)), key=lambda i: abs(curr_deg - PEDESTAL_PRESETS[i]))
+    curr_idx = min(range(len(PEDESTAL_PRESETS)), key=lambda i: abs(curr_pct - PEDESTAL_PRESETS[i]))
     if direction == "right":
         if curr_idx >= len(PEDESTAL_PRESETS) - 1:
             return PEDESTAL_PRESETS[-1], True
@@ -110,7 +126,7 @@ def load_calibration(fpath: Path) -> dict[str, MotorCalibration]:
 
 
 def make_bus(port: str, calibration: dict[str, MotorCalibration]) -> FeetechMotorsBus:
-    norm_mode_body = MotorNormMode.RANGE_M100_100
+    norm_mode_body = MotorNormMode.RANGE_0_100
     return FeetechMotorsBus(
         port=port,
         motors={
@@ -475,11 +491,12 @@ class RobotBackend:
             with self.lock:
                 self.servos[7]["pos"] = pos
                 self.servos[7]["raw"] = pos % 4096
+                self.servos[7]["normalized"] = ticks_to_pct_s7(pos, self.aux_calibration)
                 self.servos[7]["connected"] = True
                 self.servos[7]["error"] = None
                 if self.error_msg and "Servo 7" in self.error_msg:
                     self.error_msg = None
-                logging.info(f"Synchronized Motor 7 baseline from hardware: {pos} ticks")
+                logging.info(f"Synchronized Motor 7 baseline from hardware: {pos} ticks ({self.servos[7]['normalized']}%)")
                 return pos
 
         with self.lock:
@@ -492,6 +509,11 @@ class RobotBackend:
         if not hasattr(self, "aux_calibration") or "7" not in self.aux_calibration or "center_ticks" not in self.aux_calibration["7"]:
             raise RuntimeError("Servo 7 calibration missing in calibration_aux.json")
         return int(self.aux_calibration["7"]["center_ticks"])
+
+    def get_s7_bounds(self) -> Tuple[int, int]:
+        if not hasattr(self, "aux_calibration") or "7" not in self.aux_calibration or "min_ticks" not in self.aux_calibration["7"] or "max_ticks" not in self.aux_calibration["7"]:
+            raise RuntimeError("Servo 7 calibration missing in calibration_aux.json")
+        return int(self.aux_calibration["7"]["min_ticks"]), int(self.aux_calibration["7"]["max_ticks"])
 
     def get_s8_bounds(self) -> Tuple[int, int]:
         if not hasattr(self, "aux_calibration") or "8" not in self.aux_calibration or "min_ticks" not in self.aux_calibration["8"] or "max_ticks" not in self.aux_calibration["8"]:
@@ -820,10 +842,7 @@ class RobotBackend:
                     s_val = float(start_norm[mname])
                     t_val = float(target_norm[mname])
                     val = s_val + (t_val - s_val) * smooth_alpha
-                    if mname == "gripper":
-                        clamped = max(0.0, min(100.0, val))
-                    else:
-                        clamped = max(-100.0, min(100.0, val))
+                    clamped = max(0.0, min(100.0, val))
                     interp_frame[mname] = clamped
 
                 with SERIAL_LOCK:
@@ -881,7 +900,10 @@ class RobotBackend:
     def move_target(
         self, sid: int, target_pos: int, step_size: int = 50, speed: int = 400, max_t: int = 1000
     ) -> Tuple[bool, str]:
-        if sid == 8:
+        if sid == 7:
+            s7_min, s7_max = self.get_s7_bounds()
+            target_pos = max(s7_min, min(s7_max, int(target_pos)))
+        elif sid == 8:
             gantry_min, gantry_max = self.get_s8_bounds()
             target_pos = max(gantry_min, min(gantry_max, int(target_pos)))
 
@@ -942,10 +964,8 @@ class RobotBackend:
                     self.save_state()
             else:
                 if sid == 7:
-                    center_t = self.get_s7_center_ticks()
-                    deg = ticks_to_degrees_s7(target_pos, center_ticks=center_t)
-                    clamped_deg = max(-165.0, min(165.0, deg))
-                    target_pos = degrees_to_ticks_s7(clamped_deg, center_ticks=center_t)
+                    s7_min, s7_max = self.get_s7_bounds()
+                    target_pos = max(s7_min, min(s7_max, int(target_pos)))
 
                 res = ctrl.write_goal_raw(sid, target_pos, speed=speed)
                 if res is None:
@@ -955,6 +975,8 @@ class RobotBackend:
                 with self.lock:
                     self.servos[sid]["pos"] = target_pos
                     self.servos[sid]["raw"] = target_pos % 4096
+                    if sid == 7:
+                        self.servos[7]["normalized"] = ticks_to_pct_s7(target_pos, self.aux_calibration)
                     self.servos[sid]["torque"] = True
                     self.servos[sid]["connected"] = True
 
@@ -965,27 +987,27 @@ class RobotBackend:
                 self.servos[sid]["is_moving"] = False
 
     def step_pedestal_preset(self, direction: str) -> Tuple[bool, bool, str, Optional[float], Optional[int], bool]:
-        """Calculates next preset angle relative to live Servo 7 angle and executes move.
-        Returns (ok, moved, msg, target_deg, target_ticks, at_limit).
+        """Calculates next preset percentage relative to live Servo 7 percentage and executes move.
+        Returns (ok, moved, msg, target_pct, target_ticks, at_limit).
         """
-        center_s7 = self.get_s7_center_ticks()
+        aux_calib = self.aux_calibration
         with self.lock:
             curr_pos = self.aux_positions.get(7)
             if curr_pos is None and hasattr(self, "sync_servo7_position"):
                 curr_pos = self.sync_servo7_position()
             if curr_pos is None:
                 return False, False, "Hardware Error: Servo 7 position is uninitialized", None, None, False
-            curr_deg = ticks_to_degrees_s7(curr_pos, center_ticks=center_s7)
-            target_deg, at_limit = calc_next_s7_preset(curr_deg, direction)
-            target_ticks = degrees_to_ticks_s7(target_deg, center_ticks=center_s7)
+            curr_pct = ticks_to_pct_s7(curr_pos, aux_calib)
+            target_pct, at_limit = calc_next_s7_preset(curr_pct, direction)
+            target_ticks = pct_to_ticks_s7(target_pct, aux_calib)
 
         if at_limit:
-            curr_idx = min(range(len(PEDESTAL_PRESETS)), key=lambda i: abs(curr_deg - PEDESTAL_PRESETS[i]))
-            if PEDESTAL_PRESETS[curr_idx] == target_deg:
-                return True, False, f"Pedestal limit reached ({target_deg}°)", target_deg, target_ticks, True
+            curr_idx = min(range(len(PEDESTAL_PRESETS)), key=lambda i: abs(curr_pct - PEDESTAL_PRESETS[i]))
+            if PEDESTAL_PRESETS[curr_idx] == target_pct:
+                return True, False, f"Pedestal limit reached ({target_pct}%)", target_pct, target_ticks, True
 
         ok, msg = self.move_target(7, target_ticks, step_size=50, speed=400, max_t=500)
-        return ok, ok, msg, target_deg, target_ticks, at_limit
+        return ok, ok, msg, target_pct, target_ticks, at_limit
 
 
     def dispatch_dance_frame(

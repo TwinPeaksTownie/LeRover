@@ -2,11 +2,11 @@
   "pose_1": {
     "timestamp": 1724240000.0,
     "normalized": {
-      "shoulder_pan": 0.0,
-      "shoulder_lift": -65.0,
-      "elbow_flex": 15.0,
-      "wrist_flex": 60.0,
-      "wrist_roll": 0.0,
+      "shoulder_pan": 49.91,
+      "shoulder_lift": 17.56,
+      "elbow_flex": 57.43,
+      "wrist_flex": 82.41,
+      "wrist_roll": 50.05,
       "gripper": 0.0
     },
     "raw_ticks": {
