@@ -7,14 +7,18 @@
 
 ### 2. Instruction-Gated Execution Protocol
 - **Exploratory & Diagnostic Mode**: When asked exploratory, conceptual, or diagnostic questions, provide technical explanations in plain language.
-- **Planning Mode & Gate 1 Build Plan Audit**: When designing architectural changes or non-trivial implementations, formulate `implementation_plan.md` and submit it to **Gate 1 (Build Plan Audit)**. The plan must pass Gate 1 (verifying zero false tri-states, fail-fast schema compliance, and scope containment with deployment checks disabled) before requesting operator approval.
+- **Planning Mode & Gate 1 Build Plan Audit**: When designing architectural changes or non-trivial implementations, formulate `implementation_plan.md` and submit it to **Gate 1 (Build Plan Audit)**.
+  - **Step 1 of Every Plan Must Be the JSON Schema**: Identify the exact JSON file on disk where new settings, modes, or thresholds belong, and document the JSON edits before writing any Python code.
+  - The plan must pass Gate 1 (verifying zero false tri-states, fail-fast schema compliance, and scope containment with deployment checks disabled) before requesting operator approval.
 - **Imperative Execution Mode**: Execute file writes, refactors, and deploy scripts only when given explicit commands (`fix`, `implement`, `edit`, `deploy`, `run`, `refactor`).
 
-### 3. Single Source of Truth & Calibration Resolution
-- **Runtime JSON Calibration Resolution**: Load motor limits and neutral poses strictly into memory from disk at startup:
-  - Follower Arm Servos 1–6: Read from `follower.json` (`calib_min`, `calib_max`, `homing_offset`).
-  - Auxiliary Actuators Servos 7–8: Read from `calibration_aux.json`.
-  - Dance Poses: Read from `presets_dance.json`.
+### 3. Single Source of Truth & Universal JSON Taxonomy
+- **Universal JSON Storage**: Every runtime parameter, mode, and threshold must live in its designated JSON file on disk:
+  - **Motor Limits & Offsets**: `follower.json` (servos 1–6) and `calibration_aux.json` (servos 7–8).
+  - **Network & Topology Modes**: `config/network_config.json` (`topology_mode`, host IPs, ports).
+  - **App Metadata & Settings**: `apps/<app_name>/config.json` and `manifest.json`.
+  - **Audio & Dance Sequences**: `config/audio_files.json`, `presets_dance.json`, and sequence files.
+- **Startup In-Memory Resolution**: Load required JSON files once into memory at process startup. Access all values using direct bracket indexing (`config["key"]`).
 - **Dynamic In-Memory Arithmetic**: Calculate all spatial offsets, ticks, and safety clamping dynamically in memory against loaded calibration structures.
 
 ### 4. Separate Motion Synthesis from Runtime Execution
@@ -53,8 +57,15 @@ Every task must transition sequentially through two audit gates and four verific
 - Issue explicit process termination commands (`pkill -9 -f <script>`) over SSH to prevent orphaned background jobs on remote nodes.
 
 ### 6. Strict Fail-Fast Schema & Contract Enforcement
-- Parse explicitly defined keys from payloads.
-- Raise immediate, descriptive exceptions (`KeyError`, `FileNotFoundError`, HTTP `400 Bad Request` / `500 Internal Error`) with exact field names when reads or payload parsing fail.
+- **Direct Bracket Indexing Only**: Access dictionary values strictly with `dict["key"]`. If an expected key is missing, allow Python to raise an immediate `KeyError`. Never use `.get(key, default)` or `dict.get(key) or fallback`.
+- **Upfront Payload Gate**: In HTTP, WebSocket, and ZeroMQ handlers, validate incoming client payloads with an explicit check at the top of the function:
+  ```python
+  for key in ["action", "speed"]:
+      if key not in req_data:
+          self.send_error(400, f"Missing required parameter: '{key}'")
+          return
+  ```
+- **Loud Hardware Failure**: Raise immediate, descriptive exceptions (`KeyError`, `FileNotFoundError`, HTTP 500) with exact field names when hardware reads, network telemetry, or data parsing fail. Never mask an unreadable state with an inline fallback.
 
 ### 7. Musical Choreography Terminology
 - Model and describe all choreography timelines strictly using concrete musical divisions: `measures`, `beats`, `4bars`, and `8bars`.

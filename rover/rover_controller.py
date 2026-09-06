@@ -7,9 +7,21 @@ Supports mock/simulated serial mode for local PC testing.
 
 import logging
 import os
+import sys
 import threading
 import time
 from typing import Optional, Dict, Any, Tuple
+
+try:
+    import network_resolver
+except ImportError:
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    try:
+        import network_resolver
+    except ImportError:
+        from pi4b import network_resolver
 
 logger = logging.getLogger("so101.rover_controller")
 
@@ -20,23 +32,21 @@ class RoverController:
     def __init__(
         self,
         serial_port: Optional[str] = None,
-        baudrate: int = 115200,
+        baudrate: Optional[int] = None,
         max_pulse_offset: int = 175,
         accel_ramp_rate: float = 0.20,
         watchdog_timeout: float = 1.0,
         mock_mode: bool = False
     ) -> None:
-        if serial_port is None or serial_port in ["/dev/serial0", "/dev/ttyAMA0"]:
-            if os.path.exists("/dev/ttyAMA0"):
-                self.serial_port = "/dev/ttyAMA0"
-            elif os.path.exists("/dev/serial0"):
-                self.serial_port = "/dev/serial0"
-            else:
-                self.serial_port = "/dev/ttyAMA0"
+        if serial_port is None:
+            self.serial_port = network_resolver.get_rover_serial_port()
         else:
             self.serial_port = serial_port
 
-        self.baudrate = baudrate
+        if baudrate is None:
+            self.baudrate = network_resolver.get_rover_baudrate()
+        else:
+            self.baudrate = baudrate
         self.max_pulse_offset = max_pulse_offset  # +/- 175 us -> 1325 to 1675 us (smooth calibrated driving)
         self.steering_trim: float = 0.0  # [-0.25..0.25] throttle-scaled steering bias
 

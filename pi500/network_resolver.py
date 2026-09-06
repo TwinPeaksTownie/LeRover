@@ -43,7 +43,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "hardware": {
         "serial_port": "/dev/ttyACM0",
-        "baudrate": 1000000
+        "baudrate": 1000000,
+        "rover_serial_port": "/dev/serial/by-id/usb-Adafruit_KB2040_DF643CF013303739-if00",
+        "rover_baudrate": 115200
     },
     "direct_ethernet": {
         "pi500_ip": "10.0.0.1",
@@ -106,7 +108,7 @@ def validate_network_config(cfg: Dict[str, Any]) -> None:
             if sub_k not in cfg["endpoints"][k]:
                 raise KeyError(f"Missing required key 'endpoints.{k}.{sub_k}' in network configuration")
 
-    for k in ["serial_port", "baudrate"]:
+    for k in ["serial_port", "baudrate", "rover_serial_port", "rover_baudrate"]:
         if k not in cfg["hardware"]:
             raise KeyError(f"Missing required key 'hardware.{k}' in network configuration")
 
@@ -183,11 +185,11 @@ def find_secrets_path() -> str:
     search_paths = [
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "secrets.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "secrets.json"),
-        "/home/user/so101/config/secrets.json",
         "/home/carson/touch_ui/config/secrets.json",
+        "/home/user/so101/config/secrets.json",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json"),
-        "/home/user/so101/pi500/secrets.json",
         "/home/carson/touch_ui/secrets.json",
+        "/home/user/so101/pi500/secrets.json",
     ]
     for p in search_paths:
         if p and os.path.exists(p):
@@ -383,6 +385,16 @@ def get_hardware_serial_port() -> str:
 def get_hardware_baudrate() -> int:
     cfg = load_network_config()
     return int(cfg["hardware"]["baudrate"])
+
+
+def get_rover_serial_port() -> str:
+    cfg = load_network_config()
+    return str(cfg["hardware"]["rover_serial_port"])
+
+
+def get_rover_baudrate() -> int:
+    cfg = load_network_config()
+    return int(cfg["hardware"]["rover_baudrate"])
 
 
 def get_backend_host(prefer_port: Optional[int] = 8085) -> str:

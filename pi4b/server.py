@@ -185,6 +185,9 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
 
             res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
             if res.returncode != 0:
+                if res.returncode in (-9, -15, 137, 143):
+                    logging.info("Audio playback for %s cancelled by subsequent audio request (signal %d).", target_wav, res.returncode)
+                    return
                 err_txt = res.stderr.decode('utf-8', errors='replace')
                 raise RuntimeError(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}")
         except Exception as e:
@@ -758,7 +761,10 @@ class UnifiedHandler(MasterApiHandler):
                     if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
                         try:
                             from audio_tap_detector import AudioTapDetector
-                            TAP_DETECTOR = AudioTapDetector(play_sound_cb=play_sound_helper)
+                            TAP_DETECTOR = AudioTapDetector(
+                                peak_threshold=int(UI_CONFIG["clack_threshold"]),
+                                play_sound_cb=play_sound_helper
+                            )
                             TAP_DETECTOR.start()
                             STATUS_CACHE["clack_pose"] = {"running": True}
                         except Exception as e:
@@ -768,16 +774,9 @@ class UnifiedHandler(MasterApiHandler):
                             self.end_headers()
                             self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
                             return
-                    try:
-                        p500_ip = get_current_pi500_ip(port=8085)
-                        req_p500 = urllib.request.Request(
-                            f"http://{p500_ip}:8085/api/clack_pose_toggle",
-                            data=json.dumps({"action": "start"}).encode("utf-8"),
-                            headers={"Content-Type": "application/json"}
-                        )
-                        urllib.request.urlopen(req_p500, timeout=1.5)
-                    except Exception as p500_err:
-                        print(f"[ClackPose] Pi 500 start notify warning: {p500_err}", flush=True)
+
+                    if GLOBAL_APP_MANAGER:
+                        GLOBAL_APP_MANAGER.start_app_by_name("piranha_pose_app")
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -793,16 +792,8 @@ class UnifiedHandler(MasterApiHandler):
                         TAP_DETECTOR = None
                     STATUS_CACHE["clack_pose"] = {"running": False}
 
-                    try:
-                        p500_ip = get_current_pi500_ip(port=8085)
-                        req_p500 = urllib.request.Request(
-                            f"http://{p500_ip}:8085/api/clack_pose_toggle",
-                            data=json.dumps({"action": "stop"}).encode("utf-8"),
-                            headers={"Content-Type": "application/json"}
-                        )
-                        urllib.request.urlopen(req_p500, timeout=1.5)
-                    except Exception as p500_err:
-                        print(f"[ClackPose] Pi 500 stop notify warning: {p500_err}", flush=True)
+                    if GLOBAL_APP_MANAGER:
+                        GLOBAL_APP_MANAGER.stop_app("piranha_pose_app")
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")

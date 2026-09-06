@@ -117,8 +117,9 @@ class PiranhaPoseApp(BaseApp):
         icon=_CONFIG["icon"],
     )
 
-    def __init__(self, running_on_pi: bool = True) -> None:
+    def __init__(self, running_on_pi: bool = True, config: Optional[dict] = None) -> None:
         super().__init__(running_on_pi=running_on_pi)
+        self.config = config or _CONFIG
         self.logger = logging.getLogger("so101.app.piranha_pose")
         self.last_saved_position: Optional[Dict[str, Any]] = None
         self._sequence_running = False
@@ -465,13 +466,17 @@ class PiranhaPoseApp(BaseApp):
         """Drives rover in a burst for duration_sec then cleanly commands stop."""
         ctrl = self.rover_ctrl
         if ctrl is None and RoverController is not None:
+            rover_port = network_resolver.get_rover_serial_port()
+            if not os.path.exists(rover_port):
+                self.logger.warning("Rover hardware serial port '%s' not present (KB2040 unpowered). Skipping drive burst.", rover_port)
+                return
             try:
-                ctrl = RoverController()
+                ctrl = RoverController(serial_port=rover_port, baudrate=network_resolver.get_rover_baudrate())
                 ctrl.start()
                 self.rover_ctrl = ctrl
             except Exception as e:
                 self.logger.exception("Failed to start RoverController for drive burst: %s", e)
-                raise
+                raise RuntimeError(f"Failed to start RoverController on {rover_port}: {e}") from e
 
         if ctrl:
             try:
@@ -480,7 +485,7 @@ class PiranhaPoseApp(BaseApp):
                 ctrl.set_drive(0.0, 0.0)
             except Exception as e:
                 self.logger.exception("Rover drive burst helper error: %s", e)
-                raise
+                raise RuntimeError(f"Rover drive burst command failed: {e}") from e
 
     def _execute_arm_and_pedestal_sweep(
         self,

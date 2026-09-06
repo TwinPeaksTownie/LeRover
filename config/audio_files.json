@@ -91,6 +91,18 @@
     "smw_save_menu": {
       "file": "smw_save_menu.wav",
       "description": "Menu save or timeline marker operation"
+    },
+    "smw_stomp_bones": {
+      "file": "smw_stomp_bones.wav",
+      "description": "Dry Bones chime for 1-clack torque release"
+    },
+    "smw_vine": {
+      "file": "smw_vine.wav",
+      "description": "Vine growth chime for 3-clack pose resume and sequence demo"
+    },
+    "smw_shell_ricochet": {
+      "file": "smw_shell_ricochet.wav",
+      "description": "Shell ricochet for sequence angry stance"
     }
   }
 }

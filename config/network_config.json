@@ -20,7 +20,9 @@
   },
   "hardware": {
     "serial_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B41532189-if00",
-    "baudrate": 1000000
+    "rover_serial_port": "/dev/serial/by-id/usb-Adafruit_KB2040_DF643CF013303739-if00",
+    "baudrate": 1000000,
+    "rover_baudrate": 115200
   },
   "direct_ethernet": {
     "pi500_ip": "10.0.0.1",
