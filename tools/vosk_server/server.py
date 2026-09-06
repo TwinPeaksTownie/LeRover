@@ -12,15 +12,17 @@ Strict Fail-Fast schema compliance: Zero .get(k, default) fallbacks.
 from __future__ import annotations
 
 import json
+import asyncio
 import logging
 import os
 import sys
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import urllib.parse
+import websockets
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +52,7 @@ def load_vosk_config() -> Dict[str, Any]:
     # Strict fail-fast schema validation
     _ = str(cfg["host"])
     _ = int(cfg["port"])
+    _ = int(cfg["websocket_port"])
     _ = str(cfg["model_path"])
     _ = int(cfg["sample_rate"])
     _ = int(cfg["timeout_sec"])
@@ -140,7 +143,10 @@ class VoskHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
             return
 
         if _loaded_time is None:
@@ -150,14 +156,18 @@ class VoskHandler(BaseHTTPRequestHandler):
             "status": "ready",
             "model": CONFIG["model_path"],
             "load_duration_sec": load_dur,
-            "sample_rate": CONFIG["sample_rate"]
+            "sample_rate": CONFIG["sample_rate"],
+            "websocket_port": CONFIG["websocket_port"]
         }
         body = json.dumps(payload).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def handle_recognize(self) -> None:
         global _model, _model_ready
@@ -231,31 +241,119 @@ class VoskHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, format: str, *args: Any) -> None:
         # Override to keep daemon logs clean from routine polling
         return
 
 
+async def _ws_client_handler(websocket) -> None:
+    """Asynchronous WebSocket client session handler for real-time streaming recognition."""
+    global _model, _model_ready
+    with _model_lock:
+        ready = _model_ready
+        m = _model
+
+    if not ready or m is None:
+        try:
+            await websocket.send(json.dumps({"type": "error", "message": "Model still loading"}))
+            await websocket.close(1013, "Model still loading")
+        except Exception:
+            pass
+        return
+
+    import vosk
+    sample_rate = int(CONFIG["sample_rate"])
+    rec = vosk.KaldiRecognizer(m, sample_rate)
+
+    try:
+        await websocket.send(json.dumps({"type": "ready", "sample_rate": sample_rate}))
+    except Exception:
+        return
+
+    try:
+        async for message in websocket:
+            if isinstance(message, bytes):
+                # Binary audio chunk (16-bit mono PCM)
+                if rec.AcceptWaveform(message):
+                    res = json.loads(rec.Result())
+                    text = str(res["text"]).strip()
+                    await websocket.send(json.dumps({
+                        "type": "final",
+                        "text": text
+                    }))
+                else:
+                    pres = json.loads(rec.PartialResult())
+                    partial_text = str(pres["partial"]).strip()
+                    await websocket.send(json.dumps({
+                        "type": "partial",
+                        "text": partial_text
+                    }))
+            else:
+                # Text/JSON control command
+                try:
+                    cmd = json.loads(message)
+                    cmd_type = str(cmd["type"])
+                    if cmd_type == "final":
+                        fres = json.loads(rec.FinalResult())
+                        final_text = str(fres["text"]).strip()
+                        await websocket.send(json.dumps({
+                            "type": "final_result",
+                            "text": final_text
+                        }))
+                    elif cmd_type == "reset":
+                        rec.Reset()
+                        await websocket.send(json.dumps({"type": "reset_ack"}))
+                except Exception as ex:
+                    await websocket.send(json.dumps({"type": "error", "message": str(ex)}))
+    except (websockets.exceptions.ConnectionClosed, BrokenPipeError, ConnectionResetError):
+        pass
+    except Exception as e:
+        logger.error("Error in WebSocket client session: %s", e)
+
+
+def _run_websocket_server(host: str, port: int) -> None:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def _serve():
+        async with websockets.serve(_ws_client_handler, host, port):
+            logger.info("Vosk WebSocket Streaming Server listening on ws://%s:%d", host, port)
+            await asyncio.Future()  # Keep running indefinitely
+
+    try:
+        loop.run_until_complete(_serve())
+    except Exception as e:
+        logger.error("WebSocket server encountered error: %s", e)
+
+
 def main() -> None:
     host = str(CONFIG["host"])
     port = int(CONFIG["port"])
+    ws_port = int(CONFIG["websocket_port"])
     model_path = str(CONFIG["model_path"])
 
-    server = HTTPServer((host, port), VoskHandler)
-    logger.info("Vosk Standby Server listening on http://%s:%d", host, port)
+    http_server = ThreadingHTTPServer((host, port), VoskHandler)
+    logger.info("Vosk Standby Server HTTP listening on http://%s:%d", host, port)
 
     # Launch model load in background thread so HTTP health check is active immediately
     loader_thread = threading.Thread(target=_load_model_background, args=(model_path,), daemon=True)
     loader_thread.start()
 
+    # Launch WebSocket streaming server in background thread
+    ws_thread = threading.Thread(target=_run_websocket_server, args=(host, ws_port), daemon=True)
+    ws_thread.start()
+
     try:
-        server.serve_forever()
+        http_server.serve_forever()
     except KeyboardInterrupt:
         logger.info("Shutting down Vosk Standby Server...")
     finally:
-        server.server_close()
+        http_server.server_close()
 
 
 if __name__ == "__main__":

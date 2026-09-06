@@ -19,6 +19,7 @@ import io
 import json
 import logging
 import os
+import queue
 import sys
 import threading
 import time
@@ -27,6 +28,7 @@ import wave
 from collections import deque
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from websockets.sync.client import connect as ws_connect
 
 APP_DIR = Path(__file__).resolve().parent
 WORKSPACE_ROOT = APP_DIR.parent.parent
@@ -521,35 +523,145 @@ class ListenerApp(BaseApp):
                 speech_detected = (energy > energy_thresh)
 
                 if speech_detected:
-                    self.logger.info("Speech onset detected (energy=%.1f > %d)! Entering command capture window...", energy, energy_thresh)
+                    self.logger.info("Speech onset detected (energy=%.1f > %d)! Entering streaming capture window...", energy, energy_thresh)
                     self.state = "CAPTURING"
                     self.transcript = ""
 
-                    # Prepend pre-roll buffer so opening consonants ("s", "p", etc.) are not clipped
-                    command_chunks: List[bytes] = list(pre_roll_buffer)
+                    server_url = str(self.config["asr"]["server_url"])
+                    ws_client = None
+                    msg_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
+                    stop_rx = threading.Event()
+                    rx_thread: Optional[threading.Thread] = None
+
+                    try:
+                        ws_client = ws_connect(server_url, open_timeout=3.0)
+                        # Read initial greeting or ready message
+                        try:
+                            _ = ws_client.recv(timeout=1.0)
+                        except Exception:
+                            pass
+
+                        def _rx_worker() -> None:
+                            while not stop_rx.is_set():
+                                try:
+                                    if ws_client is None:
+                                        break
+                                    raw = ws_client.recv(timeout=0.1)
+                                    msg = json.loads(raw)
+                                    msg_queue.put(msg)
+                                except TimeoutError:
+                                    continue
+                                except Exception:
+                                    break
+
+                        rx_thread = threading.Thread(target=_rx_worker, daemon=True)
+                        rx_thread.start()
+
+                        # Stream pre-roll chunks first so opening consonants are preserved
+                        for prc in pre_roll_buffer:
+                            try:
+                                ws_client.send(prc)
+                            except Exception:
+                                break
+
+                    except Exception as conn_err:
+                        self.logger.warning("Could not establish streaming WebSocket session to %s: %s", server_url, conn_err)
+                        ws_client = None
+
                     record_start = time.time()
                     last_voice_time = time.time()
+                    complete_parts: List[str] = []
+                    partial_text: str = ""
 
-                    # Capture spoken command until silence
+                    # Stream spoken command until silence
                     while not stop_event.is_set():
                         c = self._stream_resp.read(chunk_bytes)
                         if not c:
                             break
-                        command_chunks.append(c)
+
+                        if ws_client is not None:
+                            try:
+                                ws_client.send(c)
+                            except Exception as send_err:
+                                self.logger.warning("WebSocket chunk send error: %s", send_err)
+
+                        # Drain incoming Vosk responses and update live deduplicated transcript
+                        while not msg_queue.empty():
+                            try:
+                                m = msg_queue.get_nowait()
+                                m_type = str(m["type"])
+                                if m_type == "final":
+                                    f_txt = str(m["text"]).strip()
+                                    if f_txt:
+                                        complete_parts.append(f_txt)
+                                        partial_text = ""
+                                elif m_type == "partial":
+                                    partial_text = str(m["text"]).strip()
+
+                                # Deterministic Binary Deduplication (Rule 13 compliant)
+                                complete_clean = " ".join(complete_parts).strip()
+                                partial_clean = partial_text.strip()
+                                if complete_clean in partial_clean:
+                                    combined = partial_clean
+                                else:
+                                    combined = f"{complete_clean} {partial_clean}".strip()
+
+                                if combined:
+                                    self.transcript = combined
+                            except queue.Empty:
+                                break
+
                         e = self._calculate_frame_energy(c)
                         now = time.time()
                         if e > energy_thresh:
                             last_voice_time = now
 
-                        # Stop if silence timeout reached or max recording duration hit
+                        # Stop if 2.5s silence timeout reached or max recording duration hit
                         if (now - last_voice_time) > silence_timeout or (now - record_start) > max_record_sec:
                             break
 
                     self.state = "PROCESSING"
                     self._play_chime("commit")
-                    transcript = self._transcribe_pcm_buffer(command_chunks)
-                    self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
                     pre_roll_buffer.clear()
+
+                    # Finalize session and request authoritative FinalResult
+                    authoritative_transcript = ""
+                    if ws_client is not None:
+                        try:
+                            ws_client.send(json.dumps({"type": "final"}))
+                            # Wait up to 2.5s for final_result to drain
+                            t_wait = time.time()
+                            while (time.time() - t_wait) < 2.5:
+                                try:
+                                    m = msg_queue.get(timeout=0.2)
+                                    if str(m["type"]) == "final_result":
+                                        authoritative_transcript = str(m["text"]).strip()
+                                        break
+                                except queue.Empty:
+                                    continue
+                        except Exception as fin_err:
+                            self.logger.warning("Error requesting final result: %s", fin_err)
+                        finally:
+                            stop_rx.set()
+                            if rx_thread is not None:
+                                rx_thread.join(timeout=0.5)
+                            try:
+                                ws_client.close()
+                            except Exception:
+                                pass
+
+                    # Fallback to combined deduplicated text if server final_result was empty
+                    if not authoritative_transcript:
+                        complete_clean = " ".join(complete_parts).strip()
+                        partial_clean = partial_text.strip()
+                        if complete_clean in partial_clean:
+                            authoritative_transcript = partial_clean
+                        else:
+                            authoritative_transcript = f"{complete_clean} {partial_clean}".strip()
+
+                    transcript = authoritative_transcript
+                    self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
+                    self.logger.info("Finalized streaming transcript: '%s'", self.transcript)
                     if transcript:
                         intent = parse_intent(transcript)
                         self.logger.info("Parsed intent: %s", intent)

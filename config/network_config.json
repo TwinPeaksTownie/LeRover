@@ -20,6 +20,10 @@
     "vosk_server": {
       "host": "127.0.0.1",
       "port": 8059
+    },
+    "vosk_websocket": {
+      "host": "127.0.0.1",
+      "port": 2700
     }
   },
   "hardware": {
@@ -51,6 +55,7 @@
     "mac_http": 8086,
     "voice_bridge_http": 8058,
     "vosk_server_port": 8059,
+    "vosk_websocket_port": 2700,
     "teleop_zmq": 5555,
     "teleop_zmq_heartbeat": 5556
   },
