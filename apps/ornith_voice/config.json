@@ -14,7 +14,7 @@
     "enforce_word_limit_error": true
   },
   "audit": {
-    "active_backend": "nim",
+    "active_backend": "local",
     "model": "moonshotai/kimi-k3",
     "lm_studio_url": "http://127.0.0.1:1234/v1/chat/completions",
     "nim_url": "https://integrate.api.nvidia.com/v1/chat/completions",

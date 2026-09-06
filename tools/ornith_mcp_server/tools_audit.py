@@ -941,7 +941,7 @@ Evaluate this implementation plan against the operator directives and strict rul
         api_key = ornith_config_loader.get_secret("NVIDIA_API_KEY")
         headers["Authorization"] = f"Bearer {api_key}"
 
-    use_stream = bool(active_backend == "nim")
+    use_stream = True
     payload = {
         "model": model_name,
         "messages": [
@@ -958,7 +958,7 @@ Evaluate this implementation plan against the operator directives and strict rul
         payload["seed"] = b_cfg["seed"]
 
     _log_debug(f"Gate 1 Plan Audit querying Ornith via {active_backend} ({model_name}) at {invoke_url}...")
-    resp = requests.post(invoke_url, headers=headers, json=payload, stream=use_stream, timeout=120)
+    resp = requests.post(invoke_url, headers=headers, json=payload, stream=use_stream, timeout=180)
     if resp.status_code != 200:
         err_body = resp.text
         return {
@@ -996,9 +996,14 @@ Evaluate this implementation plan against the operator directives and strict rul
                 reasoning_parts.append(str(delta["reasoning_content"]))
         content = "".join(content_parts)
         reasoning = "".join(reasoning_parts)
+        if not content and reasoning:
+            content = reasoning
     else:
         data = resp.json()
         content = str(data["choices"][0]["message"]["content"])
+        reasoning = str(data["choices"][0]["message"].get("reasoning_content", ""))
+        if not content and reasoning:
+            content = reasoning
 
     verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', content, re.IGNORECASE)
     if verdict_match:
