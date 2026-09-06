@@ -11,9 +11,11 @@
     "energy_multiplier": 3.0
   },
   "asr": {
-    "engine": "faster_whisper",
-    "model_size": "base.en",
-    "language": "en"
+    "engine": "vosk",
+    "server_url": "http://127.0.0.1:8059/recognize",
+    "health_url": "http://127.0.0.1:8059/health",
+    "timeout_sec": 5.0,
+    "use_dynamic_grammar": true
   },
   "vad": {
     "settle_delay_sec": 3.0,

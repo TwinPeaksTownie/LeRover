@@ -1,0 +1,7 @@
+{
+  "host": "127.0.0.1",
+  "port": 8059,
+  "model_path": "/home/carson/models/vosk-model-en-us-0.22",
+  "sample_rate": 16000,
+  "timeout_sec": 300
+}

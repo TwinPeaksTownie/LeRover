@@ -75,8 +75,10 @@ def load_listener_config() -> Dict[str, Any]:
     _ = int(cfg["hotword"]["sample_rate"])
     _ = float(cfg["hotword"]["energy_multiplier"])
     _ = cfg["asr"]["engine"]
-    _ = cfg["asr"]["model_size"]
-    _ = cfg["asr"]["language"]
+    _ = str(cfg["asr"]["server_url"])
+    _ = str(cfg["asr"]["health_url"])
+    _ = float(cfg["asr"]["timeout_sec"])
+    _ = bool(cfg["asr"]["use_dynamic_grammar"])
     settle_sec = float(cfg["vad"]["settle_delay_sec"])
     if settle_sec <= 0:
         raise ValueError("settle_delay_sec must be positive")
@@ -309,23 +311,36 @@ class ListenerApp(BaseApp):
         return target_track
 
     def setup(self, backend: RobotBackend) -> None:
-        """Pre-run setup: loads calibration limits and initializes local ASR model."""
+        """Pre-run setup: loads calibration limits and verifies resident Vosk standby server."""
         self.logger.info("Initializing ListenerApp dependencies...")
         self.calib_limits = load_calibration_limits(backend=backend)
-        self._init_local_asr()
+        self._verify_vosk_standby_server()
 
-    def _init_local_asr(self) -> None:
-        """Initializes local offline speech-to-text model."""
+    def _verify_vosk_standby_server(self) -> None:
+        """Verifies resident Vosk standby server is warm and ready on Pi 4B."""
+        health_url = str(self.config["asr"]["health_url"])
+        timeout_sec = float(self.config["asr"]["timeout_sec"])
+        self.logger.info("Verifying resident Vosk standby server readiness at %s...", health_url)
         try:
-            from faster_whisper import WhisperModel
-            model_name = self.config["asr"]["model_size"]
-            self.logger.info("Loading local Whisper model '%s' via faster-whisper...", model_name)
-            self.asr_model = WhisperModel(model_name, device="cpu", compute_type="int8")
-            self.logger.info("Local Whisper model successfully loaded.")
+            req = urllib.request.Request(health_url, headers={"User-Agent": "SO101-ListenerApp"})
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    self.logger.info("Vosk standby server is READY (model: %s).", data["model"])
+                    self._vosk_ready = True
+                    return
+        except urllib.error.HTTPError as he:
+            if he.code == 503:
+                self.logger.warning("Vosk standby server is still warming up (2-min cold load in progress).")
+                self._vosk_ready = False
+                self._play_chime("cancel")
+                return
+            self.logger.error("Vosk standby server health check failed with HTTP %d: %s", he.code, he)
         except Exception as e:
-            self.logger.error("Could not initialize local Whisper model: %s", e, exc_info=True)
-            self.asr_model = None
-            raise RuntimeError(f"Whisper ASR model failed to load: {e}") from e
+            self.logger.warning("Vosk standby server unreachable (%s): %s", health_url, e)
+
+        self._vosk_ready = False
+        self._play_chime("cancel")
 
     def _get_pi4b_url(self) -> str:
         ip = network_resolver.get_pi4b_ip(prefer_port=self.config["network"]["pi4b_port"])
@@ -352,45 +367,70 @@ class ListenerApp(BaseApp):
         import audioop
         return float(audioop.rms(pcm_bytes, 2))
 
+    def _extract_dynamic_grammar(self) -> List[str]:
+        """Extracts dynamic grammar phrases from Beat Bandit manifest and command list."""
+        phrases: List[str] = [
+            "down town", "downtown", "macklemore", "sing downtown", "play downtown",
+            "home", "center", "park", "dance", "beat bandit", "teleop", "piranha", "exit", "quit"
+        ]
+        manifest_path = get_beat_bandit_manifest_path()
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                for tid, meta in manifest.items():
+                    if "title" in meta and meta["title"]:
+                        t = str(meta["title"]).lower()
+                        if t not in phrases:
+                            phrases.append(t)
+                    if "artist" in meta and meta["artist"]:
+                        a = str(meta["artist"]).lower()
+                        if a not in phrases:
+                            phrases.append(a)
+            except Exception as e:
+                self.logger.warning("Could not extract tracks from manifest for dynamic grammar: %s", e)
+        return phrases
+
     def _transcribe_pcm_buffer(self, pcm_chunks: List[bytes]) -> str:
-        """Transcribes accumulated PCM audio buffer using local Whisper."""
-        if not pcm_chunks or self.asr_model is None:
+        """Transcribes accumulated PCM audio buffer via resident Vosk standby server."""
+        if not pcm_chunks:
+            return ""
+
+        if not getattr(self, "_vosk_ready", True):
+            self.logger.warning("Rejecting transcription: Vosk standby server not ready.")
             return ""
 
         full_pcm = b"".join(pcm_chunks)
-        sample_rate = self.config["hotword"]["sample_rate"]
+        server_url = str(self.config["asr"]["server_url"])
+        timeout_sec = float(self.config["asr"]["timeout_sec"])
+        use_grammar = bool(self.config["asr"]["use_dynamic_grammar"])
 
-        # Convert raw PCM bytes to WAV in memory
-        wav_io = io.BytesIO()
-        with wave.open(wav_io, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            wf.writeframes(full_pcm)
-        wav_io.seek(0)
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": str(len(full_pcm)),
+            "User-Agent": "SO101-ListenerApp"
+        }
 
-        # Temporary file for whisper ingestion
-        if os.name == "nt":
-            tmp_wav = Path(os.environ["TEMP"]) / "listener_cmd.wav"
-        else:
-            tmp_wav = Path("/tmp/listener_cmd.wav")
-        with open(tmp_wav, "wb") as f:
-            f.write(wav_io.read())
+        if use_grammar:
+            grammar_list = self._extract_dynamic_grammar()
+            headers["X-Grammar"] = json.dumps(grammar_list)
 
+        t0 = time.time()
         try:
-            segments, _ = self.asr_model.transcribe(str(tmp_wav), language=self.config["asr"]["language"])
-            text = " ".join([seg.text for seg in segments]).strip()
-            self.logger.info("Transcribed command: '%s'", text)
-            return text
+            req = urllib.request.Request(server_url, data=full_pcm, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                if resp.status == 200:
+                    res = json.loads(resp.read().decode("utf-8"))
+                    text = str(res["text"]).strip()
+                    dur_ms = (time.time() - t0) * 1000
+                    self.logger.info("Transcribed command via Vosk standby server in %.1f ms: '%s'", dur_ms, text)
+                    return text
+                else:
+                    self.logger.error("Vosk server returned unexpected status %d", resp.status)
+                    return ""
         except Exception as e:
-            self.logger.error("Whisper transcription error: %s", e, exc_info=True)
+            self.logger.error("Vosk standby server transcription error: %s", e, exc_info=True)
             return ""
-        finally:
-            if tmp_wav.exists():
-                try:
-                    os.remove(tmp_wav)
-                except Exception as e:
-                    self.logger.warning("Failed to cleanup temp WAV: %s", e, exc_info=True)
 
     def _execute_movement_primitive(self, backend: RobotBackend, action: str) -> None:
         """Executes calibrated movement primitive on hardware. Zero hardcoded 2048."""

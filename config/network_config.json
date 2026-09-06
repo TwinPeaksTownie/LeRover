@@ -16,6 +16,10 @@
     "voice_bridge": {
       "host": "192.168.0.194",
       "port": 8058
+    },
+    "vosk_server": {
+      "host": "127.0.0.1",
+      "port": 8059
     }
   },
   "hardware": {
@@ -46,6 +50,7 @@
     "pi500_http": 8085,
     "mac_http": 8086,
     "voice_bridge_http": 8058,
+    "vosk_server_port": 8059,
     "teleop_zmq": 5555,
     "teleop_zmq_heartbeat": 5556
   },

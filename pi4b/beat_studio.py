@@ -49,6 +49,16 @@ def compile_default_choreography(analysis: Dict[str, Any], duration: float, exis
     return compile_choreography_tracks(analysis, duration, existing_choreography=existing_choreo)
 
 
+def validate_manifest_track(track_meta: Dict[str, Any], track_id: str) -> None:
+    """Strict fail-fast validator for track manifest schema."""
+    required_keys = ["title", "artist", "duration", "analysis"]
+    for k in required_keys:
+        if k not in track_meta:
+            raise KeyError(f"Track '{track_id}' missing mandatory manifest key '{k}'")
+    if not isinstance(track_meta["analysis"], dict):
+        raise KeyError(f"Track '{track_id}' 'analysis' field must be a dict")
+
+
 class BeatStudioManager:
     """Manager providing full lifecycle CRUD, live preview, capture, and choreography management."""
 
@@ -74,16 +84,6 @@ class BeatStudioManager:
         except Exception as e:
             self.logger.error(f"Error saving manifest: {e}")
             return False
-
-def validate_manifest_track(track_meta: Dict[str, Any], track_id: str) -> None:
-    """Strict fail-fast validator for track manifest schema."""
-    required_keys = ["title", "artist", "duration", "analysis"]
-    for k in required_keys:
-        if k not in track_meta:
-            raise KeyError(f"Track '{track_id}' missing mandatory manifest key '{k}'")
-    if not isinstance(track_meta["analysis"], dict):
-        raise KeyError(f"Track '{track_id}' 'analysis' field must be a dict")
-
 
     def get_track_choreography(self, track_id: str) -> Dict[str, Any]:
         """Loads choreography from manifest or auto-compiles if not yet generated or outdated."""

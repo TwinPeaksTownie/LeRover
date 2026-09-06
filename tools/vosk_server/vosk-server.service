@@ -1,0 +1,16 @@
+[Unit]
+Description=Resident Vosk Speech Recognition Standby Server
+After=network.target
+
+[Service]
+Type=simple
+User=carson
+WorkingDirectory=/home/carson/vosk_server
+ExecStart=/usr/bin/python3 /home/carson/vosk_server/server.py
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
