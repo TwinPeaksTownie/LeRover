@@ -17,6 +17,7 @@ import random
 import sys
 import logging
 import traceback
+from typing import Optional, Dict, Any, List
 
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 if DIRECTORY not in sys.path:
@@ -55,6 +56,8 @@ STATUS_CACHE = {
     "leader": {"running": False, "pid": ""},
     "clack_pose": {"running": False},
     "ornith_state": "IDLE",
+    "topology_mode": "STANDALONE_PI4B",
+    "backend_online": False,
     "pi500_online": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0,
@@ -194,26 +197,103 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
             raise
     threading.Thread(target=_work, daemon=True).start()
 
+LOCAL_BACKEND_PROC = None
+LOCAL_BACKEND_LOCK = threading.Lock()
+
+def manage_local_backend(action: str) -> Optional[int]:
+    """Manages the local master hardware daemon (pi500/main.py) on Standalone Pi 4B.
+    Accepts explicit lifecycle actions: 'start', 'stop', 'restart'.
+    """
+    global LOCAL_BACKEND_PROC
+    with LOCAL_BACKEND_LOCK:
+        if action in ["stop", "restart"]:
+            print(f"[BackendLifecycle] Stopping local master daemon...", flush=True)
+            if LOCAL_BACKEND_PROC is not None:
+                try:
+                    LOCAL_BACKEND_PROC.terminate()
+                    LOCAL_BACKEND_PROC.wait(timeout=2.0)
+                except Exception as ex:
+                    print(f"[BackendLifecycle] Terminate warning: {ex}", flush=True)
+                LOCAL_BACKEND_PROC = None
+
+            # Clean up processes holding main.py, port 8085, or /dev/ttyACM0
+            subprocess.run(["pkill", "-9", "-f", "main.py"], check=False)
+            subprocess.run(["fuser", "-k", "8085/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["fuser", "-k", "/dev/ttyACM0"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+
+            STATUS_CACHE["backend_online"] = False
+            STATUS_CACHE["daemon_running"] = False
+            STATUS_CACHE["follower"] = {"running": False, "pid": ""}
+            STATUS_CACHE["hardware_telemetry"] = None
+
+            if action == "stop":
+                return None
+
+        if action in ["start", "restart"]:
+            print(f"[BackendLifecycle] Starting local master daemon...", flush=True)
+            # Find python binary
+            py_candidates = [
+                "/home/carson/aux_servo_interface/.venv/bin/python",
+                "/home/carson/touch_ui/.venv/bin/python",
+                "/home/user/so101/.venv/bin/python",
+                sys.executable
+            ]
+            py_bin = sys.executable
+            for cand in py_candidates:
+                if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                    py_bin = cand
+                    break
+
+            # Find pi500/main.py
+            main_candidates = [
+                os.path.join(DIRECTORY, "pi500", "main.py"),
+                os.path.join(DIRECTORY, "..", "pi500", "main.py"),
+                "/home/carson/aux_servo_interface/pi500/main.py",
+                "/home/user/so101/pi500/main.py"
+            ]
+            main_script = None
+            for mc in main_candidates:
+                norm_mc = os.path.abspath(mc)
+                if os.path.isfile(norm_mc):
+                    main_script = norm_mc
+                    break
+
+            if not main_script:
+                raise FileNotFoundError("Could not find pi500/main.py entrypoint")
+
+            log_file = open("/tmp/so101_master.log", "a")
+            LOCAL_BACKEND_PROC = subprocess.Popen(
+                [py_bin, "-u", main_script],
+                cwd=os.path.dirname(main_script),
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True
+            )
+            print(f"[BackendLifecycle] Master daemon started with PID {LOCAL_BACKEND_PROC.pid}", flush=True)
+            return LOCAL_BACKEND_PROC.pid
+
 def poll_status_loop():
     while True:
+        if not network_resolver:
+            raise RuntimeError("network_resolver module is not available")
+        cfg = network_resolver.load_network_config()
+        topology_mode = cfg["topology_mode"]
+        if topology_mode not in ["STANDALONE_PI4B", "DUAL_NODE"]:
+            raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
+        STATUS_CACHE["topology_mode"] = topology_mode
+
         p500_ip = get_current_pi500_ip(port=8085)
         mac_ip = get_current_mac_ip(port=8086)
-        conn_mode = network_resolver.get_active_connection_mode() if network_resolver else {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False}
+        conn_mode = network_resolver.get_active_connection_mode()
 
         # 1. Check physical/local host reachability
         pi500_host_online = False
         if p500_ip == "127.0.0.1":
             pi500_host_online = True
-        elif network_resolver:
-            pi500_host_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
         else:
-            try:
-                res = subprocess.run(["ping", "-c", "1", "-W", "1", p500_ip], capture_output=True)
-                pi500_host_online = (res.returncode == 0)
-            except Exception:
-                pi500_host_online = False
+            pi500_host_online = network_resolver.is_host_pingable(p500_ip, timeout_sec=1)
         
-        STATUS_CACHE["pi500_online"] = pi500_host_online
         STATUS_CACHE["connection_mode"] = conn_mode
         STATUS_CACHE["resolved_pi500_ip"] = p500_ip
         STATUS_CACHE["resolved_mac_ip"] = mac_ip
@@ -252,8 +332,8 @@ def poll_status_loop():
             STATUS_CACHE["hardware_telemetry"] = None
 
         STATUS_CACHE["backend_online"] = backend_connected
-        if p500_ip == "127.0.0.1":
-            STATUS_CACHE["pi500_online"] = backend_connected
+        # Transitional backward-compatibility: in standalone mirrors backend_online; in dual-node mirrors pi500_host_online
+        STATUS_CACHE["pi500_online"] = backend_connected if topology_mode == "STANDALONE_PI4B" else pi500_host_online
 
         # 3. Poll Mac Leader directly over HTTP 8086
         try:
@@ -860,8 +940,56 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps({"status": "ok", "message": "Detector not active"}).encode())
                     return
 
-        if path in ["/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/beat_bandit_toggle", "/api/kill_all"]:
-            action = req_data.get("action", "toggle")
+        if path in ["/api/backend_restart", "/api/pi500_master_daemon_restart"]:
+            if "action" not in req_data:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Schema contract violation: missing required 'action' key", "status": "failed"}).encode())
+                return
+
+            action = str(req_data["action"]).lower()
+            if action not in ["start", "stop", "restart"]:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Invalid action '{action}'. Expected 'start', 'stop', or 'restart'", "status": "failed"}).encode())
+                return
+
+            if not network_resolver:
+                raise RuntimeError("network_resolver module is not available")
+            cfg = network_resolver.load_network_config()
+            topology_mode = cfg["topology_mode"]
+            if topology_mode != "STANDALONE_PI4B":
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Backend lifecycle management not supported in topology mode '{topology_mode}'", "status": "failed"}).encode())
+                return
+
+            try:
+                pid = manage_local_backend(action)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "action": action, "pid": pid}).encode())
+                return
+            except Exception as ex:
+                logging.exception("Failed to execute backend action '%s': %s", action, ex)
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Backend lifecycle failure: {ex}", "status": "failed"}).encode())
+                return
+
+        if path in ["/api/follower_toggle", "/api/pi500_follower_toggle", "/api/mac_leader_toggle", "/api/servo_studio_toggle", "/api/pokeball_teleop_toggle", "/api/beat_bandit_toggle", "/api/kill_all"]:
+            if "action" not in req_data:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Schema contract violation: missing required 'action' key", "status": "failed"}).encode())
+                return
+            action = str(req_data["action"])
             if path == "/api/kill_all":
                 play_sound_helper(kind="stop_audio", stop_previous=True)
                 with TAP_DETECTOR_LOCK:
@@ -873,7 +1001,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                         TAP_DETECTOR = None
                 STATUS_CACHE["clack_pose"] = {"running": False}
 
-            if path in ["/api/pi500_follower_toggle", "/api/pokeball_teleop_toggle", "/api/servo_studio_toggle", "/api/beat_bandit_toggle"] and action != "stop":
+            if path in ["/api/follower_toggle", "/api/pi500_follower_toggle", "/api/pokeball_teleop_toggle", "/api/servo_studio_toggle", "/api/beat_bandit_toggle"] and action != "stop":
                 with TAP_DETECTOR_LOCK:
                     if TAP_DETECTOR is not None:
                         try:

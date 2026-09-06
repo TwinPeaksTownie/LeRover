@@ -55,12 +55,16 @@ export function sendMacLeaderToggle(action) {
     }, 2500);
 }
 
-export function sendPi500FollowerToggle(action) {
-    return safeFetch('/api/pi500_follower_toggle', {
+export function sendFollowerToggle(action) {
+    return safeFetch('/api/follower_toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
     }, 2500);
+}
+
+export function sendPi500FollowerToggle(action) {
+    return sendFollowerToggle(action);
 }
 
 export function sendPokeballTeleopToggle(action) {
@@ -287,12 +291,16 @@ export function sendPi500PowerOn() {
     return sendConnectHotspot();
 }
 
-export function sendMasterDaemonRestart(action) {
-    return safeFetch('/api/pi500_master_daemon_restart', {
+export function sendBackendRestart(action) {
+    return safeFetch('/api/backend_restart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
     }, 10000);
+}
+
+export function sendMasterDaemonRestart(action) {
+    return sendBackendRestart(action);
 }
 
 export function sendEmergencyKillAll() {

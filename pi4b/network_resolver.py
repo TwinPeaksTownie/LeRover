@@ -385,9 +385,12 @@ def get_hardware_baudrate() -> int:
     return int(cfg["hardware"]["baudrate"])
 
 
-def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
+def get_backend_host(prefer_port: Optional[int] = 8085) -> str:
     cfg = load_network_config()
-    if cfg["topology_mode"] == "STANDALONE_PI4B":
+    topology_mode = cfg["topology_mode"]
+    if topology_mode not in ["STANDALONE_PI4B", "DUAL_NODE"]:
+        raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
+    if topology_mode == "STANDALONE_PI4B":
         return str(cfg["endpoints"]["master_backend"]["host"])
     eth_ip = cfg["direct_ethernet"]["pi500_ip"]
 
@@ -414,9 +417,23 @@ def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
     return resolve_target(candidates, "pi500_ip")
 
 
+def get_backend_url(path: str = "/api/status", port: int = 8085) -> str:
+    host = get_backend_host(prefer_port=port)
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return f"http://{host}:{port}{clean_path}"
+
+
+def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
+    """Transitional backward-compatible alias for get_backend_host."""
+    return get_backend_host(prefer_port=prefer_port)
+
+
 def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
     cfg = load_network_config()
-    if cfg["topology_mode"] == "STANDALONE_PI4B":
+    topology_mode = cfg["topology_mode"]
+    if topology_mode not in ["STANDALONE_PI4B", "DUAL_NODE"]:
+        raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
+    if topology_mode == "STANDALONE_PI4B":
         return str(cfg["endpoints"]["touch_ui"]["host"])
     eth_ip = cfg["direct_ethernet"]["pi4b_ip"]
 

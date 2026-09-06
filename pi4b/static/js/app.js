@@ -171,7 +171,7 @@ export function toggleMacLeader() {
     api.sendMacLeaderToggle(action).catch(() => {});
 }
 
-export function togglePi500Follower() {
+export function toggleFollower() {
     const action = isFollowerRunning ? 'stop' : 'start';
     const btn = document.getElementById('followerBtn');
     const txt = document.getElementById('followerBtnText');
@@ -180,8 +180,9 @@ export function togglePi500Follower() {
         btn.style.color = '#ffaa00';
         if (txt) txt.innerText = action === 'stop' ? 'STOPPING...' : 'STARTING...';
     }
-    api.sendPi500FollowerToggle(action).catch(() => {});
+    api.sendFollowerToggle(action).catch(() => {});
 }
+export const togglePi500Follower = toggleFollower;
 
 export function togglePokeballTeleop() {
     const action = isPokeballRunning ? 'stop' : 'start';
@@ -845,15 +846,15 @@ export function triggerPi500PowerOn() {
     triggerConnectHotspot();
 }
 
-export function triggerPi500MasterDaemonRestart() {
+export function triggerBackendRestart() {
     const action = isMasterDaemonRunning ? 'stop' : 'start';
     const btn = document.getElementById('masterDaemonBtn');
     const txt = document.getElementById('masterDaemonBtnText');
     if (btn) {
         btn.style.opacity = '0.5';
-        if (txt) txt.innerText = action === 'stop' ? '⌛ STOPPING SEWER DAEMON...' : '⌛ STARTING SEWER DAEMON...';
+        if (txt) txt.innerText = action === 'stop' ? '⌛ STOPPING ROBOT BACKEND...' : '⌛ STARTING ROBOT BACKEND...';
     }
-    api.sendMasterDaemonRestart(action)
+    api.sendBackendRestart(action)
         .then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
@@ -866,10 +867,11 @@ export function triggerPi500MasterDaemonRestart() {
         .catch(() => {
             if (btn) {
                 btn.style.opacity = '1.0';
-                if (txt) txt.innerText = '❌ SEWER DAEMON ERROR';
+                if (txt) txt.innerText = '❌ ROBOT BACKEND ERROR';
             }
         });
 }
+export const triggerPi500MasterDaemonRestart = triggerBackendRestart;
 
 export function triggerEmergencyKillAll() {
     api.sendEmergencyKillAll().catch(() => {});
@@ -982,7 +984,7 @@ function bindEventListeners() {
     const pokeballBtn = document.getElementById('pokeballBtn');
 
     if (leaderBtn) leaderBtn.addEventListener('click', () => toggleMacLeader());
-    if (followerBtn) followerBtn.addEventListener('click', () => togglePi500Follower());
+    if (followerBtn) followerBtn.addEventListener('click', () => toggleFollower());
     if (pokeballBtn) pokeballBtn.addEventListener('click', () => togglePokeballTeleop());
 
     // 4. Tab 3: Robot Applications
@@ -2058,7 +2060,7 @@ function bindEventListeners() {
     const emergencyKillBtn = document.getElementById('emergencyKillBtn');
 
     if (powerBackBtn) powerBackBtn.addEventListener('click', () => ui.openBackendSubView('main'));
-    if (masterDaemonBtn) masterDaemonBtn.addEventListener('click', () => triggerPi500MasterDaemonRestart());
+    if (masterDaemonBtn) masterDaemonBtn.addEventListener('click', () => triggerBackendRestart());
     if (wifiRestoreBtn) wifiRestoreBtn.addEventListener('click', () => triggerWifiRestore());
     if (pi500PowerOnBtn) pi500PowerOnBtn.addEventListener('click', () => triggerConnectHotspot());
     if (wifiDisableBtn) wifiDisableBtn.addEventListener('click', () => triggerWifiDisable());

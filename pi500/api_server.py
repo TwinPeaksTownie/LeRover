@@ -610,7 +610,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     self.backend.aux_calibration.update(body["calibration"])
             self._send_json({"status": "ok", "calibration": self.backend.aux_calibration})
 
-        elif parsed.path == "/api/pi500_follower_toggle":
+        elif parsed.path in ["/api/follower_toggle", "/api/pi500_follower_toggle"]:
             if "action" not in body:
                 return self._send_json({"status": "error", "message": "Missing required 'action' parameter"}, 400)
             action = str(body["action"]).lower()

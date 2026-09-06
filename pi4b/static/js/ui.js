@@ -253,7 +253,7 @@ export function renderButtonStates() {
         }
     }
 
-    // Sewer daemon button
+    // Robot backend button
     const masterBtn = document.getElementById('masterDaemonBtn');
     const masterBtnText = document.getElementById('masterDaemonBtnText');
     const masterBtnSub = document.getElementById('masterDaemonBtnSub');
@@ -262,7 +262,7 @@ export function renderButtonStates() {
             masterBtn.style.borderColor = '#00ff66';
             masterBtn.style.color = '#00ff66';
             masterBtn.style.background = 'rgba(0, 255, 102, 0.12)';
-            if (masterBtnText) masterBtnText.innerText = '🟢 STOP SEWER DAEMON';
+            if (masterBtnText) masterBtnText.innerText = '🟢 STOP ROBOT BACKEND';
             if (masterBtnSub) {
                 masterBtnSub.innerText = '(PORT 8085 RUNNING)';
                 masterBtnSub.style.color = '#aaffcc';
@@ -271,9 +271,9 @@ export function renderButtonStates() {
             masterBtn.style.borderColor = '#ffaa00';
             masterBtn.style.color = '#ffffff';
             masterBtn.style.background = '#181818';
-            if (masterBtnText) masterBtnText.innerText = '🤖 START SEWER DAEMON';
+            if (masterBtnText) masterBtnText.innerText = '🤖 START ROBOT BACKEND';
             if (masterBtnSub) {
-                masterBtnSub.innerText = '(DAEMON STOPPED)';
+                masterBtnSub.innerText = '(BACKEND STOPPED)';
                 masterBtnSub.style.color = '#ffcc88';
             }
         }
@@ -1075,20 +1075,36 @@ export function updateTelemetryUI(data) {
 
     if (pStatus) {
         let pStatusHtml = '';
-        if (data.pi500_online) {
-            const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
-            const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
-            const targetIp = data.resolved_pi500_ip || '10.0.0.1';
-            if (data.daemon_running) {
-                pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | 12V: ${volt} | ${pogoState}`;
+        const isStandalone = (data.topology_mode === 'STANDALONE_PI4B') || (cm.pi500_ip === '127.0.0.1' && cm.pi4b_ip === '127.0.0.1');
+        const isBackendUp = !!(data.backend_online !== undefined ? data.backend_online : data.daemon_running);
+
+        if (isStandalone) {
+            const hostIp = pi4bWlan || '127.0.0.1';
+            if (isBackendUp) {
+                const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
+                const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
+                pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | BACKEND: ACTIVE (8085) | 12V: ${volt} | ${pogoState}`;
                 pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
             } else {
-                pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | <span style="color:#ffaa00;">DAEMON OFF</span>`;
+                pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | <span style="color:#ff3344;">BACKEND: OFFLINE</span>`;
                 pStatus.style.color = '#ffaa00';
             }
         } else {
-            pStatusHtml = `PI 500 OFFLINE | ${modeBadge}`;
-            pStatus.style.color = '#ff3344';
+            if (data.pi500_online) {
+                const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
+                const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
+                const targetIp = data.resolved_pi500_ip || '10.0.0.1';
+                if (data.daemon_running) {
+                    pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | 12V: ${volt} | ${pogoState}`;
+                    pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
+                } else {
+                    pStatusHtml = `PI 500 [${targetIp}] | ${modeBadge} | <span style="color:#ffaa00;">DAEMON OFF</span>`;
+                    pStatus.style.color = '#ffaa00';
+                }
+            } else {
+                pStatusHtml = `PI 500 OFFLINE | ${modeBadge}`;
+                pStatus.style.color = '#ff3344';
+            }
         }
         if (lastRenderedPowerText !== pStatusHtml) {
             setLastRenderedPowerText(pStatusHtml);
