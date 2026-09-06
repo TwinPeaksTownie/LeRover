@@ -278,5 +278,64 @@ class TestJoystickCalibration(unittest.TestCase):
                     load_joystick_calibration()
 
 
+class TestClackTapDetectorLifecycle(unittest.TestCase):
+    """Verifies AudioTapDetector active gating and AppManager stop callback dispatch."""
+
+    def test_app_manager_stop_callback_invoked(self):
+        from pi4b.app_manager import AppManager, BaseApp, AppMetadata
+
+        mock_backend = MagicMock()
+        mgr = AppManager(backend=mock_backend)
+
+        class DummyApp(BaseApp):
+            metadata = AppMetadata(name="test_dummy_app")
+            def __init__(self):
+                super().__init__()
+                self.config = {"chimes": {"app_start": "app_start"}}
+            def run(self, backend, stop_event):
+                while not stop_event.is_set():
+                    time.sleep(0.01)
+
+        mgr.register_app(DummyApp)
+        stopped_apps = []
+        mgr.register_stop_callback(lambda name: stopped_apps.append(name))
+
+        with patch("pi4b.app_manager.dispatch_audio_event"):
+            ok = mgr.start_app_by_name("test_dummy_app")
+            self.assertTrue(ok)
+            self.assertEqual(mgr.current_app_name, "test_dummy_app")
+
+            mgr.stop_app("test_dummy_app")
+        self.assertIn("test_dummy_app", stopped_apps)
+        self.assertIsNone(mgr.current_app_name)
+
+    def test_audio_tap_detector_is_active_gate(self):
+        sys.path.insert(0, str(REPO_ROOT / "pi4b"))
+        from audio_tap_detector import AudioTapDetector
+
+        mock_sound_cb = MagicMock()
+        is_active = False
+
+        detector = AudioTapDetector(
+            play_sound_cb=mock_sound_cb,
+            is_active_cb=lambda: is_active
+        )
+
+        # When inactive: action dispatch must be rejected and play zero sounds
+        detector._dispatch_action(1, [], 5000)
+        mock_sound_cb.assert_not_called()
+
+        # When inactive: tap detected must be ignored
+        with patch.object(detector, "_dispatch_action") as mock_dispatch:
+            detector._on_tap_detected(5000)
+            mock_dispatch.assert_not_called()
+
+        # When active: action dispatch executes
+        is_active = True
+        with patch("urllib.request.urlopen"):
+            detector._dispatch_action(1, [], 5000)
+        mock_sound_cb.assert_called_with("smw_stomp_bones")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,6 @@
+﻿{
+  "clack_threshold": 3500,
+  "volume_pct": 75,
+  "rover_max_speed_pct": 55,
+  "arm_speed_sec": 0.6
+}

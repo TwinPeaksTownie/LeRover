@@ -9,5 +9,14 @@
   "tags": ["teaching", "pose", "sequence", "audio", "so101"],
   "chimes": {
     "app_start": "app_start"
+  },
+  "clack_detector": {
+    "enabled": true,
+    "peak_threshold": 3500,
+    "tap_window_sec": 0.85,
+    "refractory_ms": 300,
+    "min_spectral_ratio": 5.0,
+    "min_high_energy_pct": 50.0,
+    "auto_stop_on_app_exit": true
   }
 }

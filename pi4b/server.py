@@ -77,7 +77,40 @@ STATUS_CACHE: Dict[str, Any] = {
 }
 
 TAP_DETECTOR = None
-TAP_DETECTOR_LOCK = threading.Lock()
+TAP_DETECTOR_LOCK = threading.RLock()
+
+def start_tap_detector() -> bool:
+    """Safely instantiates and starts AudioTapDetector with active app validation callback."""
+    global TAP_DETECTOR
+    with TAP_DETECTOR_LOCK:
+        if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
+            try:
+                from audio_tap_detector import AudioTapDetector
+                TAP_DETECTOR = AudioTapDetector(
+                    peak_threshold=int(UI_CONFIG["clack_threshold"]),
+                    play_sound_cb=play_sound_helper,
+                    is_active_cb=lambda: bool(GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.current_app_name in ["piranha_pose_app", "clack_pose_app"])
+                )
+                TAP_DETECTOR.start()
+                STATUS_CACHE["clack_pose"] = {"running": True}
+                logging.info("[ClackPose] AudioTapDetector successfully started.")
+                return True
+            except Exception as e:
+                logging.error(f"[ClackPose] Failed to start AudioTapDetector: {e}")
+                return False
+        return True
+
+def stop_tap_detector() -> None:
+    """Safely terminates AudioTapDetector, kills child parecord process, and updates status."""
+    global TAP_DETECTOR
+    with TAP_DETECTOR_LOCK:
+        if TAP_DETECTOR is not None:
+            try:
+                TAP_DETECTOR.stop()
+            except Exception as st_err:
+                logging.warning(f"[ClackPose] TAP_DETECTOR stop warning: {st_err}")
+            TAP_DETECTOR = None
+    STATUS_CACHE["clack_pose"] = {"running": False}
 
 ROBOT_MIC_PROC = None
 ROBOT_MIC_LOCK = threading.Lock()
@@ -758,25 +791,10 @@ class UnifiedHandler(MasterApiHandler):
                     action = "stop" if is_running else "start"
 
                 if action == "start":
-                    if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
-                        try:
-                            from audio_tap_detector import AudioTapDetector
-                            TAP_DETECTOR = AudioTapDetector(
-                                peak_threshold=int(UI_CONFIG["clack_threshold"]),
-                                play_sound_cb=play_sound_helper
-                            )
-                            TAP_DETECTOR.start()
-                            STATUS_CACHE["clack_pose"] = {"running": True}
-                        except Exception as e:
-                            print(f"[ClackPose] Startup error: {e}", flush=True)
-                            self.send_response(500)
-                            self.send_header("Content-Type", "application/json")
-                            self.end_headers()
-                            self.wfile.write(json.dumps({"error": str(e), "status": "failed"}).encode())
-                            return
-
                     if GLOBAL_APP_MANAGER:
                         GLOBAL_APP_MANAGER.start_app_by_name("piranha_pose_app")
+                    else:
+                        start_tap_detector()
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -784,16 +802,10 @@ class UnifiedHandler(MasterApiHandler):
                     self.wfile.write(json.dumps({"status": "ok", "action": "started", "running": True}).encode())
                     return
                 else:
-                    if TAP_DETECTOR is not None:
-                        try:
-                            TAP_DETECTOR.stop()
-                        except Exception as st_err:
-                            print(f"[ClackPose] TAP_DETECTOR stop warning: {st_err}", flush=True)
-                        TAP_DETECTOR = None
-                    STATUS_CACHE["clack_pose"] = {"running": False}
-
                     if GLOBAL_APP_MANAGER:
                         GLOBAL_APP_MANAGER.stop_app("piranha_pose_app")
+                    else:
+                        stop_tap_detector()
 
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -865,14 +877,7 @@ class UnifiedHandler(MasterApiHandler):
 
         if path == "/api/kill_all":
             play_sound_helper(kind="stop_audio", stop_previous=True)
-            with TAP_DETECTOR_LOCK:
-                if TAP_DETECTOR is not None:
-                    try:
-                        TAP_DETECTOR.stop()
-                    except Exception as k_err:
-                        logging.warning(f"[KillAll] Tap detector stop warning: {k_err}")
-                    TAP_DETECTOR = None
-            STATUS_CACHE["clack_pose"] = {"running": False}
+            stop_tap_detector()
 
         # 4. Delegate all standard robot control POST endpoints to MasterApiHandler
         import io
@@ -919,6 +924,19 @@ def main() -> None:
     GLOBAL_APP_MANAGER.pokeball_service = GLOBAL_POKEBALL
     GLOBAL_POKEBALL.app_manager = GLOBAL_APP_MANAGER
     GLOBAL_APP_MANAGER.discover_apps()
+
+    def _on_app_started(started_app_name: str) -> None:
+        if started_app_name in ["piranha_pose_app", "clack_pose_app"]:
+            logging.info(f"[Lifecycle] AppManager started '{started_app_name}', activating AudioTapDetector...")
+            start_tap_detector()
+
+    def _on_app_stopped(stopped_app_name: str) -> None:
+        if stopped_app_name in ["piranha_pose_app", "clack_pose_app"]:
+            logging.info(f"[Lifecycle] AppManager stopped '{stopped_app_name}', stopping AudioTapDetector...")
+            stop_tap_detector()
+
+    GLOBAL_APP_MANAGER.register_start_callback(_on_app_started)
+    GLOBAL_APP_MANAGER.register_stop_callback(_on_app_stopped)
 
     # 4. Bind MasterApiHandler class state
     ensure_leader_poller_started()
@@ -967,6 +985,8 @@ def main() -> None:
         server_8085.server_close()
     except Exception as e:
         logging.warning(f"Error during server shutdown: {e}")
+
+    stop_tap_detector()
 
     if GLOBAL_POKEBALL:
         try:

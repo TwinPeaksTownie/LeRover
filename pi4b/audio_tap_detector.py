@@ -53,6 +53,7 @@ class AudioTapDetector:
         min_spectral_ratio: float = 5.0,
         min_high_energy_pct: float = 50.0,
         play_sound_cb: Optional[Callable[[str], None]] = None,
+        is_active_cb: Optional[Callable[[], bool]] = None,
     ) -> None:
         self.pi500_url = pi500_url
         self.peak_threshold = peak_threshold
@@ -61,6 +62,7 @@ class AudioTapDetector:
         self.min_spectral_ratio = min_spectral_ratio
         self.min_high_energy_pct = min_high_energy_pct
         self.play_sound_cb = play_sound_cb
+        self.is_active_cb = is_active_cb
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -134,10 +136,11 @@ class AudioTapDetector:
                 try:
                     self._proc.terminate()
                     self._proc.kill()
-                except Exception:
-                    pass
+                    self._proc.wait(timeout=0.5)
+                except Exception as proc_err:
+                    logging.warning("Error terminating parecord process: %s", proc_err)
                 self._proc = None
-        if self._thread and self._thread.is_alive():
+        if self._thread and self._thread.is_alive() and self._thread != threading.current_thread():
             self._thread.join(timeout=1.0)
         logging.info("Stopped AudioTapDetector.")
 
@@ -202,6 +205,10 @@ class AudioTapDetector:
 
     def _dispatch_action(self, count: int, intervals: List[int], max_amp: int) -> None:
         """Dispatches verified clack/tap actions based on count."""
+        if self.is_active_cb is not None and not self.is_active_cb():
+            logging.warning("[AudioTapDetector] Action dispatch rejected: piranha_pose_app is not active.")
+            self.stop()
+            return
         now = time.time()
         api_url = self._get_api_url()
 
@@ -298,12 +305,20 @@ class AudioTapDetector:
             self._tap_timestamps = []
             self._window_timer = None
         if count > 0:
+            if self.is_active_cb is not None and not self.is_active_cb():
+                logging.warning("[AudioTapDetector] Window expired but app is no longer active, discarding actions.")
+                self.stop()
+                return
             threading.Thread(target=self._dispatch_action, args=(count, intervals, max_amp), daemon=True).start()
 
     def _on_tap_detected(self, peak_val: int) -> None:
         """Handles a validated acoustic clack event."""
         now = time.time()
         with self._lock:
+            if self.is_active_cb is not None and not self.is_active_cb():
+                logging.info("[AudioTapDetector] Tap ignored: piranha_pose_app is not active.")
+                return
+
             if now < self._mute_until:
                 return # Inhibited during sequence execution or audio playback
 
@@ -322,7 +337,7 @@ class AudioTapDetector:
             self._last_tap_amplitude = max(self._last_tap_amplitude if self._tap_count > 1 else 0, peak_val)
 
             logging.info("[AudioTapDetector] VALID CLACK detected: count=%d, peak=%d, gap=%dms, ratio=%.1f",
-                         self._tap_count, peak_val, interval_ms, self._last_spectral_ratio)
+                          self._tap_count, peak_val, interval_ms, self._last_spectral_ratio)
 
             if self._window_timer:
                 self._window_timer.cancel()
@@ -367,6 +382,11 @@ class AudioTapDetector:
                     self._proc = proc
 
                 while self._running:
+                    if self.is_active_cb is not None and not self.is_active_cb():
+                        logging.info("[AudioTapDetector] Active app is no longer piranha_pose_app, auto-stopping listener loop.")
+                        self._running = False
+                        break
+
                     raw = proc.stdout.read(chunk_bytes)
                     if not raw or len(raw) < chunk_bytes:
                         break
@@ -430,8 +450,8 @@ class AudioTapDetector:
                     try:
                         self._proc.terminate()
                         self._proc.kill()
-                    except Exception:
-                        pass
+                    except Exception as loop_proc_err:
+                        logging.warning("Error terminating parecord process in finally: %s", loop_proc_err)
                     self._proc = None
 
 

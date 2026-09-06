@@ -8,7 +8,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Type, List
+from typing import Optional, Dict, Any, Type, List, Callable
 from robot_backend import RobotBackend, dispatch_audio_event
 
 
@@ -87,7 +87,33 @@ class AppManager:
         self.active_app: Optional[BaseApp] = None
         self.current_app_name: Optional[str] = None
         self.registry: Dict[str, Type[BaseApp]] = {}
+        self.start_callbacks: List[Callable[[str], None]] = []
+        self.stop_callbacks: List[Callable[[str], None]] = []
         self.logger = logging.getLogger("so101.app_manager")
+
+    def register_start_callback(self, callback: Callable[[str], None]) -> None:
+        """Registers a callback hook invoked whenever an application starts."""
+        self.start_callbacks.append(callback)
+
+    def _notify_app_started(self, app_name: str) -> None:
+        """Notifies all registered callbacks that an application has started."""
+        for cb in list(self.start_callbacks):
+            try:
+                cb(app_name)
+            except Exception as cb_err:
+                self.logger.warning(f"Error in start callback for app '{app_name}': {cb_err}")
+
+    def register_stop_callback(self, callback: Callable[[str], None]) -> None:
+        """Registers a callback hook invoked whenever an application stops."""
+        self.stop_callbacks.append(callback)
+
+    def _notify_app_stopped(self, app_name: str) -> None:
+        """Notifies all registered callbacks that an application has stopped."""
+        for cb in list(self.stop_callbacks):
+            try:
+                cb(app_name)
+            except Exception as cb_err:
+                self.logger.warning(f"Error in stop callback for app '{app_name}': {cb_err}")
 
     def register_app(self, app_cls: Type[BaseApp]) -> None:
         """Registers a BaseApp subclass into the AppManager registry."""
@@ -261,9 +287,11 @@ class AppManager:
                             self.lock._owner = None
                 dispatch_audio_event(kind="app_exit_idle")
                 self.logger.info(f"Application '{app_name}' loop exited.")
+                self._notify_app_stopped(app_name)
 
         app_instance.thread = threading.Thread(target=_runner, daemon=True)
         app_instance.thread.start()
+        self._notify_app_started(app_name)
 
         # Dispatch application startup audio cue strictly AFTER worker thread starts
         start_cue = str(app_instance.config["chimes"]["app_start"])
@@ -304,6 +332,7 @@ class AppManager:
             self.active_app = None
             self.current_app_name = None
             self.logger.info(f"App '{app_name}' successfully stopped and lock released.")
+            self._notify_app_stopped(app_name)
 
     def stop_all(self) -> None:
         """Stops whatever app is currently active."""
