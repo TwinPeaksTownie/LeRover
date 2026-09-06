@@ -386,6 +386,10 @@ class RobotBackend:
             if not self.hardware_active or self.bus is None or self.is_busy or self.follower_active:
                 continue
 
+            # Gating: Suppress telemetry queries when 12V bus power is lost to eliminate half-duplex collisions
+            if self.power_mgr and not self.power_mgr.is_connected():
+                continue
+
             # Safely acquire SERIAL_LOCK for a fast sync_read
             try:
                 with SERIAL_LOCK:
@@ -443,17 +447,26 @@ class RobotBackend:
         if not self.ctrl:
             return False
         try:
-            # 1. Purge serial buffers
-            self.ctrl.flush_buffers()
+            with SERIAL_LOCK:
+                # 1. Purge serial buffers across controller and bus handlers
+                self.ctrl.flush_buffers()
+                ser = None
+                if self.bus and hasattr(self.bus, "port_handler"):
+                    ph = self.bus.port_handler
+                    if hasattr(ph, "ser"):
+                        ser = ph.ser
+                if ser and hasattr(ser, "reset_input_buffer"):
+                    ser.reset_input_buffer()
+                    ser.reset_output_buffer()
 
-            # 2. Explicitly ensure motors remain limp in hardware
-            self.ctrl.set_torque(7, False)
-            self.ctrl.set_torque(8, False)
+                # 2. Explicitly ensure motors remain limp in hardware
+                self.ctrl.set_torque(7, False)
+                self.ctrl.set_torque(8, False)
 
-            # 3. Re-sync encoder position baselines
-            self.sync_servo7_position()
-            self.sync_servo8_position()
-            self.read_raw_arm_ticks()
+                # 3. Re-sync encoder position baselines
+                self.sync_servo7_position()
+                self.sync_servo8_position()
+                self.read_raw_arm_ticks()
 
             with self.lock:
                 self.hardware_active = True

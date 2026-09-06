@@ -1,0 +1,7 @@
+{
+  "min_bus_voltage": 10.0,
+  "poll_interval_sec": 0.4,
+  "disconnect_fail_limit": 2,
+  "pogo_fail_limit": 3,
+  "settle_delay_sec": 0.5
+}
