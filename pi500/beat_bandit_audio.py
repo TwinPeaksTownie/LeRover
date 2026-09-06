@@ -109,35 +109,44 @@ def stop_pi4b_audio() -> bool:
 
 
 def dispatch_audio_to_pi4b(wav_path: str, start_sec: float = 0.0, end_sec: Optional[float] = None) -> bool:
-    """Dispatches audio payload to Pi 4B PulseAudio service (full or sliced)."""
-    try:
-        stop_pi4b_audio()
+    """Dispatches audio payload to Pi 4B PulseAudio service (full fast-path or sliced)."""
+    stop_pi4b_audio()
 
-        if not os.path.exists(wav_path):
-            logger.warning(f"Audio file not found for dispatch: {wav_path}")
-            return False
+    if not os.path.exists(wav_path):
+        raise FileNotFoundError(f"Fail-Fast Error: Audio file not found for dispatch: {wav_path}")
 
-        if float(start_sec) > 0.05 or (end_sec is not None and float(end_sec) > 0.0):
-            logger.info(f"Slicing in-memory WAV audio for section {start_sec:.2f}s to {end_sec if end_sec else 'END'}s...")
-            raw_wav = slice_wav_in_memory(wav_path, start_sec=start_sec, end_sec=end_sec)
-        else:
-            logger.info(f"Dispatching full audio ({os.path.getsize(wav_path)/(1024*1024):.1f} MB) to Pi 4B...")
-            with open(wav_path, "rb") as f:
-                raw_wav = f.read()
+    # 1. Sliced audio required for partial or seeked playback
+    if float(start_sec) > 0.0 or (end_sec is not None and float(end_sec) > 0.0):
+        logger.info(f"Slicing in-memory WAV audio for section {start_sec:.2f}s to {end_sec if end_sec else 'END'}s...")
+        raw_wav = slice_wav_in_memory(wav_path, start_sec=start_sec, end_sec=end_sec)
+        req = urllib.request.Request(
+            get_pi4b_sound_url(),
+            data=raw_wav,
+            headers={"Content-Type": "audio/wav"}
+        )
+        with urllib.request.urlopen(req, timeout=7.0) as resp:
+            if resp.status == 200:
+                logger.info(f"Sliced audio payload ({len(raw_wav)/1024:.1f} KB) successfully dispatched to Pi 4B.")
+                return True
+            raise RuntimeError(f"Pi 4B audio server returned HTTP {resp.status} during sliced audio dispatch")
 
-        if raw_wav:
-            req = urllib.request.Request(
-                get_pi4b_sound_url(),
-                data=raw_wav,
-                headers={"Content-Type": "audio/wav"}
-            )
-            with urllib.request.urlopen(req, timeout=7.0) as resp:
-                if resp.status == 200:
-                    logger.info(f"Audio payload ({len(raw_wav)/1024:.1f} KB) successfully dispatched to Pi 4B.")
-                    return True
-    except Exception as e:
-        logger.warning(f"Audio dispatch warning: {e}")
-    return False
+    # 2. Fast-path local file dispatch for full track playback (<8ms latency)
+    payload = json.dumps({
+        "event": "beat_bandit",
+        "wav_path": str(wav_path),
+        "stop_previous": True,
+        "delay_sec": 0.0
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        get_pi4b_sound_url(),
+        data=payload,
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=2.0) as resp:
+        if resp.status == 200:
+            logger.info("Fast-path full track dispatch (%s) acknowledged by Pi 4B.", wav_path)
+            return True
+        raise RuntimeError(f"Pi 4B audio server returned HTTP {resp.status} during fast-path audio dispatch")
 
 
 class BeatBanditAudioClient:

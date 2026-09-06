@@ -396,7 +396,7 @@ class BeatBanditApp(BaseApp):
 
         wav_path = self.active_track["wav_path"]
 
-        # 1. Instantiate and strictly validate ChoreographyPlayer BEFORE dispatching audio
+        # 1. Instantiate ChoreographyPlayer with synchronous audio start callback
         self.player = ChoreographyPlayer(
             backend=backend,
             choreography=choreo,
@@ -404,12 +404,10 @@ class BeatBanditApp(BaseApp):
             start_sec=start_sec,
             end_sec=end_sec,
             loop=loop,
+            on_start_audio_callback=lambda: self.audio_client.dispatch_playback(wav_path, start_sec=start_sec, end_sec=end_sec),
             on_loop_callback=lambda st, et: self._handle_player_loop(wav_path, st, et),
             on_finish_callback=self._handle_player_finish,
         )
-
-        # 2. Dispatch Audio to Pi 4B only after player initialization succeeds
-        self.audio_client.dispatch_playback(wav_path, start_sec=start_sec, end_sec=end_sec)
 
         self.current_state = "DANCING"
         self.player.start()

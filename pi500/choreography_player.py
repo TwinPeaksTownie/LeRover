@@ -37,6 +37,7 @@ class ChoreographyPlayer:
         start_sec: float = 0.0,
         end_sec: Optional[float] = None,
         loop: bool = False,
+        on_start_audio_callback: Optional[Callable[[], None]] = None,
         on_loop_callback: Optional[Callable[[float, Optional[float]], None]] = None,
         on_finish_callback: Optional[Callable[[], None]] = None,
     ) -> None:
@@ -73,6 +74,7 @@ class ChoreographyPlayer:
             self.end_sec = self.duration
 
         self.loop = loop
+        self.on_start_audio_callback = on_start_audio_callback
         self.on_loop_callback = on_loop_callback
         self.on_finish_callback = on_finish_callback
 
@@ -199,9 +201,9 @@ class ChoreographyPlayer:
 
             if hasattr(self.backend, "dispatch_dance_frame"):
                 self.backend.dispatch_dance_frame(base_home_rom, s7_rom=50.0, s8_goal=50.0, s8_is_rom=True)
-            time.sleep(0.3)
-
             start_clock = time.time()
+            if self.on_start_audio_callback:
+                self.on_start_audio_callback()
             logger.info(f"Choreography player loop active ({self.start_sec:.1f}s -> {self.end_sec:.1f}s, loop={self.loop})...")
 
             while not self._stop_event.is_set():
