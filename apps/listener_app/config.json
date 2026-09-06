@@ -33,6 +33,11 @@
     "cancel": "ornith_abort_recording",
     "exit": "app_exit_idle"
   },
+  "feedback": {
+    "unmatched_action": "No action taken",
+    "idle_action": "Awaiting voice command",
+    "idle_transcript": "(none)"
+  },
   "network": {
     "pi4b_port": 8082,
     "mac_port": 8086

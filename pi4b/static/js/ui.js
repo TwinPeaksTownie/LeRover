@@ -1051,8 +1051,23 @@ export function updateTelemetryUI(data) {
             listenerData.query,
             listenerData.search_results,
             listenerData.selected_index,
-            listenerData.state
+            listenerData.state,
+            listenerData.transcript,
+            listenerData.action_taken
         );
+    }
+
+    // Vosk Standby Health LED Indicator
+    const railVoskDot = document.getElementById('railVoskDot');
+    const listenerCardVoskDot = document.getElementById('listenerCardVoskDot');
+    const isVoskReady = Boolean(data.vosk_ready);
+    if (railVoskDot) {
+        railVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
+        const label = document.getElementById('railVoskLabel');
+        if (label) label.style.color = isVoskReady ? '#00ff66' : '#888888';
+    }
+    if (listenerCardVoskDot) {
+        listenerCardVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
     }
 
     renderButtonStates();
@@ -2106,7 +2121,31 @@ export function renderDirectorBrief(briefData, trackTitle = 'Current Track', tra
     }
 }
 
-export function renderListenerTracks(query, tracks, selectedIndex, stateStr) {
+export function renderListenerTracks(query, tracks, selectedIndex, stateStr, transcriptStr, actionStr) {
+    const transcriptEl = document.getElementById('listenerTranscriptDisplay');
+    if (transcriptEl) {
+        if (typeof transcriptStr === 'string' && transcriptStr.trim().length > 0 && transcriptStr !== '(none)') {
+            transcriptEl.innerText = `"${transcriptStr}"`;
+            transcriptEl.style.color = '#ffffff';
+        } else {
+            transcriptEl.innerText = '(none)';
+            transcriptEl.style.color = '#888888';
+        }
+    }
+
+    const actionEl = document.getElementById('listenerActionDisplay');
+    if (actionEl) {
+        const act = (typeof actionStr === 'string' && actionStr.trim().length > 0) ? actionStr : 'Awaiting voice command';
+        actionEl.innerText = act;
+        if (act === 'No action taken') {
+            actionEl.className = 'action-badge badge-unmatched';
+        } else if (act === 'Awaiting voice command') {
+            actionEl.className = 'action-badge badge-idle';
+        } else {
+            actionEl.className = 'action-badge badge-success';
+        }
+    }
+
     const queryEl = document.getElementById('listenerQueryDisplay');
     if (queryEl) {
         if (typeof query === 'string' && query.length > 0) {

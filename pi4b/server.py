@@ -70,6 +70,7 @@ STATUS_CACHE: Dict[str, Any] = {
     "topology_mode": "STANDALONE_PI4B",
     "backend_online": False,
     "pi500_online": False,
+    "vosk_ready": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0,
     "connection_mode": {"mode": "OFFLINE_DIRECT_ETH", "is_offline": True, "is_cloud_enabled": False},
@@ -293,6 +294,18 @@ def poll_status_loop() -> None:
                 STATUS_CACHE["leader"] = ht["leader"]
                 STATUS_CACHE["pokeball"] = ht["pokeball"]
                 STATUS_CACHE["servos"] = ht["servos"]
+            if isinstance(ht, dict) and "listener" in ht:
+                STATUS_CACHE["listener"] = ht["listener"]
+
+            # Sample resident Vosk standby server readiness (:8059/health)
+            try:
+                vosk_port = int(cfg["ports"]["vosk_server_port"])
+                v_url = f"http://127.0.0.1:{vosk_port}/health"
+                v_req = urllib.request.Request(v_url, headers={"User-Agent": "TouchUiStatusPoller"})
+                with urllib.request.urlopen(v_req, timeout=0.25) as v_resp:
+                    STATUS_CACHE["vosk_ready"] = (v_resp.status == 200)
+            except Exception:
+                STATUS_CACHE["vosk_ready"] = False
 
             # Update Clack Pose telemetry
             global TAP_DETECTOR

@@ -327,6 +327,8 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 resp["listener"] = {
                     "name": "listener_app",
                     "state": "IDLE",
+                    "transcript": "(none)",
+                    "action_taken": "Awaiting voice command",
                     "search_query": "",
                     "search_results": [],
                     "selected_index": 0,

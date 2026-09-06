@@ -97,6 +97,9 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["chimes"]["commit"]
     _ = cfg["chimes"]["cancel"]
     _ = cfg["chimes"]["exit"]
+    _ = str(cfg["feedback"]["unmatched_action"])
+    _ = str(cfg["feedback"]["idle_action"])
+    _ = str(cfg["feedback"]["idle_transcript"])
     _ = int(cfg["network"]["pi4b_port"])
     _ = int(cfg["network"]["mac_port"])
     return cfg
@@ -168,7 +171,8 @@ class ListenerApp(BaseApp):
         self.logger = logging.getLogger("so101.app.listener_app")
         self.config = load_listener_config()
         self.state = "IDLE"
-        self.transcript: str = ""
+        self.transcript: str = str(self.config["feedback"]["idle_transcript"])
+        self.action_taken: str = str(self.config["feedback"]["idle_action"])
         self.search_query: str = ""
         self.search_results: List[Dict[str, Any]] = []
         self.selected_index: int = 0
@@ -188,6 +192,7 @@ class ListenerApp(BaseApp):
                 "name": self.name,
                 "state": self.state,
                 "transcript": self.transcript,
+                "action_taken": self.action_taken,
                 "query": self.search_query,
                 "search_query": self.search_query,
                 "search_results": list(self.search_results),
@@ -543,7 +548,7 @@ class ListenerApp(BaseApp):
                     self.state = "PROCESSING"
                     self._play_chime("commit")
                     transcript = self._transcribe_pcm_buffer(command_chunks)
-                    self.transcript = transcript
+                    self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
                     pre_roll_buffer.clear()
                     if transcript:
                         intent = parse_intent(transcript)
@@ -552,6 +557,7 @@ class ListenerApp(BaseApp):
                         intent_type = intent["intent"]
                         if intent_type == "SWITCH_APP":
                             target_app = intent["app"]
+                            self.action_taken = f"Switching to {target_app}"
                             self.logger.info("Switching to app '%s', terminating listener...", target_app)
                             self._play_chime("commit")
                             if self.app_manager is not None:
@@ -565,7 +571,9 @@ class ListenerApp(BaseApp):
                             return
 
                         elif intent_type == "MOVE_PRIMITIVE":
-                            self._execute_movement_primitive(backend, intent["action"])
+                            action = intent["action"]
+                            self.action_taken = f"Moving to {action}"
+                            self._execute_movement_primitive(backend, action)
 
                         elif intent_type == "DOWNLOAD_SONG":
                             with self._selection_lock:
@@ -576,6 +584,7 @@ class ListenerApp(BaseApp):
                             title = intent["title"]
                             artist = intent["artist"]
                             query_str = f"{title} {artist}".strip()
+                            self.action_taken = f"Searching tracks: '{query_str}'"
                             with self._selection_lock:
                                 self.search_query = query_str
                                 self.state = "SEARCHING"
@@ -601,6 +610,7 @@ class ListenerApp(BaseApp):
                             if bb_track is not None:
                                 track_id = str(bb_track["track_id"])
                                 track_title = str(bb_track["title"])
+                                self.action_taken = f"Playing Beat Bandit: '{track_title}'"
                                 self.logger.info("Found Beat Bandit library track '%s' (ID: %s), transitioning to Beat Bandit...", track_title, track_id)
                                 self._play_chime("commit")
                                 if self.app_manager is not None:
@@ -626,6 +636,7 @@ class ListenerApp(BaseApp):
                             else:
                                 seq_file = find_compiled_sequence(title)
                                 if seq_file is not None:
+                                    self.action_taken = f"Playing Preset: '{title}'"
                                     self.logger.info("Found compiled sequence '%s', launching preset playback...", seq_file)
                                     self._play_chime("commit")
                                     if self.app_manager is not None:
@@ -638,13 +649,24 @@ class ListenerApp(BaseApp):
                                     self.stop()
                                     return
                                 else:
+                                    self.action_taken = str(self.config["feedback"]["unmatched_action"])
                                     self.logger.warning("No Beat Bandit track or compiled sequence found for '%s'.", title)
                                     self._play_chime("cancel")
 
                         elif intent_type == "EXIT":
+                            self.action_taken = "Exiting Voice Listener"
                             self.logger.info("Exit command received, stopping listener app...")
                             self.stop()
                             return
+
+                        else:
+                            self.action_taken = str(self.config["feedback"]["unmatched_action"])
+                            self.logger.warning("Unrecognized voice command '%s'. Action: %s", transcript, self.action_taken)
+                            self._play_chime("cancel")
+
+                    else:
+                        self.action_taken = str(self.config["feedback"]["unmatched_action"])
+                        self._play_chime("cancel")
 
                     # If waiting for user track selection or Mac analysis, close microphone and wait
                     with self._selection_lock:
