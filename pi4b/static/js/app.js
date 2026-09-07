@@ -76,7 +76,10 @@ import {
     updateConfigKey,
     setIsPollingInProgress,
     setIsFetchingTracks,
-    setIsFetchingPresets
+    setIsFetchingPresets,
+    currentCarouselIndex,
+    setCurrentCarouselIndex,
+    registeredAppsList
 } from './state.js';
 
 import * as api from './api.js';
@@ -1015,6 +1018,14 @@ export function handleAppCardClick(app) {
 }
 window.__handleAppCardClick = handleAppCardClick;
 
+export function cycleAppCarousel(delta) {
+    if (!registeredAppsList || registeredAppsList.length === 0) return;
+    const total = registeredAppsList.length;
+    const nextIdx = ((currentCarouselIndex + delta) % total + total) % total;
+    ui.renderAppCarousel(registeredAppsList, nextIdx, handleAppCardClick);
+}
+window.__cycleAppCarousel = cycleAppCarousel;
+
 function bindEventListeners() {
     // 1. Top Bar Navigation & Drawer
     const homeBtn = document.getElementById('navHomeBtn');
@@ -1040,6 +1051,52 @@ function bindEventListeners() {
     if (drawerBackdrop) {
         drawerBackdrop.addEventListener('click', () => ui.toggleQuickControlDrawer(false));
     }
+
+    // 1b. Carousel Arrows, Touch Swipe & Keyboard Navigation
+    const prevBtn = document.getElementById('carouselPrevBtn');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => cycleAppCarousel(-1));
+    }
+    const nextBtn = document.getElementById('carouselNextBtn');
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => cycleAppCarousel(1));
+    }
+
+    const stage = document.getElementById('carouselStage');
+    if (stage) {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        stage.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        stage.addEventListener('touchend', (e) => {
+            if (e.changedTouches && e.changedTouches.length === 1) {
+                const deltaX = e.changedTouches[0].clientX - touchStartX;
+                const deltaY = e.changedTouches[0].clientY - touchStartY;
+                if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+                    if (deltaX < 0) {
+                        cycleAppCarousel(1);
+                    } else {
+                        cycleAppCarousel(-1);
+                    }
+                }
+            }
+        }, { passive: true });
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (currentAppsSubView === 'launcher') {
+            if (e.key === 'ArrowLeft') {
+                cycleAppCarousel(-1);
+            } else if (e.key === 'ArrowRight') {
+                cycleAppCarousel(1);
+            }
+        }
+    });
 
     // 2. Quick-Control Drawer Buttons
     const dPedLeft = document.getElementById('drawerPedLeftBtn');

@@ -156,46 +156,33 @@
                 <div id="appsStatus" class="header-readout" style="font-size: 16px; color: #00e5ff;">ROBOT APPS IDLE</div>
             </div>
 
-            <!-- VIEW A: Dynamic App Launcher Grid -->
-            <div id="appsViewLauncher" style="height: calc(100% - 32px); padding: 4px 8px; box-sizing: border-box; overflow-y: auto;">
-                <div id="appsGridContainer" class="apps-grid-container">
-                    <button id="launchClackerBtn" class="app-card" data-app="piranha_pose_app" style="background: linear-gradient(135deg, #0a2e5c, #001f3f); border-color: #00e5ff;">
-                        <span class="app-card-icon">🪴</span>
-                        <div class="app-card-info">
-                            <div class="app-card-title" style="color: #00e5ff;">PIRANHA POSE</div>
-                            <div class="app-card-desc">Presets, Sequences & Clacks</div>
-                        </div>
-                        <span class="app-card-badge" id="badgeClacker">IDLE</span>
+            <!-- VIEW A: Touchscreen App Launcher Carousel -->
+            <div id="appsViewLauncher" class="apps-view-launcher">
+                <div id="appsCarouselWrapper" class="carousel-wrapper">
+                    <!-- Left Arrow Button -->
+                    <button id="carouselPrevBtn" class="carousel-arrow-btn prev" aria-label="Previous App">
+                        <span class="carousel-arrow-glyph">◀</span>
                     </button>
 
-                    <button id="launchStudioBtn" class="app-card" data-app="servo_studio_app" style="background: linear-gradient(135deg, #2d2400, #1a1500); border-color: #ffaa00;">
-                        <span class="app-card-icon">🔧</span>
-                        <div class="app-card-info">
-                            <div class="app-card-title" style="color: #ffaa00;">SERVO STUDIO</div>
-                            <div class="app-card-desc">Motor Calibration & Diagnostics</div>
-                        </div>
-                        <span class="app-card-badge" id="badgeStudio">IDLE</span>
-                    </button>
+                    <!-- Central Hero Card Stage -->
+                    <div id="carouselStage" class="carousel-stage">
+                        <!-- Populated dynamically by ui.renderAppCarousel -->
+                    </div>
 
-                    <button id="launchBeatBanditBtn" class="app-card" data-app="beat_bandit_app" style="background: linear-gradient(135deg, #380e45, #1d0724); border-color: #a855f7;">
-                        <span class="app-card-icon">🎧</span>
-                        <div class="app-card-info">
-                            <div class="app-card-title" style="color: #a855f7;">BEAT BANDIT</div>
-                            <div class="app-card-desc">Audio Analysis & Choreographer</div>
-                        </div>
-                        <span class="app-card-badge" id="badgeBeatBandit">IDLE</span>
-                    </button>
-
-                    <button id="launchListenerBtn" class="app-card" data-app="listener_app" style="background: linear-gradient(135deg, #0e3538, #051d1f); border-color: #00f2fe;">
-                        <span class="app-card-icon">👂</span>
-                        <div class="app-card-info">
-                            <div class="app-card-title" style="color: #00f2fe;">VOICE LISTENER</div>
-                            <div class="app-card-desc">Voice Commands & Track Search</div>
-                        </div>
-                        <span class="app-card-badge" id="badgeListener">IDLE</span>
-                        <span id="listenerCardVoskDot" class="status-led led-red" style="position: absolute; bottom: 8px; right: 8px;" title="Vosk Standby Server"></span>
+                    <!-- Right Arrow Button -->
+                    <button id="carouselNextBtn" class="carousel-arrow-btn next" aria-label="Next App">
+                        <span class="carousel-arrow-glyph">▶</span>
                     </button>
                 </div>
+
+                <!-- Bottom Pagination Bar -->
+                <div id="carouselPagination" class="carousel-pagination">
+                    <div id="carouselDots" class="carousel-dots"></div>
+                    <div id="carouselCounter" class="carousel-counter">APP 1 OF 7</div>
+                </div>
+
+                <!-- Backward Compatibility Stub -->
+                <div id="appsGridContainer" class="apps-grid-container" style="display: none;" aria-hidden="true"></div>
             </div>
 
             <!-- VIEW B: Dedicated Piranha Pose Interface (Controls & Presets + Telemetry Sidebar) -->

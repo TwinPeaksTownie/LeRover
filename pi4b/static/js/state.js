@@ -39,6 +39,14 @@ export let isDrawerOpen = false;
 export let registeredAppsList = [];
 export let activeBreadcrumbs = ['APPS'];
 export let auxCalibrationData = null;
+export let currentCarouselIndex = 0;
+export function setCurrentCarouselIndex(val) {
+    const parsed = parseInt(val, 10);
+    if (isNaN(parsed)) {
+        throw new TypeError(`Invalid carousel index: ${val}`);
+    }
+    currentCarouselIndex = Math.max(0, parsed);
+}
 
 // Beat Bandit Choreography Studio State
 export let bbStudioTab = 'player'; // 'player' | 'timeline' | 'poses' | 'settings'

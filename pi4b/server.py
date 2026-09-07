@@ -145,6 +145,8 @@ def load_ui_config() -> Dict[str, Any]:
     _ = cfg["default_tab"]
     _ = cfg["drawer_default_open"]
     _ = cfg["top_bar_height_px"]
+    _ = cfg["launcher_mode"]
+    _ = cfg["carousel_app_index"]
     return cfg
 
 def save_ui_config(cfg: Dict[str, Any]) -> None:
@@ -155,6 +157,8 @@ def save_ui_config(cfg: Dict[str, Any]) -> None:
     _ = cfg["default_tab"]
     _ = cfg["drawer_default_open"]
     _ = cfg["top_bar_height_px"]
+    _ = cfg["launcher_mode"]
+    _ = cfg["carousel_app_index"]
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
 
@@ -675,6 +679,14 @@ class UnifiedHandler(MasterApiHandler):
                 save_ui_config(UI_CONFIG)
             if "drawer_default_open" in req_data:
                 UI_CONFIG["drawer_default_open"] = bool(req_data["drawer_default_open"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "launcher_mode" in req_data:
+                UI_CONFIG["launcher_mode"] = str(req_data["launcher_mode"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "carousel_app_index" in req_data:
+                UI_CONFIG["carousel_app_index"] = int(req_data["carousel_app_index"])
                 STATUS_CACHE["config"] = UI_CONFIG
                 save_ui_config(UI_CONFIG)
 

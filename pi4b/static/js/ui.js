@@ -88,6 +88,8 @@ import {
     setActiveBreadcrumbs,
     auxCalibrationData,
     setAuxCalibrationData,
+    currentCarouselIndex,
+    setCurrentCarouselIndex,
     setLastRenderedButtonsKey,
     setLastRenderedConfigKey,
     setLastRenderedSliderText,
@@ -634,9 +636,113 @@ export function toggleQuickControlDrawer(forceState) {
     }
 }
 
+export function renderAppCarousel(appsList, activeIndex, onCardClick) {
+    if (!Array.isArray(appsList) || appsList.length === 0) return;
+    setRegisteredAppsList(appsList);
+    const stage = document.getElementById('carouselStage');
+    const dotsContainer = document.getElementById('carouselDots');
+    const counterEl = document.getElementById('carouselCounter');
+    if (!stage) return;
+
+    const total = appsList.length;
+    const idx = ((activeIndex % total) + total) % total;
+    setCurrentCarouselIndex(idx);
+    const app = appsList[idx];
+
+    // 1. Build Hero Card for Active App
+    stage.innerHTML = '';
+    const heroCard = document.createElement('div');
+    heroCard.className = 'carousel-hero-card' + (app.is_running ? ' running' : '');
+    heroCard.id = 'carouselHeroCard_' + app.name;
+    heroCard.dataset.app = app.name;
+
+    const header = document.createElement('div');
+    header.className = 'carousel-hero-header';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'carousel-hero-icon';
+    iconSpan.innerText = app.icon || '🤖';
+
+    const titleGroup = document.createElement('div');
+    titleGroup.className = 'carousel-hero-title-group';
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'carousel-hero-title';
+    titleDiv.innerText = (app.title || app.name).toUpperCase();
+
+    const descDiv = document.createElement('div');
+    descDiv.className = 'carousel-hero-desc';
+    descDiv.innerText = app.description || '';
+
+    titleGroup.appendChild(titleDiv);
+    titleGroup.appendChild(descDiv);
+    header.appendChild(iconSpan);
+    header.appendChild(titleGroup);
+
+    const badge = document.createElement('span');
+    badge.className = 'app-card-badge';
+    badge.innerText = app.is_running ? 'RUNNING' : 'IDLE';
+    header.appendChild(badge);
+
+    const footer = document.createElement('div');
+    footer.className = 'carousel-hero-footer';
+
+    const tagsDiv = document.createElement('div');
+    tagsDiv.className = 'carousel-hero-tags';
+    const tags = Array.isArray(app.tags) ? app.tags.slice(0, 3) : [];
+    tags.forEach(t => {
+        const tagSpan = document.createElement('span');
+        tagSpan.className = 'carousel-tag';
+        tagSpan.innerText = t;
+        tagsDiv.appendChild(tagSpan);
+    });
+
+    const actionDiv = document.createElement('div');
+    actionDiv.className = 'carousel-hero-action';
+    actionDiv.innerHTML = app.is_running 
+        ? '<span>⚡</span><span>RUNNING (TAP TO OPEN)</span>'
+        : '<span>🚀</span><span>TAP TO LAUNCH</span>';
+
+    footer.appendChild(tagsDiv);
+    footer.appendChild(actionDiv);
+
+    heroCard.appendChild(header);
+    heroCard.appendChild(footer);
+
+    if (typeof onCardClick === 'function') {
+        heroCard.addEventListener('click', () => onCardClick(app));
+    }
+    stage.appendChild(heroCard);
+
+    // 2. Render Pagination Dots
+    if (dotsContainer) {
+        dotsContainer.innerHTML = '';
+        appsList.forEach((a, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'carousel-dot' + (i === idx ? ' active' : '');
+            dot.title = a.title || a.name;
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                renderAppCarousel(appsList, i, onCardClick);
+            });
+            dotsContainer.appendChild(dot);
+        });
+    }
+
+    // 3. Update Counter
+    if (counterEl) {
+        counterEl.innerText = `APP ${idx + 1} OF ${total}: ${(app.title || app.name).toUpperCase()}`;
+    }
+}
+
 export function renderDynamicAppLauncher(appsList, onCardClick) {
     if (!Array.isArray(appsList) || appsList.length === 0) return;
     setRegisteredAppsList(appsList);
+
+    // 1. Render Carousel (Primary 4" Touch Interface)
+    renderAppCarousel(appsList, currentCarouselIndex, onCardClick);
+
+    // 2. Render Compatibility Grid Container (if present)
     const container = document.getElementById('appsGridContainer');
     if (!container) return;
 
