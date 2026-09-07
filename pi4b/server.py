@@ -130,31 +130,33 @@ PULSE_ENV["XDG_RUNTIME_DIR"] = "/run/user/1000"
 PULSE_ENV["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
 
 CONFIG_FILE = os.path.join(DIRECTORY, "ui_config.json")
-DEFAULT_CONFIG = {
-    "clack_threshold": 5200,
-    "volume_pct": 100,
-    "rover_max_speed_pct": 35,
-    "arm_speed_sec": 1.0
-}
 
-def load_ui_config():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                cfg = json.load(f)
-                res = dict(DEFAULT_CONFIG)
-                res.update(cfg)
-                return res
-        except Exception:
-            pass
-    return dict(DEFAULT_CONFIG)
+def load_ui_config() -> Dict[str, Any]:
+    if not os.path.exists(CONFIG_FILE):
+        raise FileNotFoundError(f"Missing required UI configuration file: {CONFIG_FILE}")
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
 
-def save_ui_config(cfg):
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(cfg, f, indent=2)
-    except Exception as e:
-        print(f"Error saving config: {e}", flush=True)
+    # Fail-fast validation with direct bracket access
+    _ = cfg["clack_threshold"]
+    _ = cfg["volume_pct"]
+    _ = cfg["rover_max_speed_pct"]
+    _ = cfg["arm_speed_sec"]
+    _ = cfg["default_tab"]
+    _ = cfg["drawer_default_open"]
+    _ = cfg["top_bar_height_px"]
+    return cfg
+
+def save_ui_config(cfg: Dict[str, Any]) -> None:
+    _ = cfg["clack_threshold"]
+    _ = cfg["volume_pct"]
+    _ = cfg["rover_max_speed_pct"]
+    _ = cfg["arm_speed_sec"]
+    _ = cfg["default_tab"]
+    _ = cfg["drawer_default_open"]
+    _ = cfg["top_bar_height_px"]
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
 
 UI_CONFIG = load_ui_config()
 STATUS_CACHE["config"] = UI_CONFIG
@@ -665,6 +667,14 @@ class UnifiedHandler(MasterApiHandler):
                 sync_rover_speed_config(req_data["rover_max_speed_pct"])
             if "arm_speed_sec" in req_data:
                 UI_CONFIG["arm_speed_sec"] = float(req_data["arm_speed_sec"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "default_tab" in req_data:
+                UI_CONFIG["default_tab"] = str(req_data["default_tab"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "drawer_default_open" in req_data:
+                UI_CONFIG["drawer_default_open"] = bool(req_data["drawer_default_open"])
                 STATUS_CACHE["config"] = UI_CONFIG
                 save_ui_config(UI_CONFIG)
 

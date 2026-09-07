@@ -1,6 +1,9 @@
-﻿{
+{
   "clack_threshold": 3500,
   "volume_pct": 75,
   "rover_max_speed_pct": 55,
-  "arm_speed_sec": 0.6
+  "arm_speed_sec": 0.6,
+  "default_tab": "apps",
+  "drawer_default_open": false,
+  "top_bar_height_px": 38
 }

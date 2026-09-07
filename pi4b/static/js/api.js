@@ -107,6 +107,10 @@ export function sendAppStop(appName = null) {
     }, 3000);
 }
 
+export function fetchAppsListApi() {
+    return safeFetch('/api/apps', {}, 2000);
+}
+
 // Beat Bandit App
 export function sendBeatBanditStart(urlOrId, options = {}) {
     return safeFetch('/api/apps/beat_bandit/start', {

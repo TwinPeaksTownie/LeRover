@@ -301,6 +301,7 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 "leader": leader_data,
                 "pokeball": pokeball_data,
                 "servos": servos_map,
+                "aux_calibration": cls.backend.aux_calibration,
                 "wlan0_ip": network_resolver.get_interface_ip("wlan0"),
             }
             bb_app = cls.app_manager.active_app if (cls.app_manager.current_app_name == "beat_bandit_app") else None

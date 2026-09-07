@@ -80,6 +80,14 @@ import {
     setSelectedPoseName,
     setCurrentCustomPoseJoints,
     setCurrentConfig,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    registeredAppsList,
+    setRegisteredAppsList,
+    activeBreadcrumbs,
+    setActiveBreadcrumbs,
+    auxCalibrationData,
+    setAuxCalibrationData,
     setLastRenderedButtonsKey,
     setLastRenderedConfigKey,
     setLastRenderedSliderText,
@@ -312,6 +320,97 @@ export function renderButtonStates() {
             }
         }
     }
+
+    // Drawer Teleop & Input Buttons
+    const drawerFollowerBtn = document.getElementById('drawerFollowerBtn');
+    const drawerFollowerText = document.getElementById('drawerFollowerText');
+    if (drawerFollowerBtn) {
+        drawerFollowerBtn.style.borderColor = isFollowerRunning ? '#00ff66' : '#444444';
+        drawerFollowerBtn.style.color = isFollowerRunning ? '#00ff66' : '#ffffff';
+        if (drawerFollowerText) drawerFollowerText.innerText = isFollowerRunning ? 'STOP TELEOP' : 'START TELEOP';
+    }
+    const drawerLeaderBtn = document.getElementById('drawerLeaderBtn');
+    const drawerLeaderText = document.getElementById('drawerLeaderText');
+    if (drawerLeaderBtn) {
+        drawerLeaderBtn.style.borderColor = isLeaderRunning ? '#00e5ff' : '#444444';
+        drawerLeaderBtn.style.color = isLeaderRunning ? '#00e5ff' : '#ffffff';
+        if (drawerLeaderText) drawerLeaderText.innerText = isLeaderRunning ? 'STOP LEADER' : 'START LEADER';
+    }
+    const drawerPokeballBtn = document.getElementById('drawerPokeballBtn');
+    const drawerPokeballText = document.getElementById('drawerPokeballText');
+    if (drawerPokeballBtn) {
+        drawerPokeballBtn.style.borderColor = isPokeballRunning ? (isPokeballConnected ? '#00ff66' : '#ffaa00') : '#444444';
+        drawerPokeballBtn.style.color = isPokeballRunning ? (isPokeballConnected ? '#00ff66' : '#ffaa00') : '#ffffff';
+        if (drawerPokeballText) {
+            drawerPokeballText.innerText = isPokeballRunning ? (isPokeballConnected ? 'POKÉBALL ACTIVE' : 'SEARCHING BLE') : 'POKÉBALL BLE';
+        }
+    }
+
+    // Dynamic Launcher Card Badges
+    const badgeClacker = document.getElementById('badgeClacker');
+    if (badgeClacker) {
+        badgeClacker.innerText = isClackPoseRunning ? 'RUNNING' : 'IDLE';
+        const card = document.getElementById('launchClackerBtn');
+        if (card) {
+            if (isClackPoseRunning) card.classList.add('running');
+            else card.classList.remove('running');
+        }
+    }
+    const badgeStudio = document.getElementById('badgeStudio');
+    if (badgeStudio) {
+        badgeStudio.innerText = isStudioRunning ? 'RUNNING' : 'IDLE';
+        const card = document.getElementById('launchStudioBtn');
+        if (card) {
+            if (isStudioRunning) card.classList.add('running');
+            else card.classList.remove('running');
+        }
+    }
+    const badgeBeatBandit = document.getElementById('badgeBeatBandit');
+    if (badgeBeatBandit) {
+        badgeBeatBandit.innerText = isBeatBanditAppRunning ? 'RUNNING' : 'IDLE';
+        const card = document.getElementById('launchBeatBanditBtn');
+        if (card) {
+            if (isBeatBanditAppRunning) card.classList.add('running');
+            else card.classList.remove('running');
+        }
+    }
+    const badgeListener = document.getElementById('badgeListener');
+    if (badgeListener) {
+        badgeListener.innerText = isListenerAppRunning ? 'RUNNING' : 'IDLE';
+        const card = document.getElementById('launchListenerBtn');
+        if (card) {
+            if (isListenerAppRunning) card.classList.add('running');
+            else card.classList.remove('running');
+        }
+    }
+
+    // Top Bar Status Pill
+    const topStatusDot = document.getElementById('topStatusDot');
+    const topStatusText = document.getElementById('topStatusText');
+    if (topStatusDot && topStatusText) {
+        if (isBeatBanditDancing) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'BEAT BANDIT DANCING';
+        } else if (isBeatBanditAppRunning) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'BEAT BANDIT ACTIVE';
+        } else if (isClackPoseRunning) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'PIRANHA POSE ACTIVE';
+        } else if (isListenerAppRunning) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'VOICE LISTENER ACTIVE';
+        } else if (isFollowerRunning) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'TELEOP ACTIVE';
+        } else if (isMasterDaemonRunning) {
+            topStatusDot.className = 'status-led led-green';
+            topStatusText.innerText = 'ROBOT READY';
+        } else {
+            topStatusDot.className = 'status-led led-red';
+            topStatusText.innerText = 'BACKEND OFFLINE';
+        }
+    }
 }
 
 export function updateConfigUI() {
@@ -474,31 +573,159 @@ export function selectBeatBanditTrack(trackId, encTitle, encArtist) {
     renderBeatBanditTracksList(cachedBeatBanditTracks);
 }
 
+export function updateBreadcrumbs(crumbs) {
+    if (!Array.isArray(crumbs)) return;
+    setActiveBreadcrumbs(crumbs);
+    const nav = document.getElementById('breadcrumbNav');
+    if (!nav) return;
+    nav.innerHTML = '';
+    crumbs.forEach((crumb, idx) => {
+        if (idx > 0) {
+            const sep = document.createElement('span');
+            sep.className = 'separator';
+            sep.innerText = '>';
+            nav.appendChild(sep);
+        }
+        const span = document.createElement('span');
+        const isLast = (idx === crumbs.length - 1);
+        span.className = 'crumb' + (isLast ? ' active' : '');
+        span.innerText = crumb.name;
+        if (crumb.action && !isLast) {
+            span.style.cursor = 'pointer';
+            span.addEventListener('click', crumb.action);
+        }
+        nav.appendChild(span);
+    });
+}
+
+export function toggleQuickControlDrawer(forceState) {
+    const newState = (typeof forceState === 'boolean') ? forceState : !isDrawerOpen;
+    setIsDrawerOpen(newState);
+
+    const drawer = document.getElementById('quickControlDrawer');
+    const backdrop = document.getElementById('drawerBackdrop');
+    const toggleBtn = document.getElementById('drawerToggleBtn');
+
+    if (drawer) {
+        if (newState) {
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden', 'false');
+        } else {
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden', 'true');
+        }
+    }
+    if (backdrop) {
+        if (newState) {
+            backdrop.classList.add('active');
+            backdrop.setAttribute('aria-hidden', 'false');
+        } else {
+            backdrop.classList.remove('active');
+            backdrop.setAttribute('aria-hidden', 'true');
+        }
+    }
+    if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', newState ? 'true' : 'false');
+        if (newState) {
+            toggleBtn.classList.add('active');
+        } else {
+            toggleBtn.classList.remove('active');
+        }
+    }
+}
+
+export function renderDynamicAppLauncher(appsList, onCardClick) {
+    if (!Array.isArray(appsList) || appsList.length === 0) return;
+    setRegisteredAppsList(appsList);
+    const container = document.getElementById('appsGridContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+    appsList.forEach(app => {
+        const card = document.createElement('button');
+        card.className = 'app-card' + (app.is_running ? ' running' : '');
+        card.id = 'appCard_' + app.name;
+        card.dataset.app = app.name;
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'app-card-icon';
+        iconSpan.innerText = app.icon || '🤖';
+
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'app-card-info';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'app-card-title';
+        titleDiv.innerText = app.title || app.name;
+
+        const descDiv = document.createElement('div');
+        descDiv.className = 'app-card-desc';
+        descDiv.innerText = app.description || '';
+
+        infoDiv.appendChild(titleDiv);
+        infoDiv.appendChild(descDiv);
+
+        const badge = document.createElement('span');
+        badge.className = 'app-card-badge';
+        badge.innerText = app.is_running ? 'RUNNING' : 'IDLE';
+
+        card.appendChild(iconSpan);
+        card.appendChild(infoDiv);
+        card.appendChild(badge);
+
+        if (typeof onCardClick === 'function') {
+            card.addEventListener('click', () => onCardClick(app));
+        }
+        container.appendChild(card);
+    });
+}
+
 export function switchTab(tabId) {
     try { localStorage.setItem('active_tab', tabId); } catch(e) {}
     document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    const bPower = document.getElementById('topBtnPower');
+    if (bPower) {
+        if (tabId === 'power') bPower.classList.add('active');
+        else bPower.classList.remove('active');
+    }
 
     if (tabId === 'gantry') {
         const b = document.getElementById('railBtnGantry');
         const p = document.getElementById('panelGantry');
         if (b) b.classList.add('active');
         if (p) p.classList.add('active');
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => { switchTab('apps'); openAppsSubView('launcher'); } },
+            { name: 'GANTRY', action: null }
+        ]);
     } else if (tabId === 'controls') {
         const b = document.getElementById('railBtnControls');
         const p = document.getElementById('panelControls');
         if (b) b.classList.add('active');
         if (p) p.classList.add('active');
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => { switchTab('apps'); openAppsSubView('launcher'); } },
+            { name: 'CONTROLS', action: null }
+        ]);
     } else if (tabId === 'apps') {
         const b = document.getElementById('railBtnApps');
         const p = document.getElementById('panelApps');
         if (b) b.classList.add('active');
         if (p) p.classList.add('active');
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => openAppsSubView('launcher') }
+        ]);
     } else if (tabId === 'power') {
         const b = document.getElementById('railBtnPower');
         const p = document.getElementById('panelPower');
         if (b) b.classList.add('active');
         if (p) p.classList.add('active');
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => { switchTab('apps'); openAppsSubView('launcher'); } },
+            { name: 'BACKEND', action: null }
+        ]);
     }
 }
 
@@ -511,11 +738,35 @@ export function openAppsSubView(subview) {
     const vBeatBandit = document.getElementById('appsViewBeatBandit');
     const vListener = document.getElementById('appsViewListener');
     
-    if (vLauncher) vLauncher.style.display = (subview === 'launcher') ? 'grid' : 'none';
+    if (vLauncher) vLauncher.style.display = (subview === 'launcher') ? 'block' : 'none';
     if (vClacker) vClacker.style.display = (subview === 'clacker') ? 'block' : 'none';
     if (vStudio) vStudio.style.display = (subview === 'studio') ? 'flex' : 'none';
     if (vBeatBandit) vBeatBandit.style.display = (subview === 'beat_bandit') ? 'flex' : 'none';
     if (vListener) vListener.style.display = (subview === 'listener') ? 'flex' : 'none';
+
+    if (subview === 'launcher') {
+        updateBreadcrumbs([{ name: 'APPS', action: null }]);
+    } else if (subview === 'clacker') {
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => openAppsSubView('launcher') },
+            { name: 'PIRANHA POSE', action: null }
+        ]);
+    } else if (subview === 'studio') {
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => openAppsSubView('launcher') },
+            { name: 'SERVO STUDIO', action: null }
+        ]);
+    } else if (subview === 'beat_bandit') {
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => openAppsSubView('launcher') },
+            { name: 'BEAT BANDIT', action: null }
+        ]);
+    } else if (subview === 'listener') {
+        updateBreadcrumbs([
+            { name: 'APPS', action: () => openAppsSubView('launcher') },
+            { name: 'VOICE LISTENER', action: null }
+        ]);
+    }
 }
 
 export function openBackendSubView(subview) {
@@ -806,6 +1057,10 @@ export function updateTelemetryUI(data) {
         if (sliderEl) {
             sliderEl.innerHTML = `<span style="color:#ff9900;">Pedestal: ${m7Str}</span> <span style="color:#666;">|</span> <span style="color:#00e5ff;">Gantry: ${m8Str}</span>`;
         }
+        const drawerSliderEl = document.getElementById('drawerSliderValDisplay');
+        if (drawerSliderEl) {
+            drawerSliderEl.innerHTML = `<span style="color:#ff9900;">Ped: ${m7Str}</span> | <span style="color:#00e5ff;">Gantry: ${m8Str}</span>`;
+        }
     }
 
     // App Manager & Service State
@@ -872,6 +1127,23 @@ export function updateTelemetryUI(data) {
             teleopEl.innerText = teleopStatusStr;
             teleopEl.style.color = teleopStatusColor;
         }
+        const drawerTeleopEl = document.getElementById('drawerTeleopStatus');
+        if (drawerTeleopEl) {
+            drawerTeleopEl.innerText = teleopStatusStr;
+            drawerTeleopEl.style.color = teleopStatusColor;
+        }
+    }
+
+    // Bus voltage & aux calibration telemetry
+    const busVoltVal = (data.bus_voltage !== undefined && data.bus_voltage !== null) ? data.bus_voltage : (ht.bus_voltage !== undefined ? ht.bus_voltage : null);
+    const voltBadge = document.getElementById('topVoltageBadge');
+    if (voltBadge && busVoltVal !== null && busVoltVal > 0) {
+        voltBadge.innerText = `${busVoltVal.toFixed(1)}V`;
+        voltBadge.style.borderColor = busVoltVal >= 11.5 ? '#00ff66' : '#ffaa00';
+        voltBadge.style.color = busVoltVal >= 11.5 ? '#00ff66' : '#ffaa00';
+    }
+    if (data.aux_calibration || ht.aux_calibration) {
+        setAuxCalibrationData(data.aux_calibration || ht.aux_calibration);
     }
 
     const pkData = data.pokeball || {};
@@ -892,6 +1164,11 @@ export function updateTelemetryUI(data) {
         const btnB = document.getElementById('pbBtnB');
         const activeTelem = pkTelem || pkData;
 
+        const drawerPbBadge = document.getElementById('drawerPbBadge');
+        const drawerPbDir = document.getElementById('drawerPbDir');
+        const drawerPbJoy = document.getElementById('drawerPbJoy');
+        const drawerPbPkts = document.getElementById('drawerPbPkts');
+
         if (badge) {
             if (isPokeballConnected) {
                 badge.innerText = '🟢 CONNECTED';
@@ -908,7 +1185,22 @@ export function updateTelemetryUI(data) {
             }
         }
 
+        if (drawerPbBadge) {
+            if (isPokeballConnected) {
+                drawerPbBadge.innerText = '🟢 CONNECTED';
+                drawerPbBadge.style.color = '#00ff66';
+            } else if (isPokeballRunning) {
+                drawerPbBadge.innerText = '🔴 SEARCHING';
+                drawerPbBadge.style.color = '#ff3344';
+            } else {
+                drawerPbBadge.innerText = '⚪ DISCONNECTED';
+                drawerPbBadge.style.color = '#888';
+            }
+        }
+
         if (dir && activeTelem) dir.innerText = (activeTelem.x_direction ? activeTelem.x_direction.toUpperCase() : '--');
+        if (drawerPbDir && activeTelem) drawerPbDir.innerText = (activeTelem.x_direction ? activeTelem.x_direction.toUpperCase() : '--');
+
         if (joy && activeTelem) {
             if (activeTelem.norm_x !== undefined && activeTelem.norm_y !== undefined) {
                 joy.innerText = `X: ${activeTelem.norm_x.toFixed(2)}, Y: ${activeTelem.norm_y.toFixed(2)}`;
@@ -916,8 +1208,17 @@ export function updateTelemetryUI(data) {
                 joy.innerText = '--';
             }
         }
+        if (drawerPbJoy && activeTelem) {
+            if (activeTelem.norm_x !== undefined && activeTelem.norm_y !== undefined) {
+                drawerPbJoy.innerText = `(${activeTelem.norm_x.toFixed(2)}, ${activeTelem.norm_y.toFixed(2)})`;
+            } else {
+                drawerPbJoy.innerText = '--';
+            }
+        }
+
         if (rawHex && activeTelem) rawHex.innerText = activeTelem.raw_hex || '--';
         if (pkt && activeTelem) pkt.innerText = (activeTelem.packet_count !== undefined && activeTelem.packet_count !== null) ? activeTelem.packet_count : '--';
+        if (drawerPbPkts && activeTelem) drawerPbPkts.innerText = (activeTelem.packet_count !== undefined && activeTelem.packet_count !== null) ? activeTelem.packet_count : '--';
         
         if (btnA && activeTelem) {
             const isTopActive = activeTelem.button_top || activeTelem.button_a;

@@ -35,6 +35,10 @@ export let cachedPresetsList = {};
 export let lastPresetsJsonStr = '';
 export let currentAppsSubView = 'launcher';
 export let currentBackendSubView = 'main';
+export let isDrawerOpen = false;
+export let registeredAppsList = [];
+export let activeBreadcrumbs = ['APPS'];
+export let auxCalibrationData = null;
 
 // Beat Bandit Choreography Studio State
 export let bbStudioTab = 'player'; // 'player' | 'timeline' | 'poses' | 'settings'
@@ -100,6 +104,10 @@ export function setCachedPresetsList(val) { cachedPresetsList = val; }
 export function setLastPresetsJsonStr(val) { lastPresetsJsonStr = val; }
 export function setCurrentAppsSubView(val) { currentAppsSubView = val; }
 export function setCurrentBackendSubView(val) { currentBackendSubView = val; }
+export function setIsDrawerOpen(val) { isDrawerOpen = !!val; }
+export function setRegisteredAppsList(val) { registeredAppsList = val; }
+export function setActiveBreadcrumbs(val) { activeBreadcrumbs = val; }
+export function setAuxCalibrationData(val) { auxCalibrationData = val; }
 export function setBbStudioTab(val) { bbStudioTab = val; }
 export function setActiveChoreoData(val) { activeChoreoData = val; }
 export function setActiveProbabilitiesData(val) { activeProbabilitiesData = val; }

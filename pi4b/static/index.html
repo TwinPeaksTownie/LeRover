@@ -11,32 +11,53 @@
 </head>
 <body>
 
-    <!-- Left Navigation Rail -->
-    <div class="left-rail">
-        <button id="railBtnGantry" class="rail-btn">
-            <span style="font-size: 26px;">⚙️</span>
-            <span>GANTRY</span>
-        </button>
+    <!-- Top Application Bar -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <button id="navHomeBtn" class="top-bar-btn" title="App Launcher">
+                <span style="font-size: 18px;">🏠</span>
+                <span class="top-bar-btn-text">HOME</span>
+            </button>
+            <nav id="breadcrumbNav" class="top-bar-breadcrumbs">
+                <span class="crumb active" id="crumbRoot" data-tab="apps">APPS</span>
+            </nav>
+        </div>
 
-        <button id="railBtnControls" class="rail-btn">
-            <span style="font-size: 26px;">🦾</span>
-            <span>CONTROLS</span>
-        </button>
+        <div class="top-bar-center">
+            <div id="topStatusPill" class="top-status-pill">
+                <span id="topStatusDot" class="status-led led-green"></span>
+                <span id="topStatusText">ROBOT READY</span>
+            </div>
+            <div id="topVoltageBadge" class="voltage-badge">12V --</div>
+        </div>
 
-        <button id="railBtnApps" class="rail-btn active">
-            <span style="font-size: 26px;">📱</span>
-            <span>APPS</span>
-        </button>
+        <div class="top-bar-actions">
+            <button id="drawerToggleBtn" class="top-bar-btn btn-drawer" aria-expanded="false" title="Quick Controls (Gantry, Pedestal, Inputs)">
+                <span style="font-size: 18px;">⚙️</span>
+                <span class="top-bar-btn-text">CONTROLS</span>
+            </button>
 
-        <button id="railBtnPower" class="rail-btn">
-            <span style="font-size: 26px;">⚡</span>
-            <span>BACKEND</span>
-        </button>
+            <button id="topBtnPower" class="top-bar-btn" title="Backend & Settings">
+                <span style="font-size: 18px;">⚡</span>
+            </button>
 
-        <div id="railVoskIndicator" class="rail-status-pill" title="Vosk Speech Recognition Standby Server (:8059)">
-            <span style="font-size: 14px;">🎙️</span>
-            <span id="railVoskDot" class="status-led led-red"></span>
-            <span id="railVoskLabel" class="rail-status-label">VOSK</span>
+            <div id="topVoskIndicator" class="rail-status-pill" title="Vosk Standby Server (:8059)">
+                <span style="font-size: 14px;">🎙️</span>
+                <span id="topVoskDot" class="status-led led-red"></span>
+                <span id="topVoskLabel" class="rail-status-label">VOSK</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hidden compatibility rail elements -->
+    <div class="left-rail" style="display:none;" aria-hidden="true">
+        <button id="railBtnGantry" class="rail-btn"></button>
+        <button id="railBtnControls" class="rail-btn"></button>
+        <button id="railBtnApps" class="rail-btn active"></button>
+        <button id="railBtnPower" class="rail-btn"></button>
+        <div id="railVoskIndicator">
+            <span id="railVoskDot"></span>
+            <span id="railVoskLabel"></span>
         </div>
     </div>
 
@@ -135,40 +156,46 @@
                 <div id="appsStatus" class="header-readout" style="font-size: 16px; color: #00e5ff;">ROBOT APPS IDLE</div>
             </div>
 
-            <!-- VIEW A: Top-Level 4-Button Launcher (2x2 Grid) -->
-            <div id="appsViewLauncher" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: calc(100% - 32px); padding: 4px 8px; box-sizing: border-box;">
-                <button id="launchClackerBtn" class="btn-action" style="background: linear-gradient(135deg, #0a2e5c, #001f3f); border: 2px solid #00e5ff; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
-                    <span style="font-size: 34px;">🪴</span>
-                    <div style="text-align: left; min-width: 0;">
-                        <div style="font-size: 18px; color: #00e5ff; font-weight: 900; line-height: 1.2;">PIRANHA POSE</div>
-                        <div style="font-size: 11px; color: #a0c8e0; font-weight: 600; margin-top: 2px; white-space: normal;">Presets, Sequences & Clacks</div>
-                    </div>
-                </button>
+            <!-- VIEW A: Dynamic App Launcher Grid -->
+            <div id="appsViewLauncher" style="height: calc(100% - 32px); padding: 4px 8px; box-sizing: border-box; overflow-y: auto;">
+                <div id="appsGridContainer" class="apps-grid-container">
+                    <button id="launchClackerBtn" class="app-card" data-app="piranha_pose_app" style="background: linear-gradient(135deg, #0a2e5c, #001f3f); border-color: #00e5ff;">
+                        <span class="app-card-icon">🪴</span>
+                        <div class="app-card-info">
+                            <div class="app-card-title" style="color: #00e5ff;">PIRANHA POSE</div>
+                            <div class="app-card-desc">Presets, Sequences & Clacks</div>
+                        </div>
+                        <span class="app-card-badge" id="badgeClacker">IDLE</span>
+                    </button>
 
-                <button id="launchStudioBtn" class="btn-action" style="background: linear-gradient(135deg, #2d2400, #1a1500); border: 2px solid #ffaa00; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
-                    <span style="font-size: 34px;">🔧</span>
-                    <div style="text-align: left; min-width: 0;">
-                        <div style="font-size: 18px; color: #ffaa00; font-weight: 900; line-height: 1.2;">SERVO STUDIO</div>
-                        <div style="font-size: 11px; color: #e0cca0; font-weight: 600; margin-top: 2px; white-space: normal;">Motor Calibration & Diagnostics</div>
-                    </div>
-                </button>
+                    <button id="launchStudioBtn" class="app-card" data-app="servo_studio_app" style="background: linear-gradient(135deg, #2d2400, #1a1500); border-color: #ffaa00;">
+                        <span class="app-card-icon">🔧</span>
+                        <div class="app-card-info">
+                            <div class="app-card-title" style="color: #ffaa00;">SERVO STUDIO</div>
+                            <div class="app-card-desc">Motor Calibration & Diagnostics</div>
+                        </div>
+                        <span class="app-card-badge" id="badgeStudio">IDLE</span>
+                    </button>
 
-                <button id="launchBeatBanditBtn" class="btn-action" style="background: linear-gradient(135deg, #380e45, #1d0724); border: 2px solid #a855f7; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
-                    <span style="font-size: 34px;">🎧</span>
-                    <div style="text-align: left; min-width: 0;">
-                        <div style="font-size: 18px; color: #a855f7; font-weight: 900; line-height: 1.2;">BEAT BANDIT</div>
-                        <div style="font-size: 11px; color: #e9cbfd; font-weight: 600; margin-top: 2px; white-space: normal;">Audio Analysis & Choreographer</div>
-                    </div>
-                </button>
+                    <button id="launchBeatBanditBtn" class="app-card" data-app="beat_bandit_app" style="background: linear-gradient(135deg, #380e45, #1d0724); border-color: #a855f7;">
+                        <span class="app-card-icon">🎧</span>
+                        <div class="app-card-info">
+                            <div class="app-card-title" style="color: #a855f7;">BEAT BANDIT</div>
+                            <div class="app-card-desc">Audio Analysis & Choreographer</div>
+                        </div>
+                        <span class="app-card-badge" id="badgeBeatBandit">IDLE</span>
+                    </button>
 
-                <button id="launchListenerBtn" class="btn-action" style="position: relative; background: linear-gradient(135deg, #0e3538, #051d1f); border: 2px solid #00f2fe; color: #ffffff; border-radius: 10px; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 8px 12px; gap: 12px;">
-                    <span style="font-size: 34px;">👂</span>
-                    <div style="text-align: left; min-width: 0; flex: 1;">
-                        <div style="font-size: 18px; color: #00f2fe; font-weight: 900; line-height: 1.2;">VOICE LISTENER</div>
-                        <div style="font-size: 11px; color: #9dfbfa; font-weight: 600; margin-top: 2px; white-space: normal;">Voice Commands & Track Search</div>
-                    </div>
-                    <span id="listenerCardVoskDot" class="status-led led-red" style="position: absolute; top: 10px; right: 10px;" title="Vosk Standby Server"></span>
-                </button>
+                    <button id="launchListenerBtn" class="app-card" data-app="listener_app" style="background: linear-gradient(135deg, #0e3538, #051d1f); border-color: #00f2fe;">
+                        <span class="app-card-icon">👂</span>
+                        <div class="app-card-info">
+                            <div class="app-card-title" style="color: #00f2fe;">VOICE LISTENER</div>
+                            <div class="app-card-desc">Voice Commands & Track Search</div>
+                        </div>
+                        <span class="app-card-badge" id="badgeListener">IDLE</span>
+                        <span id="listenerCardVoskDot" class="status-led led-red" style="position: absolute; bottom: 8px; right: 8px;" title="Vosk Standby Server"></span>
+                    </button>
+                </div>
             </div>
 
             <!-- VIEW B: Dedicated Piranha Pose Interface (Controls & Presets + Telemetry Sidebar) -->
@@ -1027,7 +1054,96 @@
         </div>
     </div>
 
+    <!-- Quick-Control Drawer Backdrop -->
+    <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+    <!-- Quick-Control Drawer (Universal Bottom Slide-up) -->
+    <aside id="quickControlDrawer" class="control-drawer" aria-hidden="true">
+        <div class="drawer-handle-bar">
+            <div class="drawer-drag-pill"></div>
+            <div class="drawer-title">⚙️ QUICK CONTROLS & INPUTS</div>
+            <button id="drawerCloseBtn" class="drawer-close-btn" title="Close Controls">✕</button>
+        </div>
+
+        <div class="drawer-content">
+            <!-- SECTION A: GANTRY & PEDESTAL AUX CONTROLS -->
+            <div class="drawer-section">
+                <div class="drawer-section-header">
+                    <span class="drawer-section-title">🎡 PEDESTAL (S7) & 🛤️ GANTRY (S8)</span>
+                    <div id="drawerSliderValDisplay" class="drawer-readout"><span style="color:#ff9900;">Ped: --°</span> | <span style="color:#00e5ff;">Gantry: --</span></div>
+                </div>
+
+                <div class="drawer-controls-grid">
+                    <!-- Pedestal Rotation Buttons -->
+                    <button id="drawerPedLeftBtn" class="btn-action btn-orange drawer-btn">
+                        ↺ PEDESTAL LEFT (-45°)
+                    </button>
+                    <button id="drawerPedRightBtn" class="btn-action btn-orange drawer-btn">
+                        PEDESTAL RIGHT (+45°) ↻
+                    </button>
+
+                    <!-- Gantry Step Buttons -->
+                    <button id="drawerGantryStepLeftBtn" class="btn-action btn-cyan drawer-btn">
+                        ◀ GANTRY (-500 TICKS)
+                    </button>
+                    <button id="drawerGantryStepRightBtn" class="btn-action btn-cyan drawer-btn">
+                        GANTRY (+500 TICKS) ▶
+                    </button>
+
+                    <!-- Gantry Bounds / Center -->
+                    <div class="drawer-btn-triplet">
+                        <button id="drawerGantryMaxLeftBtn" class="btn-action btn-cyan drawer-btn-sm">
+                            ⏪ MAX LEFT
+                        </button>
+                        <button id="drawerGantryCenterBtn" class="btn-action btn-cyan drawer-btn-sm">
+                            ⏺ CENTER
+                        </button>
+                        <button id="drawerGantryMaxRightBtn" class="btn-action btn-cyan drawer-btn-sm">
+                            MAX RIGHT ⏩
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION B: TELEOP & CONTROLLER MODALITIES -->
+            <div class="drawer-section">
+                <div class="drawer-section-header">
+                    <span class="drawer-section-title">🎮 INPUT CONTROLLERS & TELEOPERATION</span>
+                    <div id="drawerTeleopStatus" class="drawer-readout" style="color:#00ff66;">DAEMON ACTIVE</div>
+                </div>
+
+                <div class="drawer-teleop-row">
+                    <button id="drawerLeaderBtn" class="btn-action drawer-teleop-btn">
+                        <span id="drawerLeaderIcon" style="font-size:22px;">🍎</span>
+                        <span id="drawerLeaderText">START LEADER</span>
+                    </button>
+                    <button id="drawerFollowerBtn" class="btn-action drawer-teleop-btn">
+                        <span id="drawerFollowerIcon" style="font-size:22px;">🦾</span>
+                        <span id="drawerFollowerText">START TELEOP</span>
+                    </button>
+                    <button id="drawerPokeballBtn" class="btn-action drawer-teleop-btn">
+                        <span id="drawerPokeballIcon" style="font-size:22px;">🔴</span>
+                        <span id="drawerPokeballText">POKÉBALL BLE</span>
+                    </button>
+                </div>
+
+                <!-- Pokéball Quick Telemetry Strip -->
+                <div id="drawerPbTelemetry" class="drawer-pb-box">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:11px; font-weight:800; color:#ff3344;">🔴 POKÉBALL TELEMETRY</span>
+                        <span id="drawerPbBadge" class="drawer-status-chip">DISCONNECTED</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-family:monospace; font-size:11px; margin-top:4px;">
+                        <span>Dir: <strong id="drawerPbDir" style="color:#ffaa00;">CENTER</strong></span>
+                        <span>Stick: <strong id="drawerPbJoy" style="color:#00e5ff;">--</strong></span>
+                        <span>Packets: <strong id="drawerPbPkts" style="color:#00ff66;">0</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
     <!-- Main ES Module Entry Point -->
-    <script type="module" src="./js/app.js?v=2.6"></script>
+    <script type="module" src="./js/app.js?v=2.7"></script>
 </body>
 </html>

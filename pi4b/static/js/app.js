@@ -935,6 +935,11 @@ export function pollTelemetry() {
             if (data) {
                 ui.updateTelemetryUI(data);
 
+                const amApps = (data.hardware_telemetry && data.hardware_telemetry.apps) || data.apps;
+                if (Array.isArray(amApps) && amApps.length > 0) {
+                    ui.renderDynamicAppLauncher(amApps, handleAppCardClick);
+                }
+
                 const lData = data.listener;
                 if (lData) {
                     const curState = lData.state;
@@ -984,12 +989,82 @@ export function pollTelemetry() {
         });
 }
 
-// ==========================================
-// DOM Event Listener Binding & Initialization
-// ==========================================
+export function handleAppCardClick(app) {
+    const name = (typeof app === 'string') ? app : (app && app.name ? app.name : '');
+    if (name === 'piranha_pose_app' || name === 'preset_app') {
+        ui.openAppsSubView('clacker');
+        if (currentAppsMode === 'presets') fetchPresetsList(true);
+    } else if (name === 'servo_studio_app' || name === 'servo_studio') {
+        ui.openAppsSubView('studio');
+    } else if (name === 'beat_bandit_app' || name === 'beat_bandit') {
+        ui.openAppsSubView('beat_bandit');
+        fetchBeatBanditTracks(undefined);
+    } else if (name === 'listener_app') {
+        ui.openAppsSubView('listener');
+    } else if (name === 'teleop_app') {
+        toggleFollower();
+    } else if (name === 'pokeball_teleop_app') {
+        togglePokeballTeleop();
+    } else if (name) {
+        if (app && app.is_running) {
+            api.sendAppStop(name).then(() => pollTelemetry()).catch(() => {});
+        } else {
+            api.sendAppStart(name).then(() => pollTelemetry()).catch(() => {});
+        }
+    }
+}
+window.__handleAppCardClick = handleAppCardClick;
 
 function bindEventListeners() {
-    // 1. Navigation Rail
+    // 1. Top Bar Navigation & Drawer
+    const homeBtn = document.getElementById('navHomeBtn');
+    if (homeBtn) {
+        homeBtn.addEventListener('click', () => {
+            ui.switchTab('apps');
+            ui.openAppsSubView('launcher');
+        });
+    }
+    const topPowerBtn = document.getElementById('topBtnPower');
+    if (topPowerBtn) {
+        topPowerBtn.addEventListener('click', () => ui.switchTab('power'));
+    }
+    const drawerToggleBtn = document.getElementById('drawerToggleBtn');
+    if (drawerToggleBtn) {
+        drawerToggleBtn.addEventListener('click', () => ui.toggleQuickControlDrawer());
+    }
+    const drawerCloseBtn = document.getElementById('drawerCloseBtn');
+    if (drawerCloseBtn) {
+        drawerCloseBtn.addEventListener('click', () => ui.toggleQuickControlDrawer(false));
+    }
+    const drawerBackdrop = document.getElementById('drawerBackdrop');
+    if (drawerBackdrop) {
+        drawerBackdrop.addEventListener('click', () => ui.toggleQuickControlDrawer(false));
+    }
+
+    // 2. Quick-Control Drawer Buttons
+    const dPedLeft = document.getElementById('drawerPedLeftBtn');
+    const dPedRight = document.getElementById('drawerPedRightBtn');
+    const dGStepLeft = document.getElementById('drawerGantryStepLeftBtn');
+    const dGStepRight = document.getElementById('drawerGantryStepRightBtn');
+    const dGMaxLeft = document.getElementById('drawerGantryMaxLeftBtn');
+    const dGCenter = document.getElementById('drawerGantryCenterBtn');
+    const dGMaxRight = document.getElementById('drawerGantryMaxRightBtn');
+    const dLeaderBtn = document.getElementById('drawerLeaderBtn');
+    const dFollowerBtn = document.getElementById('drawerFollowerBtn');
+    const dPokeballBtn = document.getElementById('drawerPokeballBtn');
+
+    if (dPedLeft) dPedLeft.addEventListener('click', () => rotatePedestal('left'));
+    if (dPedRight) dPedRight.addEventListener('click', () => rotatePedestal('right'));
+    if (dGStepLeft) dGStepLeft.addEventListener('click', () => nudgeSlider(-500));
+    if (dGStepRight) dGStepRight.addEventListener('click', () => nudgeSlider(500));
+    if (dGMaxLeft) dGMaxLeft.addEventListener('click', () => moveGantryMaxLeft());
+    if (dGCenter) dGCenter.addEventListener('click', () => moveGantryCenter());
+    if (dGMaxRight) dGMaxRight.addEventListener('click', () => moveGantryMaxRight());
+    if (dLeaderBtn) dLeaderBtn.addEventListener('click', () => toggleMacLeader());
+    if (dFollowerBtn) dFollowerBtn.addEventListener('click', () => toggleFollower());
+    if (dPokeballBtn) dPokeballBtn.addEventListener('click', () => togglePokeballTeleop());
+
+    // 3. Navigation Rail (Backward Compatibility)
     const railGantry = document.getElementById('railBtnGantry');
     const railControls = document.getElementById('railBtnControls');
     const railApps = document.getElementById('railBtnApps');
@@ -1003,7 +1078,7 @@ function bindEventListeners() {
     });
     if (railPower) railPower.addEventListener('click', () => ui.switchTab('power'));
 
-    // 2. Tab 1: Gantry & Pedestal
+    // 4. Tab 1: Gantry & Pedestal (Tab Mode)
     const pedLeft = document.getElementById('pedestalLeftBtn');
     const pedRight = document.getElementById('pedestalRightBtn');
     const gStepLeft = document.getElementById('gantryStepLeftBtn');
@@ -1020,7 +1095,7 @@ function bindEventListeners() {
     if (gCenter) gCenter.addEventListener('click', () => moveGantryCenter());
     if (gMaxRight) gMaxRight.addEventListener('click', () => moveGantryMaxRight());
 
-    // 3. Tab 2: Teleop Controllers
+    // 5. Tab 2: Teleop Controllers (Tab Mode)
     const leaderBtn = document.getElementById('leaderBtn');
     const followerBtn = document.getElementById('followerBtn');
     const pokeballBtn = document.getElementById('pokeballBtn');
@@ -1029,27 +1104,16 @@ function bindEventListeners() {
     if (followerBtn) followerBtn.addEventListener('click', () => toggleFollower());
     if (pokeballBtn) pokeballBtn.addEventListener('click', () => togglePokeballTeleop());
 
-    // 4. Tab 3: Robot Applications
-    // View A: Top-level Launcher
+    // 6. Tab 3: Dynamic & Static App Cards
     const launchClacker = document.getElementById('launchClackerBtn');
     const launchStudio = document.getElementById('launchStudioBtn');
     const launchBeatBandit = document.getElementById('launchBeatBanditBtn');
     const launchListener = document.getElementById('launchListenerBtn');
 
-    if (launchClacker) launchClacker.addEventListener('click', () => {
-        ui.openAppsSubView('clacker');
-        if (currentAppsMode === 'presets') fetchPresetsList(true);
-    });
-    if (launchStudio) launchStudio.addEventListener('click', () => {
-        ui.openAppsSubView('studio');
-    });
-    if (launchBeatBandit) launchBeatBandit.addEventListener('click', () => {
-        ui.openAppsSubView('beat_bandit');
-        fetchBeatBanditTracks(undefined);
-    });
-    if (launchListener) launchListener.addEventListener('click', () => {
-        ui.openAppsSubView('listener');
-    });
+    if (launchClacker) launchClacker.addEventListener('click', () => handleAppCardClick('piranha_pose_app'));
+    if (launchStudio) launchStudio.addEventListener('click', () => handleAppCardClick('servo_studio_app'));
+    if (launchBeatBandit) launchBeatBandit.addEventListener('click', () => handleAppCardClick('beat_bandit_app'));
+    if (launchListener) launchListener.addEventListener('click', () => handleAppCardClick('listener_app'));
 
     // View B: Piranha Pose Controls & Presets
     const clackPoseBtn = document.getElementById('clackPoseBtn');
@@ -2184,6 +2248,16 @@ function initApp() {
         if (!isNaN(savedBbPage)) setBeatBanditTrackPage(savedBbPage);
         ui.renderBeatBanditTracksList(cachedBeatBanditTracks);
     } catch(e) {}
+
+    // Dynamic App Catalog Discovery
+    api.fetchAppsListApi()
+        .then(r => r.json())
+        .then(d => {
+            if (d && Array.isArray(d.apps)) {
+                ui.renderDynamicAppLauncher(d.apps, handleAppCardClick);
+            }
+        })
+        .catch(() => {});
 
     // Start sequential telemetry loop
     pollTelemetry();
