@@ -5,7 +5,7 @@
   "arm_speed_sec": 0.6,
   "default_tab": "apps",
   "drawer_default_open": false,
-  "top_bar_height_px": 38,
+  "top_bar_height_px": 52,
   "launcher_mode": "carousel",
   "carousel_app_index": 0
 }

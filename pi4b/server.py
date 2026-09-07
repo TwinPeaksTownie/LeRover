@@ -1012,15 +1012,6 @@ def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         logging.info("Interrupted, shutting down servers...")
 
-    logging.info("Shutting down HTTP servers...")
-    try:
-        server_8082.shutdown()
-        server_8082.server_close()
-        server_8085.shutdown()
-        server_8085.server_close()
-    except Exception as e:
-        logging.warning(f"Error during server shutdown: {e}")
-
     stop_tap_detector()
 
     if GLOBAL_POKEBALL:
@@ -1035,6 +1026,15 @@ def main() -> None:
             GLOBAL_BACKEND.close()
         except Exception as e:
             logging.warning(f"Error disconnecting backend: {e}")
+
+    logging.info("Shutting down HTTP servers...")
+    try:
+        server_8082.shutdown()
+        server_8082.server_close()
+        server_8085.shutdown()
+        server_8085.server_close()
+    except Exception as e:
+        logging.warning(f"Error during server shutdown: {e}")
 
     logging.info("SO-101 Unified Service shutdown complete.")
 
