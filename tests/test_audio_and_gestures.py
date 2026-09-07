@@ -143,14 +143,14 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 mock_thread.return_value.start.assert_called_once()
 
     def test_gantry_up_plus_b_nudges_right(self):
-        """Tilting stick UP (norm_y > 0.35) and pressing Button B must dispatch /api/nudge_physical with direction='right'."""
+        """Tilting stick UP (norm_y < -0.35) and pressing Button B must dispatch /api/nudge_physical with direction='right'."""
         self.service.teleop_enabled = True
         self.service.is_armed = False
         self.service.zero_calibrated = True
         t0 = 500.0
 
-        # Simulate stick UP (raw_y = center_y + 1000) with Button B (0x01)
-        up_y = self.service.joystick_center_y + 1000
+        # Simulate stick UP (raw_y = center_y - 1000, physical forward) with Button B (0x01)
+        up_y = self.service.joystick_center_y - 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
                 self._simulate_input(buttons=0x01, now=t0, raw_y=up_y)
@@ -161,14 +161,14 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 )
 
     def test_gantry_down_plus_b_nudges_left(self):
-        """Tilting stick DOWN (norm_y < -0.35) and pressing Button B must dispatch /api/nudge_physical with direction='left'."""
+        """Tilting stick DOWN (norm_y > 0.35) and pressing Button B must dispatch /api/nudge_physical with direction='left'."""
         self.service.teleop_enabled = True
         self.service.is_armed = False
         self.service.zero_calibrated = True
         t0 = 600.0
 
-        # Simulate stick DOWN (raw_y = center_y - 1000) with Button B (0x01)
-        down_y = self.service.joystick_center_y - 1000
+        # Simulate stick DOWN (raw_y = center_y + 1000, physical back) with Button B (0x01)
+        down_y = self.service.joystick_center_y + 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
                 self._simulate_input(buttons=0x01, now=t0, raw_y=down_y)

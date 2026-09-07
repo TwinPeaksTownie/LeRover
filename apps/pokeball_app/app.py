@@ -364,9 +364,9 @@ class PokeballService:
             else:
                 x_direction = "center"
 
-            if norm_y > 0.35:
+            if norm_y < -0.35:
                 y_direction = "up"
-            elif norm_y < -0.35:
+            elif norm_y > 0.35:
                 y_direction = "down"
             else:
                 y_direction = "center"
