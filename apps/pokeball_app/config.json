@@ -16,7 +16,8 @@
   "control": {
     "deadzone": 0.15,
     "speed_scale": 1.0,
-    "poll_rate_hz": 50
+    "poll_rate_hz": 50,
+    "auto_zero_samples": 25
   },
   "gestures": {
     "chord_abort_sec": 1.0,
@@ -24,8 +25,7 @@
     "arm_drivetrain_sec": 2.0,
     "arm_lockout_sec": 4.25,
     "b_hold_sec": 3.0,
-    "a_hold_sec": 3.0,
-    "auto_arm_on_start": true
+    "a_hold_sec": 3.0
   },
   "chimes": {
     "app_start": "app_start",

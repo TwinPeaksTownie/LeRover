@@ -5,6 +5,7 @@ Manages serial communication with the Adafruit KB2040 safety bridge over GPIO UA
 Supports mock/simulated serial mode for local PC testing.
 """
 
+import json
 import logging
 import os
 import sys
@@ -26,6 +27,37 @@ except ImportError:
 logger = logging.getLogger("so101.rover_controller")
 
 
+def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Loads canonical rover drivetrain configuration fail-fast with direct bracket indexing."""
+    candidates = []
+    if config_path:
+        candidates.append(config_path)
+    if "ROVER_CONFIG_PATH" in os.environ and os.environ["ROVER_CONFIG_PATH"]:
+        candidates.append(os.environ["ROVER_CONFIG_PATH"])
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates.extend([
+        os.path.join(repo_root, "config", "rover_config.json"),
+        "/home/carson/touch_ui/config/rover_config.json",
+        "/home/carson/aux_servo_interface/config/rover_config.json",
+        "/home/user/so101/config/rover_config.json",
+    ])
+    for cp in candidates:
+        if os.path.exists(cp):
+            with open(cp, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            _ = cfg["pwm"]["neutral_pulse_us"]
+            _ = cfg["pwm"]["min_pulse_us"]
+            _ = cfg["pwm"]["max_pulse_us"]
+            _ = cfg["pwm"]["max_pulse_offset"]
+            _ = cfg["pwm"]["max_speed_pct"]
+            _ = cfg["control"]["accel_ramp_rate"]
+            _ = cfg["control"]["watchdog_timeout_sec"]
+            _ = cfg["control"]["steering_trim"]
+            _ = cfg["control"]["loop_rate_hz"]
+            return cfg
+    raise FileNotFoundError(f"Missing canonical rover_config.json in candidates: {candidates}")
+
+
 class RoverController:
     """Thread-safe controller for Overlander-4 PWM wheel motors via Adafruit KB2040."""
 
@@ -33,9 +65,7 @@ class RoverController:
         self,
         serial_port: Optional[str] = None,
         baudrate: Optional[int] = None,
-        max_pulse_offset: int = 175,
-        accel_ramp_rate: float = 0.20,
-        watchdog_timeout: float = 1.0,
+        config_path: Optional[str] = None,
         mock_mode: bool = False
     ) -> None:
         if serial_port is None:
@@ -47,11 +77,16 @@ class RoverController:
             self.baudrate = network_resolver.get_rover_baudrate()
         else:
             self.baudrate = baudrate
-        self.max_pulse_offset = max_pulse_offset  # +/- 175 us -> 1325 to 1675 us (smooth calibrated driving)
-        self.steering_trim: float = 0.0  # [-0.25..0.25] throttle-scaled steering bias
 
-        self.accel_ramp_rate = accel_ramp_rate
-        self.watchdog_timeout = watchdog_timeout
+        self.config = load_rover_config(config_path)
+        self.neutral_pulse_us = int(self.config["pwm"]["neutral_pulse_us"])
+        self.min_pulse_us = int(self.config["pwm"]["min_pulse_us"])
+        self.max_pulse_us = int(self.config["pwm"]["max_pulse_us"])
+        self.max_pulse_offset = int(self.config["pwm"]["max_pulse_offset"])
+        self.accel_ramp_rate = float(self.config["control"]["accel_ramp_rate"])
+        self.watchdog_timeout = float(self.config["control"]["watchdog_timeout_sec"])
+        self.steering_trim = float(self.config["control"]["steering_trim"])
+        self.loop_rate_hz = float(self.config["control"]["loop_rate_hz"])
         self.mock_mode = mock_mode
 
         # Enforce strict serial port presence when mock_mode is False (No silent auto-mock fallbacks)
@@ -68,18 +103,18 @@ class RoverController:
         self._last_drive_update: float = 0.0
         self._current_left_val: float = 0.0
         self._current_right_val: float = 0.0
-        self._slider_val: int = 1500
+        self._slider_val: int = self.neutral_pulse_us
         self._lights_pulse: int = 0
 
-        self._last_left_pulse: int = 1500
-        self._last_right_pulse: int = 1500
-        self._last_cmd_sent: str = "CMD:1500,1500,1500,0\n"
+        self._last_left_pulse: int = self.neutral_pulse_us
+        self._last_right_pulse: int = self.neutral_pulse_us
+        self._last_cmd_sent: str = f"CMD:{self.neutral_pulse_us},{self.neutral_pulse_us},{self.neutral_pulse_us},0\n"
 
         self.telemetry: Dict[str, Any] = {
             "mode": "MOCK" if self.mock_mode else "DISCONNECTED",
-            "left_out": 1500,
-            "right_out": 1500,
-            "steering_trim": 0.0,
+            "left_out": self.neutral_pulse_us,
+            "right_out": self.neutral_pulse_us,
+            "steering_trim": self.steering_trim,
             "sbus_active": 0,
             "web_active": 0,
             "ch1": 1000,
@@ -290,14 +325,14 @@ class RoverController:
             self._current_left_val += (target_left - self._current_left_val) * self.accel_ramp_rate
             self._current_right_val += (target_right - self._current_right_val) * self.accel_ramp_rate
 
-            # Map to 50Hz PWM pulse widths (1000 - 2000 us, neutral 1500 us)
+            # Map to 50Hz PWM pulse widths using calibrated neutral and limits from rover_config.json
             # Left motor physically inverted (lower pulse = forward, higher pulse = reverse)
             # Right motor normal (higher pulse = forward, lower pulse = reverse)
-            left_pulse = 1500 - int(self._current_left_val * self.max_pulse_offset)
-            right_pulse = 1500 + int(self._current_right_val * self.max_pulse_offset)
+            left_pulse = self.neutral_pulse_us - int(self._current_left_val * self.max_pulse_offset)
+            right_pulse = self.neutral_pulse_us + int(self._current_right_val * self.max_pulse_offset)
 
-            left_pulse = max(1000, min(2000, left_pulse))
-            right_pulse = max(1000, min(2000, right_pulse))
+            left_pulse = max(self.min_pulse_us, min(self.max_pulse_us, left_pulse))
+            right_pulse = max(self.min_pulse_us, min(self.max_pulse_us, right_pulse))
 
             cmd_str = f"CMD:{left_pulse},{right_pulse},{slider},{pulse}\n"
 
@@ -326,15 +361,16 @@ class RoverController:
                 except Exception:
                     pass
 
-            # Target ~25 Hz loop rate (40 ms cycle)
+            # Target loop rate from configuration
             elapsed = time.time() - loop_start
-            sleep_time = max(0.005, 0.040 - elapsed)
+            sleep_time = max(0.005, (1.0 / self.loop_rate_hz) - elapsed)
             time.sleep(sleep_time)
 
         if ser and ser.is_open:
             try:
                 # Send final neutral stop command
-                ser.write(b"CMD:1500,1500,1500,0\n")
+                neutral_cmd = f"CMD:{self.neutral_pulse_us},{self.neutral_pulse_us},{self.neutral_pulse_us},0\n"
+                ser.write(neutral_cmd.encode('utf-8'))
                 ser.close()
             except Exception:
                 pass

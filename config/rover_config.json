@@ -1,0 +1,15 @@
+{
+  "pwm": {
+    "neutral_pulse_us": 1500,
+    "min_pulse_us": 1000,
+    "max_pulse_us": 2000,
+    "max_pulse_offset": 175,
+    "max_speed_pct": 35
+  },
+  "control": {
+    "accel_ramp_rate": 0.20,
+    "watchdog_timeout_sec": 1.0,
+    "steering_trim": 0.0,
+    "loop_rate_hz": 25
+  }
+}

@@ -26,8 +26,9 @@ from typing import Optional, Dict, Any, Tuple
 # Ensure repo root and rover package are importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-if workspace_root not in sys.path:
-    sys.path.insert(0, workspace_root)
+for p in [workspace_root, os.path.join(workspace_root, "config")]:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.append(p)
 
 try:
     from rover.rover_controller import RoverController
@@ -65,13 +66,16 @@ def load_pokeball_config() -> dict:
     _ = cfg["ble"]["scan_timeout_sec"]
     _ = cfg["ble"]["reconnect_delay_sec"]
     _ = cfg["ble"]["telemetry_file"]
+    _ = cfg["control"]["deadzone"]
+    _ = cfg["control"]["speed_scale"]
+    _ = cfg["control"]["poll_rate_hz"]
+    _ = cfg["control"]["auto_zero_samples"]
     _ = cfg["gestures"]["chord_abort_sec"]
     _ = cfg["gestures"]["chord_click_suppress_sec"]
     _ = cfg["gestures"]["arm_drivetrain_sec"]
     _ = cfg["gestures"]["arm_lockout_sec"]
     _ = cfg["gestures"]["b_hold_sec"]
     _ = cfg["gestures"]["a_hold_sec"]
-    _ = cfg["gestures"]["auto_arm_on_start"]
     _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["ble_connect"]
     _ = cfg["chimes"]["ble_disconnect"]
@@ -203,6 +207,13 @@ class PokeballService:
         self.joystick_range_y = float(self.joystick_center_y)
         self.joystick_range = self.joystick_range_x
 
+        # Dynamic startup zero-point calibration state
+        self.auto_zero_samples = int(self.config["control"]["auto_zero_samples"])
+        self.calib_samples_x: list = []
+        self.calib_samples_y: list = []
+        self.zero_calibrated = False
+        self.deadzone = float(self.config["control"]["deadzone"])
+
         self.is_busy = False
         self.busy_until = 0.0
         self.chord_click_suppress_sec = float(self.config["gestures"]["chord_click_suppress_sec"])
@@ -294,21 +305,51 @@ class PokeballService:
                 return
 
             buttons = data[1]
+            btn_a = bool(buttons & 0x02)  # Button A (Stick Click)
+            btn_b = bool(buttons & 0x01)  # Button B (Top Red Button)
 
             # 12-Bit Joystick Decoding
             raw_x_12 = data[2] | ((data[3] & 0x0F) << 8)
             raw_y_12 = (data[3] >> 4) | (data[4] << 4)
 
+            # Dynamic startup auto-zero calibration:
+            # While uncalibrated and no buttons pressed, accumulate resting samples
+            if not self.zero_calibrated:
+                if not btn_a and not btn_b:
+                    if 1200 <= raw_x_12 <= 2800 and 1200 <= raw_y_12 <= 2800:
+                        self.calib_samples_x.append(raw_x_12)
+                        self.calib_samples_y.append(raw_y_12)
+                        if len(self.calib_samples_x) >= self.auto_zero_samples:
+                            self.joystick_center_x = int(sum(self.calib_samples_x) / len(self.calib_samples_x))
+                            self.joystick_center_y = int(sum(self.calib_samples_y) / len(self.calib_samples_y))
+                            self.joystick_range_x = float(self.joystick_center_x)
+                            self.joystick_range_y = float(self.joystick_center_y)
+                            self.zero_calibrated = True
+                            self.logger.info(
+                                "🎯 Dynamic Poké Ball Plus joystick zero calibrated: center_x=%d, center_y=%d (from %d samples)",
+                                self.joystick_center_x, self.joystick_center_y, self.auto_zero_samples
+                            )
+
             x_offset = raw_x_12 - self.joystick_center_x
             y_offset = raw_y_12 - self.joystick_center_y
 
-            norm_x = max(-1.0, min(1.0, x_offset / self.joystick_range_x))
-            norm_y = max(-1.0, min(1.0, y_offset / self.joystick_range_y))
+            raw_norm_x = max(-1.0, min(1.0, x_offset / self.joystick_range_x))
+            raw_norm_y = max(-1.0, min(1.0, y_offset / self.joystick_range_y))
 
-            if abs(norm_x) < 0.08:
+            # Linear deadband remapping using configured deadzone:
+            # If within deadzone: strictly 0.0
+            # If outside deadzone: scale smoothly from 0.0 at deadzone up to 1.0 at full deflection
+            if abs(raw_norm_x) <= self.deadzone:
                 norm_x = 0.0
-            if abs(norm_y) < 0.08:
+            else:
+                sign_x = 1.0 if raw_norm_x > 0 else -1.0
+                norm_x = sign_x * ((abs(raw_norm_x) - self.deadzone) / (1.0 - self.deadzone))
+
+            if abs(raw_norm_y) <= self.deadzone:
                 norm_y = 0.0
+            else:
+                sign_y = 1.0 if raw_norm_y > 0 else -1.0
+                norm_y = sign_y * ((abs(raw_norm_y) - self.deadzone) / (1.0 - self.deadzone))
 
             if norm_x < -0.35:
                 x_direction = "left"
@@ -316,9 +357,6 @@ class PokeballService:
                 x_direction = "right"
             else:
                 x_direction = "center"
-
-            btn_a = bool(buttons & 0x02)  # Button A (Stick Click)
-            btn_b = bool(buttons & 0x01)  # Button B (Top Red Button)
 
             now = time.time()
             chord_abort_sec = _CONFIG["gestures"]["chord_abort_sec"]
@@ -388,30 +426,25 @@ class PokeballService:
                 hold_duration_a = now - self.btn_a_press_start_time
 
                 # 3-second hold regardless of whether PokeballApp is started:
-                # Kills other apps, starts PokeballApp, and arms rover drivetrain immediately
+                # Kills other apps, starts PokeballApp, and arms rover drivetrain with countdown lockout
                 if hold_duration_a >= a_hold_sec and not self.a_hold_triggered:
                     self.a_hold_triggered = True
-                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Launching Poké Ball Teleop for rover control...", hold_duration_a)
+                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Arming Poké Ball Teleop with %.1fs countdown...", hold_duration_a, arm_lockout_sec)
+                    self.teleop_enabled = True
+                    self.is_armed = True
+                    self.arm_lockout_until = now + arm_lockout_sec
+                    if self.rover_ctrl:
+                        self.rover_ctrl.set_drive(0.0, 0.0)
+
                     if self.app_manager:
                         if self.app_manager.current_app_name != "pokeball_teleop_app":
                             def _launch_rover():
                                 self.logger.info("Terminating active app and launching pokeball_teleop_app...")
                                 self.app_manager.start_app_by_name("pokeball_teleop_app")
-                                self.teleop_enabled = True
-                                self.is_armed = True
-                                self.arm_lockout_until = 0.0
                             threading.Thread(target=_launch_rover, daemon=True).start()
                         else:
-                            self.teleop_enabled = True
-                            self.is_armed = True
-                            self.arm_lockout_until = 0.0
                             self.logger.info("PokeballApp already active; re-armed rover drivetrain.")
-                        play_chime(_CONFIG["chimes"]["arm_rover"])
-                    else:
-                        self.teleop_enabled = True
-                        self.is_armed = True
-                        self.arm_lockout_until = 0.0
-                        play_chime(_CONFIG["chimes"]["arm_rover"])
+                    play_chime(_CONFIG["chimes"]["arm_rover"])
             else:
                 self.btn_a_press_start_time = None
                 self.stick_press_start_time = None
@@ -604,9 +637,11 @@ class PokeballApp(BaseApp):
         self.pokeball_service = service
 
         service.teleop_enabled = True
-        auto_arm = bool(_CONFIG["gestures"]["auto_arm_on_start"])
-        service.is_armed = auto_arm
-        service.arm_lockout_until = 0.0
+        # If arming was triggered by the 3s hold before app started, retain is_armed and countdown!
+        # Otherwise, initialize strictly disarmed with 0.0 lockout
+        if not service.is_armed:
+            service.is_armed = False
+            service.arm_lockout_until = 0.0
 
         if self.rover_ctrl is None:
             if RoverController is None:
@@ -614,6 +649,7 @@ class PokeballApp(BaseApp):
             self.rover_ctrl = RoverController()
             self.rover_ctrl.start()
         service.rover_ctrl = self.rover_ctrl
+        self.rover_ctrl.set_drive(0.0, 0.0)
 
         self.logger.info(
             "PokeballApp enabled teleoperation on intrinsic PokeballService (Armed: %s).",
