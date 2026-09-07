@@ -718,16 +718,16 @@ class RobotBackend:
                     if hasattr(ph, "ser") and ph.ser:
                         try:
                             ph.ser.close()
-                        except Exception:
-                            pass
+                        except Exception as close_err:
+                            logging.debug("Port close exception during recovery: %s", close_err)
                     if hasattr(ph, "openPort"):
                         ph.openPort()
                     if hasattr(ph, "ser") and ph.ser:
                         try:
                             ph.ser.reset_input_buffer()
                             ph.ser.reset_output_buffer()
-                        except Exception:
-                            pass
+                        except Exception as flush_err:
+                            logging.debug("Buffer flush exception during recovery: %s", flush_err)
                 logging.info("Feetech serial bus handler recovered cleanly.")
                 return True
             except Exception as rec_err:
