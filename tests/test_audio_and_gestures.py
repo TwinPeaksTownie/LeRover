@@ -9,6 +9,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -141,12 +142,66 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 )
                 mock_thread.return_value.start.assert_called_once()
 
-    def _simulate_input(self, buttons: int, now: float):
+    def test_gantry_up_plus_b_nudges_right(self):
+        """Tilting stick UP (norm_y > 0.35) and pressing Button B must dispatch /api/nudge_physical with direction='right'."""
+        self.service.teleop_enabled = True
+        self.service.is_armed = False
+        self.service.zero_calibrated = True
+        t0 = 500.0
+
+        # Simulate stick UP (raw_y = center_y + 1000) with Button B (0x01)
+        up_y = self.service.joystick_center_y + 1000
+        with patch.object(self.service, "_send_aux_request") as mock_aux:
+            with patch("time.time", return_value=t0):
+                self._simulate_input(buttons=0x01, now=t0, raw_y=up_y)
+                mock_aux.assert_called_once_with(
+                    "/api/nudge_physical",
+                    {"id": 8, "direction": "right", "amount": self.service.gantry_step_ticks},
+                    lock_duration=self.service.aux_lock_duration_sec
+                )
+
+    def test_gantry_down_plus_b_nudges_left(self):
+        """Tilting stick DOWN (norm_y < -0.35) and pressing Button B must dispatch /api/nudge_physical with direction='left'."""
+        self.service.teleop_enabled = True
+        self.service.is_armed = False
+        self.service.zero_calibrated = True
+        t0 = 600.0
+
+        # Simulate stick DOWN (raw_y = center_y - 1000) with Button B (0x01)
+        down_y = self.service.joystick_center_y - 1000
+        with patch.object(self.service, "_send_aux_request") as mock_aux:
+            with patch("time.time", return_value=t0):
+                self._simulate_input(buttons=0x01, now=t0, raw_y=down_y)
+                mock_aux.assert_called_once_with(
+                    "/api/nudge_physical",
+                    {"id": 8, "direction": "left", "amount": self.service.gantry_step_ticks},
+                    lock_duration=self.service.aux_lock_duration_sec
+                )
+
+    def test_pedestal_left_right_plus_b(self):
+        """Tilting stick RIGHT (norm_x > 0.35) and pressing Button B must dispatch /api/pedestal_step with direction='right'."""
+        self.service.teleop_enabled = True
+        self.service.is_armed = False
+        self.service.zero_calibrated = True
+        t0 = 700.0
+
+        right_x = self.service.joystick_center_x + 1000
+        with patch.object(self.service, "_send_aux_request") as mock_aux:
+            with patch("time.time", return_value=t0):
+                self._simulate_input(buttons=0x01, now=t0, raw_x=right_x)
+                mock_aux.assert_called_once_with(
+                    "/api/pedestal_step",
+                    {"direction": "right"},
+                    lock_duration=self.service.aux_lock_duration_sec
+                )
+
+    def _simulate_input(self, buttons: int, now: float, raw_x: Optional[int] = None, raw_y: Optional[int] = None):
         """Dispatches synthetic BLE report directly into production PokeballService.notification_handler."""
-        center = self.service.joystick_center
-        b2 = center & 0xFF
-        b3 = ((center >> 8) & 0x0F) | ((center & 0x0F) << 4)
-        b4 = (center >> 4) & 0xFF
+        rx = self.service.joystick_center_x if raw_x is None else raw_x
+        ry = self.service.joystick_center_y if raw_y is None else raw_y
+        b2 = rx & 0xFF
+        b3 = ((rx >> 8) & 0x0F) | ((ry & 0x0F) << 4)
+        b4 = (ry >> 4) & 0xFF
         data = bytearray([0x00, buttons, b2, b3, b4])
         with patch("time.time", return_value=now):
             self.service.notification_handler(None, data)

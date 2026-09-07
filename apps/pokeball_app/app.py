@@ -70,6 +70,8 @@ def load_pokeball_config() -> dict:
     _ = cfg["control"]["speed_scale"]
     _ = cfg["control"]["poll_rate_hz"]
     _ = cfg["control"]["auto_zero_samples"]
+    _ = cfg["control"]["gantry_step_ticks"]
+    _ = cfg["control"]["aux_lock_duration_sec"]
     _ = cfg["gestures"]["chord_abort_sec"]
     _ = cfg["gestures"]["chord_click_suppress_sec"]
     _ = cfg["gestures"]["arm_drivetrain_sec"]
@@ -194,6 +196,7 @@ class PokeballService:
         self.teleop_enabled = False
         self.control_mode = "ROVER"
         self.is_armed = False
+        self.rover_ctrl: Optional[Any] = None
         self.arm_lockout_until = 0.0
         self.stick_press_start_time: Optional[float] = None
         self.btn_a_press_start_time: Optional[float] = None
@@ -221,8 +224,11 @@ class PokeballService:
         self.last_btn_top = False
         self.last_btn_stick = False
         self.last_x_direction = "center"
+        self.last_y_direction = "center"
         self.last_listener_nav_time = 0.0
         self.last_btn_a_listener = False
+        self.gantry_step_ticks = int(self.config["control"]["gantry_step_ticks"])
+        self.aux_lock_duration_sec = float(self.config["control"]["aux_lock_duration_sec"])
 
         self.telemetry = {
             "running": True,
@@ -358,6 +364,13 @@ class PokeballService:
             else:
                 x_direction = "center"
 
+            if norm_y > 0.35:
+                y_direction = "up"
+            elif norm_y < -0.35:
+                y_direction = "down"
+            else:
+                y_direction = "center"
+
             now = time.time()
             chord_abort_sec = _CONFIG["gestures"]["chord_abort_sec"]
             arm_drivetrain_sec = _CONFIG["gestures"]["arm_drivetrain_sec"]
@@ -459,9 +472,38 @@ class PokeballService:
                         self.rover_ctrl.set_drive(0.0, 0.0)
 
                 # Aux Manipulator (Gantry / Pedestal) gestures only when unarmed
-                if not self.is_armed and btn_b and not self.last_btn_top and x_direction in ("left", "right"):
-                    if not (self.is_busy or now < self.busy_until):
-                        self._send_aux_request("/api/pedestal_step", {"direction": x_direction}, lock_duration=0.6)
+                if not self.is_armed and btn_b:
+                    # Gantry gesture: Up / Down + B button
+                    # Up moves right / increases ticks towards 4800, Down moves left / decreases towards 3
+                    if y_direction in ("up", "down") and abs(norm_y) >= abs(norm_x):
+                        is_gantry_trigger = (not self.last_btn_top) or (self.last_y_direction == "center")
+                        if is_gantry_trigger and not (self.is_busy or now < self.busy_until):
+                            gantry_dir = "right" if y_direction == "up" else "left"
+                            self.logger.info(
+                                "🕹️ [GANTRY] Button B + %s detected -> Nudging Gantry %s (%d ticks)",
+                                y_direction.upper(), gantry_dir.upper(), self.gantry_step_ticks
+                            )
+                            self._send_aux_request(
+                                "/api/nudge_physical",
+                                {"id": 8, "direction": gantry_dir, "amount": self.gantry_step_ticks},
+                                lock_duration=self.aux_lock_duration_sec
+                            )
+                            self.btn_b_press_start_time = None
+
+                    # Pedestal gesture: Left / Right + B button
+                    elif x_direction in ("left", "right") and abs(norm_x) > abs(norm_y):
+                        is_pedestal_trigger = (not self.last_btn_top) or (self.last_x_direction == "center")
+                        if is_pedestal_trigger and not (self.is_busy or now < self.busy_until):
+                            self.logger.info(
+                                "🔄 [PEDESTAL] Button B + %s detected -> Stepping Pedestal Preset",
+                                x_direction.upper()
+                            )
+                            self._send_aux_request(
+                                "/api/pedestal_step",
+                                {"direction": x_direction},
+                                lock_duration=self.aux_lock_duration_sec
+                            )
+                            self.btn_b_press_start_time = None
 
             # --- 5. LISTENER APP NAVIGATION & SELECTION (When ListenerApp is Active & in SELECTING state) ---
             if self.app_manager and self.app_manager.current_app_name == "listener_app":
@@ -493,6 +535,7 @@ class PokeballService:
             self.last_btn_top = btn_b
             self.last_btn_stick = btn_a
             self.last_x_direction = x_direction
+            self.last_y_direction = y_direction
 
             self.telemetry.update({
                 "packet_count": self.counter,
@@ -501,6 +544,8 @@ class PokeballService:
                 "is_armed": self.is_armed,
                 "norm_x": round(norm_x, 3),
                 "norm_y": round(norm_y, 3),
+                "x_direction": x_direction,
+                "y_direction": y_direction,
                 "button_a": btn_a,
                 "button_b": btn_b,
                 "button_stick": btn_a,

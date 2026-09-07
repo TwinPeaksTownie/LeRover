@@ -17,7 +17,9 @@
     "deadzone": 0.15,
     "speed_scale": 1.0,
     "poll_rate_hz": 50,
-    "auto_zero_samples": 25
+    "auto_zero_samples": 25,
+    "gantry_step_ticks": 500,
+    "aux_lock_duration_sec": 0.6
   },
   "gestures": {
     "chord_abort_sec": 1.0,
