@@ -1143,6 +1143,10 @@ export function updateTelemetryUI(data) {
         setIsLeaderRunning(false);
         setIsPokeballRunning(false);
         setIsPokeballConnected(false);
+        const topVoskDot = document.getElementById('topVoskDot');
+        if (topVoskDot) topVoskDot.className = 'status-led led-red';
+        const topVoskLabel = document.getElementById('topVoskLabel');
+        if (topVoskLabel) topVoskLabel.style.color = '#888888';
         renderButtonStates();
         return;
     }
@@ -1465,9 +1469,17 @@ export function updateTelemetryUI(data) {
     }
 
     // Vosk Standby Health LED Indicator
+    const topVoskDot = document.getElementById('topVoskDot');
+    const topVoskLabel = document.getElementById('topVoskLabel');
     const railVoskDot = document.getElementById('railVoskDot');
     const listenerCardVoskDot = document.getElementById('listenerCardVoskDot');
     const isVoskReady = Boolean(data.vosk_ready);
+    if (topVoskDot) {
+        topVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
+    }
+    if (topVoskLabel) {
+        topVoskLabel.style.color = isVoskReady ? '#00ff66' : '#888888';
+    }
     if (railVoskDot) {
         railVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
         const label = document.getElementById('railVoskLabel');
