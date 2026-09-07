@@ -42,10 +42,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         }
     },
     "hardware": {
-        "serial_port": "/dev/ttyACM0",
+        "serial_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B41532189-if00",
         "baudrate": 1000000,
         "rover_serial_port": "/dev/serial/by-id/usb-Adafruit_KB2040_DF643CF013303739-if00",
-        "rover_baudrate": 115200
+        "rover_baudrate": 115200,
+        "serial_retry_attempts": 3,
+        "reconnect_timeout_sec": 1.5,
+        "bus_reconnect_max_attempts": 5,
+        "bus_reconnect_backoff_sec": 0.25
     },
     "direct_ethernet": {
         "pi500_ip": "10.0.0.1",
@@ -108,7 +112,7 @@ def validate_network_config(cfg: Dict[str, Any]) -> None:
             if sub_k not in cfg["endpoints"][k]:
                 raise KeyError(f"Missing required key 'endpoints.{k}.{sub_k}' in network configuration")
 
-    for k in ["serial_port", "baudrate", "rover_serial_port", "rover_baudrate"]:
+    for k in ["serial_port", "baudrate", "rover_serial_port", "rover_baudrate", "serial_retry_attempts", "reconnect_timeout_sec", "bus_reconnect_max_attempts", "bus_reconnect_backoff_sec"]:
         if k not in cfg["hardware"]:
             raise KeyError(f"Missing required key 'hardware.{k}' in network configuration")
 
@@ -395,6 +399,26 @@ def get_rover_serial_port() -> str:
 def get_rover_baudrate() -> int:
     cfg = load_network_config()
     return int(cfg["hardware"]["rover_baudrate"])
+
+
+def get_serial_retry_attempts() -> int:
+    cfg = load_network_config()
+    return int(cfg["hardware"]["serial_retry_attempts"])
+
+
+def get_reconnect_timeout_sec() -> float:
+    cfg = load_network_config()
+    return float(cfg["hardware"]["reconnect_timeout_sec"])
+
+
+def get_bus_reconnect_max_attempts() -> int:
+    cfg = load_network_config()
+    return int(cfg["hardware"]["bus_reconnect_max_attempts"])
+
+
+def get_bus_reconnect_backoff_sec() -> float:
+    cfg = load_network_config()
+    return float(cfg["hardware"]["bus_reconnect_backoff_sec"])
 
 
 def get_backend_host(prefer_port: Optional[int] = 8085) -> str:

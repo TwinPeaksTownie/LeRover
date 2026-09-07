@@ -11,5 +11,11 @@
     "watchdog_timeout_sec": 1.0,
     "steering_trim": 0.0,
     "loop_rate_hz": 25
+  },
+  "hardware_interface": {
+    "assert_dtr": false,
+    "assert_rts": false,
+    "serial_timeout_sec": 0.01,
+    "write_timeout_sec": 1.0
   }
 }

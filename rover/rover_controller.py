@@ -87,6 +87,10 @@ class RoverController:
         self.watchdog_timeout = float(self.config["control"]["watchdog_timeout_sec"])
         self.steering_trim = float(self.config["control"]["steering_trim"])
         self.loop_rate_hz = float(self.config["control"]["loop_rate_hz"])
+        self.assert_dtr = bool(self.config["hardware_interface"]["assert_dtr"])
+        self.assert_rts = bool(self.config["hardware_interface"]["assert_rts"])
+        self.serial_timeout = float(self.config["hardware_interface"]["serial_timeout_sec"])
+        self.write_timeout = float(self.config["hardware_interface"]["write_timeout_sec"])
         self.mock_mode = mock_mode
 
         # Enforce strict serial port presence when mock_mode is False (No silent auto-mock fallbacks)
@@ -253,9 +257,9 @@ class RoverController:
             if not self.mock_mode and ser is None:
                 try:
                     import serial
-                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=0.01, write_timeout=1.0)
-                    ser.dtr = True
-                    ser.rts = True
+                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=self.serial_timeout, write_timeout=self.write_timeout)
+                    ser.dtr = self.assert_dtr
+                    ser.rts = self.assert_rts
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)

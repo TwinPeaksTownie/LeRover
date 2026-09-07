@@ -30,7 +30,11 @@
     "serial_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B41532189-if00",
     "rover_serial_port": "/dev/serial/by-id/usb-Adafruit_KB2040_DF643CF013303739-if00",
     "baudrate": 1000000,
-    "rover_baudrate": 115200
+    "rover_baudrate": 115200,
+    "serial_retry_attempts": 3,
+    "reconnect_timeout_sec": 1.5,
+    "bus_reconnect_max_attempts": 5,
+    "bus_reconnect_backoff_sec": 0.25
   },
   "direct_ethernet": {
     "pi500_ip": "10.0.0.1",

@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 sys.path.append(str(Path.home() / "so101"))
 
+import network_resolver
+
 try:
     from lerobot.motors import Motor, MotorCalibration, MotorNormMode
     from lerobot.motors.feetech import FeetechMotorsBus
@@ -144,8 +146,11 @@ def make_bus(port: str, calibration: dict[str, MotorCalibration]) -> FeetechMoto
 class RobotBackend:
     """Authoritative hardware abstraction layer for SO-101 arm (1-6) and Aux servos (7-8)."""
 
-    def __init__(self, port: str = "/dev/ttyACM0", robot_id: str = "follower") -> None:
-        self.port = port
+    def __init__(self, port: Optional[str] = None, robot_id: str = "follower") -> None:
+        if port is None:
+            self.port = network_resolver.get_hardware_serial_port()
+        else:
+            self.port = port
         self.robot_id = robot_id
         self.lock = threading.RLock()
         self.ctrl: Optional[AuxiliaryServoController] = None
@@ -303,12 +308,15 @@ class RobotBackend:
         )
         self.arm_calibration = load_calibration(calib_fpath)
 
-        for attempt in range(5):
+        max_attempts = network_resolver.get_bus_reconnect_max_attempts()
+        backoff_sec = network_resolver.get_bus_reconnect_backoff_sec()
+
+        for attempt in range(max_attempts):
             try:
                 self.bus = make_bus(self.port, self.arm_calibration)
                 with SERIAL_LOCK:
                     self.bus.connect()
-                    time.sleep(0.2)
+                    time.sleep(backoff_sec)
                     ser = None
                     if hasattr(self.bus, "port_handler"):
                         ph = self.bus.port_handler
@@ -324,11 +332,11 @@ class RobotBackend:
                 break
             except Exception as e:
                 logging.warning("Arm connection attempt %d warning: %s", attempt + 1, e)
-                time.sleep(0.3 * (attempt + 1))
+                time.sleep(backoff_sec * (attempt + 1))
 
         if not self.hardware_active:
-            logging.warning("Arm motor connection failed after 5 attempts; flagging bus fault state.")
-            self.error_msg = "Arm motors offline after 5 connection retries"
+            logging.warning("Arm motor connection failed after %d attempts; flagging bus fault state.", max_attempts)
+            self.error_msg = f"Arm motors offline after {max_attempts} connection retries"
 
         try:
             ser_handle = None
@@ -698,11 +706,40 @@ class RobotBackend:
         with self.lock:
             return {sid: self.servos[sid]["raw"] for sid in range(1, 7) if self.servos[sid]["raw"] is not None}
 
+    def _recover_serial_bus(self) -> bool:
+        """Recovers Feetech serial port from EIO / Port is in use states."""
+        with SERIAL_LOCK:
+            if not self.bus:
+                return False
+            try:
+                if hasattr(self.bus, "port_handler") and self.bus.port_handler:
+                    ph = self.bus.port_handler
+                    ph.is_using = False
+                    if hasattr(ph, "ser") and ph.ser:
+                        try:
+                            ph.ser.close()
+                        except Exception:
+                            pass
+                    if hasattr(ph, "openPort"):
+                        ph.openPort()
+                    if hasattr(ph, "ser") and ph.ser:
+                        try:
+                            ph.ser.reset_input_buffer()
+                            ph.ser.reset_output_buffer()
+                        except Exception:
+                            pass
+                logging.info("Feetech serial bus handler recovered cleanly.")
+                return True
+            except Exception as rec_err:
+                logging.warning("Serial bus recovery failed: %s", rec_err)
+                return False
+
     def set_arm_torque(self, enable: bool) -> bool:
         """Cleanly enables or disables torque on Arm Servos 1-6 using normalized positions."""
         with SERIAL_LOCK:
             if not self.bus:
                 return False
+            num_retry = network_resolver.get_serial_retry_attempts()
             if enable:
                 ser = None
                 if hasattr(self.bus, "port_handler"):
@@ -710,7 +747,10 @@ class RobotBackend:
                     if hasattr(ph, "ser"):
                         ser = ph.ser
                 if ser and hasattr(ser, "reset_input_buffer"):
-                    ser.reset_input_buffer()
+                    try:
+                        ser.reset_input_buffer()
+                    except Exception as e:
+                        logging.warning("reset_input_buffer warning: %s", e)
                 # Read current normalized positions to sync goals prior to torque enable
                 current_norm = self.bus.sync_read("Present_Position")
                 if current_norm and hasattr(self.bus, "sync_write"):
@@ -719,15 +759,32 @@ class RobotBackend:
                     except Exception as e:
                         logging.warning("sync_write Goal_Position warning: %s", e)
                 if hasattr(self.bus, "enable_torque"):
-                    self.bus.enable_torque(num_retry=2)
+                    try:
+                        self.bus.enable_torque(num_retry=num_retry)
+                    except Exception as e:
+                        logging.warning("enable_torque encountered error (%s); attempting port recovery...", e)
+                        self._recover_serial_bus()
+                        try:
+                            self.bus.enable_torque(num_retry=num_retry)
+                        except Exception as err2:
+                            logging.error("enable_torque recovery attempt failed: %s", err2)
                 with self.lock:
                     for sid in range(1, 7):
                         self.servos[sid]["torque"] = True
                     self.follower_active = True
                 logging.info("Arm torque re-engaged on Servos 1-6 (holding current pose).")
             else:
-                if hasattr(self.bus, "disable_torque"):
-                    self.bus.disable_torque(num_retry=2)
+                try:
+                    if hasattr(self.bus, "disable_torque"):
+                        self.bus.disable_torque(num_retry=num_retry)
+                except Exception as e:
+                    logging.warning("disable_torque encountered serial error (%s); attempting port recovery...", e)
+                    self._recover_serial_bus()
+                    try:
+                        if hasattr(self.bus, "disable_torque"):
+                            self.bus.disable_torque(num_retry=num_retry)
+                    except Exception as err2:
+                        logging.error("disable_torque recovery attempt failed: %s", err2)
                 with self.lock:
                     for sid in range(1, 7):
                         self.servos[sid]["torque"] = False
