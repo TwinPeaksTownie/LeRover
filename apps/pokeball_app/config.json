@@ -8,7 +8,7 @@
   "ble": {
     "mac_address": "58:2F:40:8D:50:71",
     "input_uuid": "6675e16c-f36d-4567-bb55-6b51e27a23e6",
-    "packet_timeout_sec": 1.25,
+    "packet_timeout_sec": 5.0,
     "scan_timeout_sec": 4.0,
     "reconnect_delay_sec": 0.5,
     "telemetry_file": "/tmp/pokeball_telemetry.json"
@@ -25,7 +25,7 @@
     "chord_abort_sec": 1.0,
     "chord_click_suppress_sec": 1.0,
     "arm_drivetrain_sec": 2.0,
-    "arm_lockout_sec": 4.25,
+    "arm_lockout_sec": 0.5,
     "b_hold_sec": 3.0,
     "a_hold_sec": 3.0
   },
