@@ -409,7 +409,7 @@ class ListenerApp(BaseApp):
         self._play_chime("cancel")
 
     def _get_pi4b_url(self) -> str:
-        ip = network_resolver.get_pi4b_ip(prefer_port=self.config["network"]["pi4b_port"])
+        pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=self.config["network"]["pi4b_port"])
         return f"http://{pi4b_ip}:{self.config['network']['pi4b_port']}"
 
     def _play_chime(self, chime_key: str) -> None:
@@ -876,10 +876,27 @@ class ListenerApp(BaseApp):
                         if stop_event.is_set():
                             break
 
-                    # Continuous listening: return to LISTENING state and await next voice command
+                    # Continuous listening: cycle stream to flush buffered motor/chime noise and await next command
+                    if self._stream_resp is not None:
+                        try:
+                            self._stream_resp.close()
+                        except (OSError, ValueError) as close_err:
+                            self.logger.debug("Closing stream after command turn: %s", close_err)
+                        self._stream_resp = None
+
+                    pre_roll_buffer.clear()
+
                     with self._selection_lock:
                         if self.state not in ("SELECTING", "ANALYZING"):
                             self.state = "LISTENING"
+
+                    if not stop_event.is_set():
+                        try:
+                            self._stream_resp = self._connect_daemon_audio_stream()
+                            self.logger.info("Re-opened clean daemon audio stream for next listening turn.")
+                        except Exception as rec_err:
+                            self.logger.warning("Could not re-open daemon audio stream: %s", rec_err)
+
                     self.logger.info("Command turn completed. ListenerApp remaining active in LISTENING state.")
 
         except Exception as e:

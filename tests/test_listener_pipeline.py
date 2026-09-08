@@ -349,7 +349,7 @@ class TestListenerPipeline(unittest.TestCase):
             t5 = find_beat_bandit_track("Nonexistent Song 12345", manifest_path=tf_path)
             self.assertIsNone(t5)
 
-            # 6. Corrupt manifest key raises KeyError (fail-fast)
+            # 8. Corrupt manifest key raises KeyError (fail-fast)
             bad_manifest = {"bad": {"title": "No track ID"}}
             with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as btf:
                 json.dump(bad_manifest, btf)
@@ -361,6 +361,20 @@ class TestListenerPipeline(unittest.TestCase):
                 btf_path.unlink(missing_ok=True)
         finally:
             tf_path.unlink(missing_ok=True)
+
+    def test_endpoint_urls_resolution(self):
+        app = ListenerApp(running_on_pi=False)
+        pi4b_url = app._get_pi4b_url()
+        self.assertTrue(pi4b_url.startswith("http://"))
+        self.assertIn(str(app.config["network"]["pi4b_port"]), pi4b_url)
+
+        health_url, ws_url, recognize_url = app._get_vosk_urls()
+        self.assertTrue(health_url.startswith("http://"))
+        self.assertTrue(ws_url.startswith("ws://"))
+        self.assertTrue(recognize_url.startswith("http://"))
+        self.assertIn(str(app.config["network"]["vosk_server_port"]), health_url)
+        self.assertIn(str(app.config["network"]["vosk_websocket_port"]), ws_url)
+        self.assertIn(str(app.config["network"]["vosk_server_port"]), recognize_url)
 
 
 if __name__ == "__main__":
