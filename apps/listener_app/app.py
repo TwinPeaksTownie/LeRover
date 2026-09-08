@@ -84,6 +84,9 @@ def load_listener_config() -> Dict[str, Any]:
     settle_sec = float(cfg["vad"]["settle_delay_sec"])
     if settle_sec <= 0:
         raise ValueError("settle_delay_sec must be positive")
+    post_settle_sec = float(cfg["vad"]["post_chime_settle_sec"])
+    if post_settle_sec <= 0:
+        raise ValueError("post_chime_settle_sec must be positive")
     _ = float(cfg["vad"]["silence_timeout_sec"])
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
@@ -698,6 +701,18 @@ class ListenerApp(BaseApp):
                         if (now - last_voice_time) > silence_timeout or (now - record_start) > max_record_sec:
                             break
 
+                    if stop_event.is_set():
+                        self.logger.info("Stop event signaled during speech capture. Aborting turn...")
+                        stop_rx.set()
+                        if rx_thread is not None:
+                            rx_thread.join(timeout=0.2)
+                        if ws_client is not None:
+                            try:
+                                ws_client.close()
+                            except Exception:
+                                pass
+                        break
+
                     self.state = "PROCESSING"
                     self._play_chime("commit")
                     pre_roll_buffer.clear()
@@ -890,6 +905,12 @@ class ListenerApp(BaseApp):
                         if self.state not in ("SELECTING", "ANALYZING"):
                             self.state = "LISTENING"
 
+                    post_settle_sec = float(self.config["vad"]["post_chime_settle_sec"])
+                    self.logger.info("Awaiting %.1fs post-turn acoustic cooldown...", post_settle_sec)
+                    if stop_event.wait(timeout=post_settle_sec):
+                        self.logger.info("Stop event signaled during post-turn acoustic cooldown. Exiting...")
+                        break
+
                     if not stop_event.is_set():
                         try:
                             self._stream_resp = self._connect_daemon_audio_stream()
@@ -919,6 +940,17 @@ class ListenerApp(BaseApp):
         self.stop_event.set()
         if self._stream_resp is not None:
             try:
+                sock_fp = getattr(self._stream_resp, "fp", None)
+                if sock_fp is not None:
+                    raw_sock = getattr(sock_fp, "raw", None)
+                    if raw_sock is not None:
+                        sock_obj = getattr(raw_sock, "_sock", None)
+                        if sock_obj is not None:
+                            try:
+                                import socket
+                                sock_obj.shutdown(socket.SHUT_RDWR)
+                            except Exception:
+                                pass
                 self._stream_resp.close()
             except Exception as e:
                 self.logger.debug("Error closing stream on stop: %s", e)

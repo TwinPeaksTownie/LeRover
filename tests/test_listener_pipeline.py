@@ -206,9 +206,12 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
         self.assertEqual(cfg["vad"]["settle_delay_sec"], 2.5)
+        self.assertEqual(cfg["vad"]["post_chime_settle_sec"], 1.5)
+        self.assertEqual(cfg["vad"]["energy_threshold"], 450)
         self.assertEqual(cfg["vad"]["pre_roll_chunks"], 15)
         self.assertEqual(cfg["vad"]["fuzzy_match_threshold"], 0.55)
         self.assertGreater(cfg["vad"]["settle_delay_sec"], 0)
+        self.assertGreater(cfg["vad"]["post_chime_settle_sec"], 0)
         self.assertEqual(cfg["motion"]["interpolation_duration_sec"], 1.2)
         self.assertEqual(cfg["motion"]["interpolation_steps"], 35)
         self.assertEqual(cfg["motion"]["dead_posture"], "arch")
@@ -222,10 +225,24 @@ class TestListenerPipeline(unittest.TestCase):
             with self.assertRaises(KeyError):
                 load_listener_config()
 
+        # Missing post_chime_settle_sec raises KeyError
+        bad_cfg_missing_post = copy.deepcopy(cfg)
+        del bad_cfg_missing_post["vad"]["post_chime_settle_sec"]
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_missing_post))):
+            with self.assertRaises(KeyError):
+                load_listener_config()
+
         # Non-positive settle_delay_sec raises ValueError
         bad_cfg_zero = copy.deepcopy(cfg)
         bad_cfg_zero["vad"]["settle_delay_sec"] = 0.0
         with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_zero))):
+            with self.assertRaises(ValueError):
+                load_listener_config()
+
+        # Non-positive post_chime_settle_sec raises ValueError
+        bad_cfg_post_zero = copy.deepcopy(cfg)
+        bad_cfg_post_zero["vad"]["post_chime_settle_sec"] = 0.0
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_post_zero))):
             with self.assertRaises(ValueError):
                 load_listener_config()
 
