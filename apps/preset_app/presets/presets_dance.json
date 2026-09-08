@@ -1,6 +1,14 @@
 {
   "stand": {
     "timestamp": 1787854607.0,
+    "normalized": {
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 26.0,
+      "elbow_flex": 46.0,
+      "wrist_flex": 70.0,
+      "wrist_roll": 50.0,
+      "gripper": 0.0
+    },
     "rom_pct": {
       "shoulder_pan": 50.0,
       "shoulder_lift": 26.0,
@@ -24,6 +32,14 @@
   },
   "squat": {
     "timestamp": 1787821625.8206272,
+    "normalized": {
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 4.0,
+      "elbow_flex": 69.0,
+      "wrist_flex": 70.0,
+      "wrist_roll": 50.0,
+      "gripper": 0.0
+    },
     "rom_pct": {
       "shoulder_pan": 50.0,
       "shoulder_lift": 4.0,
@@ -47,6 +63,14 @@
   },
   "tiptoe": {
     "timestamp": 1787854668.0,
+    "normalized": {
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 43.0,
+      "elbow_flex": 19.0,
+      "wrist_flex": 70.0,
+      "wrist_roll": 50.0,
+      "gripper": 0.0
+    },
     "rom_pct": {
       "shoulder_pan": 50.0,
       "shoulder_lift": 43.0,
@@ -70,6 +94,14 @@
   },
   "arch": {
     "timestamp": 1787854700.0,
+    "normalized": {
+      "shoulder_pan": 50.0,
+      "shoulder_lift": 10.0,
+      "elbow_flex": 20.0,
+      "wrist_flex": 50.0,
+      "wrist_roll": 50.0,
+      "gripper": 0.0
+    },
     "rom_pct": {
       "shoulder_pan": 50.0,
       "shoulder_lift": 10.0,

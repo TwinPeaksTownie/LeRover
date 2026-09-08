@@ -726,6 +726,15 @@ export function commitOfficialPreset() {
 }
 
 export function armResumePose() {
+    const appsStatus = document.getElementById('appsStatus');
+    if (!isClackPoseRunning) {
+        if (appsStatus) {
+            appsStatus.innerText = '⚠️ START PIRANHA POSE FIRST';
+            appsStatus.style.color = '#ffaa00';
+        }
+        api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
+        return;
+    }
     const dur = currentConfig.arm_speed_sec || 1.0;
     api.sendArmResumePose(dur, currentPresetMode).catch(() => {});
 }
@@ -758,6 +767,14 @@ export function triggerOverwritePreset(presetName, label) {
 
 export function triggerSequenceAction() {
     const appsStatus = document.getElementById('appsStatus');
+    if (!isClackPoseRunning) {
+        if (appsStatus) {
+            appsStatus.innerText = '⚠️ START PIRANHA POSE FIRST';
+            appsStatus.style.color = '#ffaa00';
+        }
+        api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
+        return;
+    }
     if (currentPresetMode === 'demo') {
         if (appsStatus) {
             appsStatus.innerText = '☠️ EXECUTING 4-CLICK ATTACK DEMO...';
@@ -779,13 +796,26 @@ export function triggerMoveToPreset(presetName, label) {
         return;
     }
     const appsStatus = document.getElementById('appsStatus');
+    if (!isClackPoseRunning) {
+        if (appsStatus) {
+            appsStatus.innerText = '⚠️ START PIRANHA POSE FIRST';
+            appsStatus.style.color = '#ffaa00';
+        }
+        api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
+        return;
+    }
     if (appsStatus) {
         appsStatus.innerText = `MOVING TO ${label}...`;
         appsStatus.style.color = '#00ff66';
     }
     const dur = currentConfig.arm_speed_sec || 1.0;
     api.sendArmMoveToPreset(presetName, dur, currentPresetMode)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) {
+                throw new Error(`HTTP ${r.status}`);
+            }
+            return r.json();
+        })
         .then(() => {
             setTimeout(() => {
                 if (appsStatus) {

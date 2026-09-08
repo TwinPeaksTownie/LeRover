@@ -5,6 +5,7 @@
   "version": "2.0.0",
   "modes": ["normal", "demo", "angry", "dance"],
   "default_mode": "normal",
+  "require_active_app_for_motion": true,
   "icon": "🪴",
   "tags": ["teaching", "pose", "sequence", "audio", "so101"],
   "chimes": {

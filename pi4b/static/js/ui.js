@@ -171,6 +171,18 @@ export function renderButtonStates() {
         clackPoseBadge.style.background = isClackPoseRunning ? '#113311' : '#222222';
     }
 
+    // Sequence Play Button gating in View B
+    const seqPlayBtn = document.getElementById('seqPlayBtn');
+    if (seqPlayBtn) {
+        if (isClackPoseRunning) {
+            seqPlayBtn.style.opacity = '1.0';
+            seqPlayBtn.style.filter = 'none';
+        } else {
+            seqPlayBtn.style.opacity = '0.55';
+            seqPlayBtn.style.filter = 'grayscale(0.4)';
+        }
+    }
+
     // Beat Bandit App Toggle button
     const bbAppToggleBtn = document.getElementById('bbAppToggleBtn');
     const bbAppToggleBtnText = document.getElementById('bbAppToggleBtnText');
@@ -1038,9 +1050,10 @@ export function renderPresetsGrid() {
     const slots = getModeSlots(currentPresetMode, presets);
 
     let html = '';
-    const btnBg = isOverwriteModeActive ? '#4a1500' : '#0066cc';
-    const btnBorder = isOverwriteModeActive ? '#ff5500' : '#3399ff';
-    const btnColor = isOverwriteModeActive ? '#ffaa00' : '#ffffff';
+    const btnBg = isOverwriteModeActive ? '#4a1500' : (isClackPoseRunning ? '#0066cc' : '#1e3f66');
+    const btnBorder = isOverwriteModeActive ? '#ff5500' : (isClackPoseRunning ? '#3399ff' : '#2a5a88');
+    const btnColor = isOverwriteModeActive ? '#ffaa00' : (isClackPoseRunning ? '#ffffff' : '#a0c4e8');
+    const btnOpacity = isClackPoseRunning || isOverwriteModeActive ? '1.0' : '0.65';
 
     if (currentPresetsPage === 1) {
         slots.forEach(slot => {
@@ -1048,7 +1061,7 @@ export function renderPresetsGrid() {
             const displayLabel = isOverwriteModeActive ? `✏️ ${slot.label}` : slot.label;
             const fSize = slot.label.length > 3 ? '13px' : '22px';
             if (isSaved) {
-                html += `<button class="btn-action preset-slot-btn" data-preset="${slot.key}" data-label="${slot.label}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:pointer; padding:2px;">${displayLabel}</button>`;
+                html += `<button class="btn-action preset-slot-btn" data-preset="${slot.key}" data-label="${slot.label}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; opacity:${btnOpacity}; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:pointer; padding:2px;">${displayLabel}</button>`;
             } else if (isOverwriteModeActive) {
                 html += `<button class="btn-action preset-slot-btn" data-preset="${slot.key}" data-label="${slot.label}" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:${fSize}; font-weight:900; border-radius:8px; cursor:pointer; padding:2px;">+ ${slot.label}</button>`;
             } else {
@@ -1080,7 +1093,7 @@ export function renderPresetsGrid() {
             const label = `${num}`;
             const displayLabel = isOverwriteModeActive ? `✏️ ${label}` : label;
             if (isSaved) {
-                html += `<button class="btn-action preset-slot-btn" data-preset="${key}" data-label="${label}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">${displayLabel}</button>`;
+                html += `<button class="btn-action preset-slot-btn" data-preset="${key}" data-label="${label}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; opacity:${btnOpacity}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">${displayLabel}</button>`;
             } else if (isOverwriteModeActive) {
                 html += `<button class="btn-action preset-slot-btn" data-preset="${key}" data-label="${label}" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;">+${label}</button>`;
             } else {
@@ -1096,7 +1109,7 @@ export function renderPresetsGrid() {
         const label10 = `${num10}`;
         const displayLabel10 = isOverwriteModeActive ? `✏️ ${label10}` : label10;
         if (isSaved10) {
-            html += `<button class="btn-action preset-slot-btn" data-preset="${key10}" data-label="${label10}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">${displayLabel10}</button>`;
+            html += `<button class="btn-action preset-slot-btn" data-preset="${key10}" data-label="${label10}" style="background:${btnBg}; border:2.5px solid ${btnBorder}; color:${btnColor}; opacity:${btnOpacity}; font-size:22px; font-weight:900; border-radius:8px; cursor:pointer;">${displayLabel10}</button>`;
         } else if (isOverwriteModeActive) {
             html += `<button class="btn-action preset-slot-btn" data-preset="${key10}" data-label="${label10}" style="background:#2a1000; border:2px dashed #aa4400; color:#ff8833; font-size:18px; font-weight:900; border-radius:8px; cursor:pointer;">+${label10}</button>`;
         } else {

@@ -18,9 +18,20 @@ from typing import Optional, Dict, Any
 
 from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7, pct_to_ticks_s7, ticks_to_pct_s7
 from app_manager import AppManager
-from teleop_control_loop import TeleopControlApp
-from servo_studio_app import ServoStudioApp
-from pokeball_app import PokeballApp
+try:
+    from teleop_control_loop import TeleopControlApp
+except ImportError:
+    from apps.teleop_app.app import TeleopControlApp
+
+try:
+    from servo_studio_app import ServoStudioApp
+except ImportError:
+    from apps.servo_studio.app import ServoStudioApp
+
+try:
+    from pokeball_app import PokeballApp
+except ImportError:
+    from apps.pokeball_app.app import PokeballApp
 import threading
 
 try:
@@ -1068,13 +1079,19 @@ class MasterApiHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/arm/resume_last_pose":
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
+            preset_app = self.get_preset_app()
+            if preset_app.config["require_active_app_for_motion"]:
+                if not self.app_manager or self.app_manager.current_app_name not in ["piranha_pose_app", "clack_pose_app"]:
+                    return self._send_json({
+                        "status": "error",
+                        "message": "Piranha Pose app is not running. Tap START PIRANHA POSE before commanding motion."
+                    }, 409)
             duration = 1.0
             if "duration" in body:
                 duration = float(body["duration"])
             mode = "normal"
             if "mode" in body:
                 mode = str(body["mode"])
-            preset_app = self.get_preset_app()
             ok, msg = preset_app.resume_last_arm_pose(self.backend, duration=duration, mode=mode)
             self._send_json({"status": "ok" if ok else "error", "message": msg}, 200 if ok else 400)
 
@@ -1083,6 +1100,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 return self._send_json({"error": "Backend uninitialized"}, 500)
             if "name" not in body or not body["name"]:
                 return self._send_json({"status": "error", "message": "Missing required 'name' parameter"}, 400)
+            preset_app = self.get_preset_app()
+            if preset_app.config["require_active_app_for_motion"]:
+                if not self.app_manager or self.app_manager.current_app_name not in ["piranha_pose_app", "clack_pose_app"]:
+                    return self._send_json({
+                        "status": "error",
+                        "message": "Piranha Pose app is not running. Tap START PIRANHA POSE before commanding motion."
+                    }, 409)
             preset_name = str(body["name"])
             duration = 1.0
             if "duration" in body:
@@ -1090,7 +1114,6 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             mode = "normal"
             if "mode" in body:
                 mode = str(body["mode"])
-            preset_app = self.get_preset_app()
             ok, msg = preset_app.move_to_specific_arm_preset(self.backend, preset_name=preset_name, duration=duration, mode=mode)
             self._send_json({"status": "ok" if ok else "error", "name": preset_name, "mode": mode, "message": msg}, 200 if ok else 400)
 
@@ -1116,6 +1139,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
         elif parsed.path in ["/api/arm/execute_sequence", "/api/arm/sequence"]:
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
+            preset_app = self.get_preset_app()
+            if preset_app.config["require_active_app_for_motion"]:
+                if not self.app_manager or self.app_manager.current_app_name not in ["piranha_pose_app", "clack_pose_app"]:
+                    return self._send_json({
+                        "status": "error",
+                        "message": "Piranha Pose app is not running. Tap START PIRANHA POSE before commanding motion."
+                    }, 409)
             seq_name = "sequence_attack"
             if "sequence" in body:
                 seq_name = str(body["sequence"])
@@ -1124,7 +1154,6 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             mode = "demo"
             if "mode" in body:
                 mode = str(body["mode"])
-            preset_app = self.get_preset_app()
             threading.Thread(target=preset_app.execute_sequence, args=(self.backend, seq_name, mode), daemon=True).start()
             self._send_json({"status": "ok", "action": "sequence_started", "sequence": seq_name, "mode": mode})
 
@@ -1132,6 +1161,12 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             if not self.backend:
                 return self._send_json({"error": "Backend uninitialized"}, 500)
             preset_app = self.get_preset_app()
+            if preset_app.config["require_active_app_for_motion"]:
+                if not self.app_manager or self.app_manager.current_app_name not in ["piranha_pose_app", "clack_pose_app"]:
+                    return self._send_json({
+                        "status": "error",
+                        "message": "Piranha Pose app is not running. Tap START PIRANHA POSE before commanding motion."
+                    }, 409)
             threading.Thread(target=preset_app.execute_attack_sequence, args=(self.backend,), daemon=True).start()
             self._send_json({"status": "ok", "action": "attack_sequence_started"})
 

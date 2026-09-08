@@ -1,0 +1,47 @@
+{
+  "name": "sequence_dance",
+  "title": "Standard Dance Sequence",
+  "description": "Choreographed groove cycle through dance postures: stand -> squat -> tiptoe -> arch -> stand.",
+  "mode": "dance",
+  "steps": [
+    {
+      "step_name": "to_stand",
+      "preset": "stand",
+      "arm_duration": 1.2,
+      "servo7_pct": 50.0,
+      "audio": {
+        "kind": "connect",
+        "delay_sec": 0.0,
+        "stop_previous": true
+      }
+    },
+    {
+      "step_name": "to_squat",
+      "preset": "squat",
+      "arm_duration": 1.0,
+      "servo7_pct": 35.0
+    },
+    {
+      "step_name": "to_tiptoe",
+      "preset": "tiptoe",
+      "arm_duration": 1.0,
+      "servo7_pct": 65.0
+    },
+    {
+      "step_name": "to_arch",
+      "preset": "arch",
+      "arm_duration": 1.2,
+      "servo7_pct": 50.0
+    },
+    {
+      "step_name": "pause",
+      "pause_sec": 0.5
+    },
+    {
+      "step_name": "return_stand",
+      "preset": "stand",
+      "arm_duration": 1.2,
+      "servo7_pct": 50.0
+    }
+  ]
+}

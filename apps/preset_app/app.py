@@ -412,7 +412,7 @@ class PiranhaPoseApp(BaseApp):
             return False, f"Preset '{preset_name}' not found in mode '{mode}' (available: {list(presets.keys())})"
 
         if "normalized" not in presets[preset_name]:
-            return False, f"Preset '{preset_name}' has no normalized coordinates"
+            raise KeyError(f"Preset '{preset_name}' in mode '{mode}' missing required 'normalized' coordinates")
 
         target_norm = presets[preset_name]["normalized"]
 
