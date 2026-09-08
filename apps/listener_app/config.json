@@ -21,7 +21,7 @@
     "use_dynamic_grammar": false
   },
   "vad": {
-    "settle_delay_sec": 2.5,
+    "settle_delay_sec": 0.65,
     "post_chime_settle_sec": 1.5,
     "silence_timeout_sec": 2.5,
     "max_record_sec": 10.0,
@@ -31,7 +31,7 @@
     "fuzzy_match_threshold": 0.55
   },
   "chimes": {
-    "app_start": "ornith_listen_start",
+    "app_start": "ornith_app_start",
     "wake": "ornith_listen_start",
     "commit": "ornith_commit_speech",
     "cancel": "ornith_abort_recording",

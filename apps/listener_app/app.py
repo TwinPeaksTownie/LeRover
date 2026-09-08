@@ -551,7 +551,8 @@ class ListenerApp(BaseApp):
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main execution loop of ListenerApp. Must monitor stop_event.is_set()."""
         self.logger.info("Starting ListenerApp hotword loop...")
-        self.state = "LISTENING"
+        self.state = "IDLE"
+        self.action_taken = "Press Button B to speak"
 
         settle_delay = float(self.config["vad"]["settle_delay_sec"])
         chunk_samples = int(self.config["hotword"]["chunk_samples"])
@@ -561,17 +562,9 @@ class ListenerApp(BaseApp):
         max_record_sec = float(self.config["vad"]["max_record_sec"])
         energy_thresh = int(self.config["vad"]["energy_threshold"])
 
-        self.logger.info("Awaiting %.1fs acoustic settle delay before opening microphone stream...", settle_delay)
-        if stop_event.wait(timeout=settle_delay):
-            self.logger.info("Stop event signaled during acoustic settle delay. Exiting...")
-            return
-
-        # Initial trigger: wait for single B Button tap or stop_event
-        self.state = "IDLE"
-        self.action_taken = "Press Button B to speak"
         self.logger.info("ListenerApp initialized in IDLE. Awaiting Button B single tap to start listening...")
 
-        # If start_listen_event is not already set, await operator trigger
+        # Await single Button B tap (or stop/abort)
         while not stop_event.is_set() and not self.abort_listen_event.is_set():
             if self.start_listen_event.wait(timeout=0.1):
                 self.start_listen_event.clear()
@@ -581,8 +574,17 @@ class ListenerApp(BaseApp):
             self.logger.info("Exit signaled before listening started. Exiting ListenerApp...")
             return
 
-        self.state = "LISTENING"
+        # Single tap detected! Play wake whistle chime
         self._play_chime("wake")
+
+        # Wait for wake chime sound wave to clear before opening/reading mic
+        self.logger.info("Awaiting %.2fs acoustic settle delay for wake chime...", settle_delay)
+        if stop_event.wait(timeout=settle_delay) or self.abort_listen_event.is_set():
+            self.logger.info("Exit signaled during wake settle delay. Exiting ListenerApp...")
+            return
+
+        self.state = "LISTENING"
+        self.action_taken = "Listening for voice command..."
 
         pre_roll_chunks = int(self.config["vad"]["pre_roll_chunks"])
         pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)

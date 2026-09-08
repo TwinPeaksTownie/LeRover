@@ -205,7 +205,7 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["asr"]["engine"], "vosk")
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
-        self.assertEqual(cfg["vad"]["settle_delay_sec"], 2.5)
+        self.assertEqual(cfg["vad"]["settle_delay_sec"], 0.65)
         self.assertEqual(cfg["vad"]["post_chime_settle_sec"], 1.5)
         self.assertEqual(cfg["vad"]["energy_threshold"], 450)
         self.assertEqual(cfg["vad"]["pre_roll_chunks"], 15)

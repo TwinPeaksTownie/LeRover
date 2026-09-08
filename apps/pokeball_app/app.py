@@ -426,8 +426,6 @@ class PokeballService:
                                     if self.app_manager.active_app:
                                         if hasattr(self.app_manager.active_app, "caller_app"):
                                             self.app_manager.active_app.caller_app = "pokeball_teleop_app"
-                                        if hasattr(self.app_manager.active_app, "start_listen_event"):
-                                            self.app_manager.active_app.start_listen_event.set()
                                 except Exception as err:
                                     self.logger.error("Failed to launch listener_app: %s", err)
                             threading.Thread(target=_launch_listener, daemon=True).start()
