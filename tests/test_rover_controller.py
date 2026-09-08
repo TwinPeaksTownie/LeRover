@@ -26,8 +26,8 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.controller.stop()
 
     def test_config_loaded_rts(self):
-        """Assert that assert_rts is True from rover_config.json."""
-        self.assertTrue(self.controller.assert_rts)
+        """Assert that assert_rts is False from rover_config.json."""
+        self.assertFalse(self.controller.assert_rts)
         self.assertTrue(self.controller.assert_dtr)
 
     def test_neutral_stop(self):

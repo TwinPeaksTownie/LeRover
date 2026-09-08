@@ -259,7 +259,8 @@ class RoverController:
                     import serial
                     ser = serial.Serial(self.serial_port, self.baudrate, timeout=self.serial_timeout, write_timeout=self.write_timeout)
                     ser.dtr = self.assert_dtr
-                    ser.rts = self.assert_rts
+                    if self.assert_rts:
+                        ser.rts = True
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)
