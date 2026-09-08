@@ -27,7 +27,7 @@
     "arm_drivetrain_sec": 2.0,
     "arm_lockout_sec": 0.5,
     "b_hold_sec": 3.0,
-    "a_hold_sec": 3.0
+    "a_hold_sec": 1.5
   },
   "chimes": {
     "app_start": "app_start",

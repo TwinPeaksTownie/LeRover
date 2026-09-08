@@ -377,6 +377,7 @@ class PokeballService:
             arm_drivetrain_sec = _CONFIG["gestures"]["arm_drivetrain_sec"]
             arm_lockout_sec = _CONFIG["gestures"]["arm_lockout_sec"]
             b_hold_sec = _CONFIG["gestures"]["b_hold_sec"]
+            a_hold_sec = float(_CONFIG["gestures"]["a_hold_sec"])
 
             # --- 1. SIMULTANEOUS A + B CHORD (1.0s Hold) -> CANCEL AUDIO CAPTURE ---
             if btn_a and btn_b:
@@ -417,7 +418,7 @@ class PokeballService:
                         self.logger.info("🔘 Button B single click detected.")
                         self.button_b_click_event.set()
 
-                        # In PokeballApp: Button B tap toggles mode between ROVER and AUX
+                        # In PokeballApp: Button B tap while in ROVER mode switches to AUX mode
                         if self.teleop_enabled:
                             if self.control_mode == "ROVER":
                                 self.control_mode = "AUX"
@@ -426,9 +427,7 @@ class PokeballService:
                                 self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to AUX Mode (Gantry & Pedestal).")
                                 play_chime(_CONFIG["chimes"]["mode_switch_aux"])
                             else:
-                                self.control_mode = "ROVER"
-                                self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to ROVER Mode (Drivetrain).")
-                                play_chime(_CONFIG["chimes"]["mode_switch_rover"])
+                                self.logger.info("ℹ️ Button B clicked while already in AUX mode (hold Button A for %.1fs to enter ROVER mode).", a_hold_sec)
 
                     self.btn_b_press_start_time = None
                 self.b_hold_triggered = False
@@ -442,11 +441,12 @@ class PokeballService:
                     self.btn_a_press_start_time = now
                 hold_duration_a = now - self.btn_a_press_start_time
 
-                # 3-second hold regardless of whether PokeballApp is started:
-                # Kills other apps, starts PokeballApp, and arms rover drivetrain with countdown lockout
+                # Hold for a_hold_sec (1.5s) regardless of whether PokeballApp is started:
+                # Kills other apps, starts PokeballApp, switches to ROVER mode, and arms rover drivetrain with countdown lockout
                 if hold_duration_a >= a_hold_sec and not self.a_hold_triggered:
                     self.a_hold_triggered = True
-                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Arming Poké Ball Teleop with %.1fs countdown...", hold_duration_a, arm_lockout_sec)
+                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Entering ROVER mode & arming teleop with %.1fs countdown...", hold_duration_a, arm_lockout_sec)
+                    self.control_mode = "ROVER"
                     self.teleop_enabled = True
                     self.is_armed = True
                     self.arm_lockout_until = now + arm_lockout_sec
@@ -460,7 +460,7 @@ class PokeballService:
                                 self.app_manager.start_app_by_name("pokeball_teleop_app")
                             threading.Thread(target=_launch_rover, daemon=True).start()
                         else:
-                            self.logger.info("PokeballApp already active; re-armed rover drivetrain.")
+                            self.logger.info("PokeballApp already active; switched to ROVER mode & re-armed drivetrain.")
                     play_chime(_CONFIG["chimes"]["arm_rover"])
             else:
                 self.btn_a_press_start_time = None
@@ -687,7 +687,8 @@ class PokeballApp(BaseApp):
         self.pokeball_service = service
 
         service.teleop_enabled = True
-        # If arming was triggered by the 3s hold before app started, retain is_armed and countdown!
+        service.control_mode = "ROVER"
+        # If arming was triggered by the Button A hold before app started, retain is_armed and countdown!
         # Otherwise, initialize strictly disarmed with 0.0 lockout
         if not service.is_armed:
             service.is_armed = False

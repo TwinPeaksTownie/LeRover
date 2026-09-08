@@ -96,19 +96,19 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self._simulate_input(buttons=0x02, now=t0)
             self.assertFalse(self.service.is_armed)
 
-        # 2.5s (under 3.0s)
-        with patch("time.time", return_value=t0 + 2.5):
-            self._simulate_input(buttons=0x02, now=t0 + 2.5)
+        # 1.0s (under 1.5s)
+        with patch("time.time", return_value=t0 + 1.0):
+            self._simulate_input(buttons=0x02, now=t0 + 1.0)
             self.assertFalse(self.service.is_armed)
 
-        # 3.0s reached -> armed!
-        with patch("time.time", return_value=t0 + 3.05):
-            self._simulate_input(buttons=0x02, now=t0 + 3.05)
+        # 1.5s reached -> armed in ROVER mode!
+        with patch("time.time", return_value=t0 + 1.55):
+            self._simulate_input(buttons=0x02, now=t0 + 1.55)
             self.assertTrue(self.service.is_armed)
             self.assertEqual(self.service.control_mode, "ROVER")
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
-        # Now tap Button B (0x01) -> Clean Toggle to AUX Mode!
+        # Tap Button B (0x01) while in ROVER mode -> Switches to AUX Mode!
         t_tap = t0 + 4.0
         with patch("time.time", return_value=t_tap):
             self._simulate_input(buttons=0x01, now=t_tap)
@@ -118,14 +118,23 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.service.rover_ctrl.set_drive.assert_called_with(0.0, 0.0)
             mock_play_chime.assert_called_with("mode_switch_aux")
 
-        # Second tap Button B -> Clean Toggle back to ROVER Mode!
+        # Second tap Button B while already in AUX mode -> Remains in AUX Mode!
         t_tap2 = t0 + 5.0
         with patch("time.time", return_value=t_tap2):
             self._simulate_input(buttons=0x01, now=t_tap2)
         with patch("time.time", return_value=t_tap2 + 0.1):
             self._simulate_input(buttons=0x00, now=t_tap2 + 0.1)
+            self.assertEqual(self.service.control_mode, "AUX")
+
+        # Holding Button A for 1.5s from AUX mode -> Switches back to ROVER mode & arms!
+        t_hold_a = t0 + 6.0
+        with patch("time.time", return_value=t_hold_a):
+            self._simulate_input(buttons=0x02, now=t_hold_a)
+        with patch("time.time", return_value=t_hold_a + 1.55):
+            self._simulate_input(buttons=0x02, now=t_hold_a + 1.55)
             self.assertEqual(self.service.control_mode, "ROVER")
-            mock_play_chime.assert_called_with("mode_switch_rover")
+            self.assertTrue(self.service.is_armed)
+            mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
     @patch("apps.pokeball_app.app.play_chime")
     def test_button_b_hold_launches_listener_app(self, mock_play_chime):
