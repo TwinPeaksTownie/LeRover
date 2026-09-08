@@ -709,8 +709,8 @@ class ListenerApp(BaseApp):
                         if ws_client is not None:
                             try:
                                 ws_client.close()
-                            except Exception:
-                                pass
+                            except Exception as ws_err:
+                                self.logger.debug("Error closing WebSocket on abort: %s", ws_err)
                         break
 
                     self.state = "PROCESSING"
@@ -940,17 +940,12 @@ class ListenerApp(BaseApp):
         self.stop_event.set()
         if self._stream_resp is not None:
             try:
-                sock_fp = getattr(self._stream_resp, "fp", None)
-                if sock_fp is not None:
-                    raw_sock = getattr(sock_fp, "raw", None)
-                    if raw_sock is not None:
-                        sock_obj = getattr(raw_sock, "_sock", None)
-                        if sock_obj is not None:
-                            try:
-                                import socket
-                                sock_obj.shutdown(socket.SHUT_RDWR)
-                            except Exception:
-                                pass
+                import socket
+                raw_sock = self._stream_resp.fp.raw._sock
+                raw_sock.shutdown(socket.SHUT_RDWR)
+            except (AttributeError, OSError) as sock_err:
+                self.logger.debug("Socket shutdown during stop: %s", sock_err)
+            try:
                 self._stream_resp.close()
             except Exception as e:
                 self.logger.debug("Error closing stream on stop: %s", e)
