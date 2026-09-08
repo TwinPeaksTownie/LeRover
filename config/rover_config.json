@@ -14,7 +14,7 @@
   },
   "hardware_interface": {
     "assert_dtr": true,
-    "assert_rts": true,
+    "assert_rts": false,
     "serial_timeout_sec": 0.01,
     "write_timeout_sec": 1.0
   }

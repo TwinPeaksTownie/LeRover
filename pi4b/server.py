@@ -234,14 +234,15 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
                     raise FileNotFoundError(f"Resolved audio asset '{cand}' does not exist on disk.")
                 target_wav = cand
 
-            CURRENT_PAPLAY_PROC = subprocess.Popen(
+            proc = subprocess.Popen(
                 ["paplay", "--latency-msec=20", target_wav],
                 env=PULSE_ENV,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE
             )
-            _, stderr_data = CURRENT_PAPLAY_PROC.communicate()
-            rc = CURRENT_PAPLAY_PROC.returncode
+            CURRENT_PAPLAY_PROC = proc
+            _, stderr_data = proc.communicate()
+            rc = proc.returncode
             if rc != 0:
                 if rc in (-9, -15, 137, 143):
                     logging.info("Audio playback for %s cancelled by subsequent audio request (signal %d).", target_wav, rc)
