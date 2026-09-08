@@ -311,6 +311,10 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertIn("listener_app", discovered)
         self.assertIn("listener_app", mgr.registry)
 
+        # Test stop_current_app method existence and safe execution
+        self.assertTrue(hasattr(mgr, "stop_current_app"))
+        mgr.stop_current_app()  # Safe no-op when no active app
+
     def test_dynamic_calibration_resolution(self):
         import json
         from unittest.mock import patch, mock_open

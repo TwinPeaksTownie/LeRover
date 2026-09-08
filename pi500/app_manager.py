@@ -305,6 +305,11 @@ class AppManager:
             self.current_app_name = None
             self.logger.info(f"App '{app_name}' successfully stopped and lock released.")
 
+    def stop_current_app(self) -> None:
+        """Stops the currently running application, if any."""
+        if self.current_app_name:
+            self.stop_app(self.current_app_name)
+
     def stop_all(self) -> None:
         """Stops whatever app is currently active."""
         if self.current_app_name:
