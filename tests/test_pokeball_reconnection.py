@@ -35,7 +35,7 @@ class TestPokeballConfigSchema(unittest.TestCase):
         self.assertIn("packet_timeout_sec", cfg["ble"])
         self.assertIn("scan_timeout_sec", cfg["ble"])
         self.assertIn("reconnect_delay_sec", cfg["ble"])
-        self.assertAlmostEqual(cfg["ble"]["packet_timeout_sec"], 1.25)
+        self.assertAlmostEqual(cfg["ble"]["packet_timeout_sec"], 5.0)
         self.assertAlmostEqual(cfg["ble"]["scan_timeout_sec"], 4.0)
         self.assertAlmostEqual(cfg["ble"]["reconnect_delay_sec"], 0.5)
 
@@ -69,7 +69,7 @@ class TestPokeballWatchdog(unittest.TestCase):
         self.assertEqual(self.service.telemetry["packet_count"], 1)
 
     def test_watchdog_detects_inactivity(self):
-        self.service.last_packet_time = time.time() - 1.5
+        self.service.last_packet_time = time.time() - (self.service.packet_timeout_sec + 0.5)
         elapsed = time.time() - self.service.last_packet_time
         self.assertGreater(elapsed, self.service.packet_timeout_sec)
 

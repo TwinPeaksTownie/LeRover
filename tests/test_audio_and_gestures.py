@@ -84,9 +84,10 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.assertTrue(self.service.ab_hold_triggered)
 
     @patch("apps.pokeball_app.app.play_chime")
-    def test_rover_arm_hold_and_brake(self, mock_play_chime):
-        """Holding Button A for 2.0s arms drivetrain with 4.25s lockout. Button B emergency brakes."""
+    def test_rover_arm_hold_and_mode_toggle(self, mock_play_chime):
+        """Holding Button A for 3.0s arms drivetrain. Button B click toggles ROVER <-> AUX mode."""
         self.service.teleop_enabled = True
+        self.service.control_mode = "ROVER"
         self.service.rover_ctrl = MagicMock()
         t0 = 200.0
 
@@ -104,19 +105,27 @@ class TestPokeballServiceGestures(unittest.TestCase):
         with patch("time.time", return_value=t0 + 3.05):
             self._simulate_input(buttons=0x02, now=t0 + 3.05)
             self.assertTrue(self.service.is_armed)
-            self.assertAlmostEqual(self.service.arm_lockout_until, t0 + 3.05 + 4.25, delta=0.01)
+            self.assertEqual(self.service.control_mode, "ROVER")
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
-        # Now tap Button B (0x01) -> Instant Emergency Brake!
+        # Now tap Button B (0x01) -> Clean Toggle to AUX Mode!
         t_tap = t0 + 4.0
         with patch("time.time", return_value=t_tap):
             self._simulate_input(buttons=0x01, now=t_tap)
         with patch("time.time", return_value=t_tap + 0.1):
             self._simulate_input(buttons=0x00, now=t_tap + 0.1)
-            self.assertFalse(self.service.is_armed)
-            self.assertEqual(self.service.arm_lockout_until, 0.0)
-            self.service.rover_ctrl.stop.assert_called()
-            mock_play_chime.assert_called_with("rover_emergency_brake")
+            self.assertEqual(self.service.control_mode, "AUX")
+            self.service.rover_ctrl.set_drive.assert_called_with(0.0, 0.0)
+            mock_play_chime.assert_called_with("mode_switch_aux")
+
+        # Second tap Button B -> Clean Toggle back to ROVER Mode!
+        t_tap2 = t0 + 5.0
+        with patch("time.time", return_value=t_tap2):
+            self._simulate_input(buttons=0x01, now=t_tap2)
+        with patch("time.time", return_value=t_tap2 + 0.1):
+            self._simulate_input(buttons=0x00, now=t_tap2 + 0.1)
+            self.assertEqual(self.service.control_mode, "ROVER")
+            mock_play_chime.assert_called_with("mode_switch_rover")
 
     @patch("apps.pokeball_app.app.play_chime")
     def test_button_b_hold_launches_listener_app(self, mock_play_chime):
@@ -142,53 +151,53 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 )
                 mock_thread.return_value.start.assert_called_once()
 
-    def test_gantry_up_plus_b_nudges_right(self):
-        """Tilting stick UP (norm_y < -0.35) and pressing Button B must dispatch /api/nudge_physical with direction='right'."""
+    def test_gantry_up_nudges_right_in_aux_mode(self):
+        """In AUX mode, tilting stick UP (norm_y < -0.35) must dispatch /api/nudge_physical with direction='right'."""
         self.service.teleop_enabled = True
-        self.service.is_armed = False
+        self.service.control_mode = "AUX"
         self.service.zero_calibrated = True
         t0 = 500.0
 
-        # Simulate stick UP (raw_y = center_y - 1000, physical forward) with Button B (0x01)
+        # Simulate stick UP (raw_y = center_y - 1000, physical forward) with NO button pressed (0x00)
         up_y = self.service.joystick_center_y - 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
-                self._simulate_input(buttons=0x01, now=t0, raw_y=up_y)
+                self._simulate_input(buttons=0x00, now=t0, raw_y=up_y)
                 mock_aux.assert_called_once_with(
                     "/api/nudge_physical",
                     {"id": 8, "direction": "right", "amount": self.service.gantry_step_ticks},
                     lock_duration=self.service.aux_lock_duration_sec
                 )
 
-    def test_gantry_down_plus_b_nudges_left(self):
-        """Tilting stick DOWN (norm_y > 0.35) and pressing Button B must dispatch /api/nudge_physical with direction='left'."""
+    def test_gantry_down_nudges_left_in_aux_mode(self):
+        """In AUX mode, tilting stick DOWN (norm_y > 0.35) must dispatch /api/nudge_physical with direction='left'."""
         self.service.teleop_enabled = True
-        self.service.is_armed = False
+        self.service.control_mode = "AUX"
         self.service.zero_calibrated = True
         t0 = 600.0
 
-        # Simulate stick DOWN (raw_y = center_y + 1000, physical back) with Button B (0x01)
+        # Simulate stick DOWN (raw_y = center_y + 1000, physical back) with NO button pressed (0x00)
         down_y = self.service.joystick_center_y + 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
-                self._simulate_input(buttons=0x01, now=t0, raw_y=down_y)
+                self._simulate_input(buttons=0x00, now=t0, raw_y=down_y)
                 mock_aux.assert_called_once_with(
                     "/api/nudge_physical",
                     {"id": 8, "direction": "left", "amount": self.service.gantry_step_ticks},
                     lock_duration=self.service.aux_lock_duration_sec
                 )
 
-    def test_pedestal_left_right_plus_b(self):
-        """Tilting stick RIGHT (norm_x > 0.35) and pressing Button B must dispatch /api/pedestal_step with direction='right'."""
+    def test_pedestal_left_right_in_aux_mode(self):
+        """In AUX mode, tilting stick RIGHT (norm_x > 0.35) must dispatch /api/pedestal_step with direction='right'."""
         self.service.teleop_enabled = True
-        self.service.is_armed = False
+        self.service.control_mode = "AUX"
         self.service.zero_calibrated = True
         t0 = 700.0
 
         right_x = self.service.joystick_center_x + 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
-                self._simulate_input(buttons=0x01, now=t0, raw_x=right_x)
+                self._simulate_input(buttons=0x00, now=t0, raw_x=right_x)
                 mock_aux.assert_called_once_with(
                     "/api/pedestal_step",
                     {"direction": "right"},

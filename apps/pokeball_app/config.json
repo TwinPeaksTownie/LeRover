@@ -34,7 +34,8 @@
     "ble_connect": "device_connect",
     "ble_disconnect": "disconnect",
     "arm_rover": "rover_arm_drivetrain",
-    "emergency_brake": "rover_emergency_brake",
+    "mode_switch_rover": "mode_switch_rover",
+    "mode_switch_aux": "mode_switch_aux",
     "chord_abort": "ornith_abort_recording"
   }
 }

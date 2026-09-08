@@ -40,6 +40,14 @@
       "file": "smw_yoshi_runs_away.wav",
       "description": "Emergency brake and disarm rover wheels"
     },
+    "mode_switch_rover": {
+      "file": "smw_pipe.wav",
+      "description": "Switched Pokeball control mode to ROVER"
+    },
+    "mode_switch_aux": {
+      "file": "smw_save_menu.wav",
+      "description": "Switched Pokeball control mode to AUX"
+    },
     "app_exit_idle": {
       "file": "smw_goal_iris-out.wav",
       "description": "Application stopped and daemon in IDLE state"

@@ -82,7 +82,8 @@ def load_pokeball_config() -> dict:
     _ = cfg["chimes"]["ble_connect"]
     _ = cfg["chimes"]["ble_disconnect"]
     _ = cfg["chimes"]["arm_rover"]
-    _ = cfg["chimes"]["emergency_brake"]
+    _ = cfg["chimes"]["mode_switch_rover"]
+    _ = cfg["chimes"]["mode_switch_aux"]
     _ = cfg["chimes"]["chord_abort"]
     return cfg
 
@@ -416,15 +417,18 @@ class PokeballService:
                         self.logger.info("🔘 Button B single click detected.")
                         self.button_b_click_event.set()
 
-                        # In PokeballApp: Button B tap acts as Emergency Brake when armed
-                        if self.teleop_enabled and self.is_armed:
-                            self.is_armed = False
-                            self.arm_lockout_until = 0.0
-                            if not self.rover_ctrl:
-                                raise RuntimeError("Emergency brake engaged but rover_ctrl is missing")
-                            self.rover_ctrl.stop()
-                            self.logger.info("🛑 Emergency brake engaged via Button B! Rover disarmed.")
-                            play_chime(_CONFIG["chimes"]["emergency_brake"])
+                        # In PokeballApp: Button B tap toggles mode between ROVER and AUX
+                        if self.teleop_enabled:
+                            if self.control_mode == "ROVER":
+                                self.control_mode = "AUX"
+                                if self.rover_ctrl:
+                                    self.rover_ctrl.set_drive(0.0, 0.0)
+                                self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to AUX Mode (Gantry & Pedestal).")
+                                play_chime(_CONFIG["chimes"]["mode_switch_aux"])
+                            else:
+                                self.control_mode = "ROVER"
+                                self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to ROVER Mode (Drivetrain).")
+                                play_chime(_CONFIG["chimes"]["mode_switch_rover"])
 
                     self.btn_b_press_start_time = None
                 self.b_hold_triggered = False
@@ -465,22 +469,25 @@ class PokeballService:
 
             # --- 4. TELEOPERATION ACTUATION (When PokeballApp is Active) ---
             if self.teleop_enabled:
-                if self.rover_ctrl:
-                    if self.is_armed and now >= self.arm_lockout_until:
-                        self.rover_ctrl.set_drive(norm_x, -norm_y)
-                    else:
+                if self.control_mode == "ROVER":
+                    if self.rover_ctrl:
+                        if self.is_armed and now >= self.arm_lockout_until:
+                            self.rover_ctrl.set_drive(norm_x, -norm_y)
+                        else:
+                            self.rover_ctrl.set_drive(0.0, 0.0)
+
+                elif self.control_mode == "AUX":
+                    if self.rover_ctrl:
                         self.rover_ctrl.set_drive(0.0, 0.0)
 
-                # Aux Manipulator (Gantry / Pedestal) gestures only when unarmed
-                if not self.is_armed and btn_b:
-                    # Gantry gesture: Up / Down + B button
+                    # Gantry gesture: Up / Down stick deflection in AUX mode
                     # Up moves right / increases ticks towards 4800, Down moves left / decreases towards 3
                     if y_direction in ("up", "down") and abs(norm_y) >= abs(norm_x):
-                        is_gantry_trigger = (not self.last_btn_top) or (self.last_y_direction == "center")
+                        is_gantry_trigger = (self.last_y_direction == "center")
                         if is_gantry_trigger and not (self.is_busy or now < self.busy_until):
                             gantry_dir = "right" if y_direction == "up" else "left"
                             self.logger.info(
-                                "🕹️ [GANTRY] Button B + %s detected -> Nudging Gantry %s (%d ticks)",
+                                "🕹️ [GANTRY] Stick %s detected in AUX mode -> Nudging Gantry %s (%d ticks)",
                                 y_direction.upper(), gantry_dir.upper(), self.gantry_step_ticks
                             )
                             self._send_aux_request(
@@ -488,14 +495,13 @@ class PokeballService:
                                 {"id": 8, "direction": gantry_dir, "amount": self.gantry_step_ticks},
                                 lock_duration=self.aux_lock_duration_sec
                             )
-                            self.btn_b_press_start_time = None
 
-                    # Pedestal gesture: Left / Right + B button
+                    # Pedestal gesture: Left / Right stick deflection in AUX mode
                     elif x_direction in ("left", "right") and abs(norm_x) > abs(norm_y):
-                        is_pedestal_trigger = (not self.last_btn_top) or (self.last_x_direction == "center")
+                        is_pedestal_trigger = (self.last_x_direction == "center")
                         if is_pedestal_trigger and not (self.is_busy or now < self.busy_until):
                             self.logger.info(
-                                "🔄 [PEDESTAL] Button B + %s detected -> Stepping Pedestal Preset",
+                                "🔄 [PEDESTAL] Stick %s detected in AUX mode -> Stepping Pedestal Preset",
                                 x_direction.upper()
                             )
                             self._send_aux_request(
@@ -503,7 +509,6 @@ class PokeballService:
                                 {"direction": x_direction},
                                 lock_duration=self.aux_lock_duration_sec
                             )
-                            self.btn_b_press_start_time = None
 
             # --- 5. LISTENER APP NAVIGATION & SELECTION (When ListenerApp is Active & in SELECTING state) ---
             if self.app_manager and self.app_manager.current_app_name == "listener_app":
@@ -705,6 +710,7 @@ class PokeballApp(BaseApp):
 
         service.teleop_enabled = False
         service.is_armed = False
+        service.control_mode = "ROVER"
         if self.rover_ctrl:
             self.rover_ctrl.stop()
             try:
@@ -720,6 +726,7 @@ class PokeballApp(BaseApp):
         if self.pokeball_service is not None:
             self.pokeball_service.teleop_enabled = False
             self.pokeball_service.is_armed = False
+            self.pokeball_service.control_mode = "ROVER"
             if self.pokeball_service.rover_ctrl:
                 self.pokeball_service.rover_ctrl.stop()
         if self.rover_ctrl is not None:
