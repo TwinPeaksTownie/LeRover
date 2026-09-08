@@ -467,7 +467,7 @@ class PokeballService:
             if self.teleop_enabled:
                 if self.rover_ctrl:
                     if self.is_armed and now >= self.arm_lockout_until:
-                        self.rover_ctrl.set_drive(norm_x, norm_y)
+                        self.rover_ctrl.set_drive(norm_x, -norm_y)
                     else:
                         self.rover_ctrl.set_drive(0.0, 0.0)
 
