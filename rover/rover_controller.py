@@ -259,6 +259,7 @@ class RoverController:
                     import serial
                     ser = serial.Serial(self.serial_port, self.baudrate, timeout=self.serial_timeout, write_timeout=self.write_timeout)
                     ser.dtr = self.assert_dtr
+                    ser.rts = self.assert_rts
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)
@@ -314,12 +315,12 @@ class RoverController:
             # Standard arcade drive calculation:
             # y = throttle (+ forward, - reverse)
             # x = steering (+ right, - left)
-            # Steering is inverted (-x) so positive x turns right
+            # Positive x biases target_left up and target_right down for clockwise yaw (right turn)
             # steering_trim is scaled by throttle (+ values bias right to compensate for left veer)
             throttle = y
             with self._lock:
                 trim = self.steering_trim
-            steering = -x + (trim * throttle)
+            steering = x + (trim * throttle)
 
             target_left = max(-1.0, min(1.0, throttle + steering))
             target_right = max(-1.0, min(1.0, throttle - steering))
@@ -329,10 +330,10 @@ class RoverController:
             self._current_right_val += (target_right - self._current_right_val) * self.accel_ramp_rate
 
             # Map to 50Hz PWM pulse widths using calibrated neutral and limits from rover_config.json
-            # Left motor physically inverted (lower pulse = forward, higher pulse = reverse)
-            # Right motor normal (higher pulse = forward, lower pulse = reverse)
-            left_pulse = self.neutral_pulse_us - int(self._current_left_val * self.max_pulse_offset)
-            right_pulse = self.neutral_pulse_us + int(self._current_right_val * self.max_pulse_offset)
+            # Left motor forward: higher pulse (>1500 us)
+            # Right motor forward: lower pulse (<1500 us)
+            left_pulse = self.neutral_pulse_us + int(self._current_left_val * self.max_pulse_offset)
+            right_pulse = self.neutral_pulse_us - int(self._current_right_val * self.max_pulse_offset)
 
             left_pulse = max(self.min_pulse_us, min(self.max_pulse_us, left_pulse))
             right_pulse = max(self.min_pulse_us, min(self.max_pulse_us, right_pulse))
