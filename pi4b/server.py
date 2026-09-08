@@ -1033,15 +1033,31 @@ def main() -> None:
 
     cfg = network_resolver.load_network_config()
     serial_port = network_resolver.get_hardware_serial_port()
+    rover_port = network_resolver.get_rover_serial_port()
 
-    # Clean up stale processes holding ports and serial device
-    logging.info("Cleaning up stale locks on serial port and HTTP endpoints...")
-    try:
-        subprocess.run(["fuser", "-k", serial_port], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["fuser", "-k", f"{PORT_TOUCH_UI}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["fuser", "-k", f"{PORT_MASTER_API}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception as e:
-        logging.warning(f"Port cleanup warning: {e}")
+    # Clean up stale processes holding ports and serial devices
+    logging.info("Cleaning up stale locks on serial ports and HTTP endpoints...")
+    for port_name in [serial_port, rover_port]:
+        if os.path.exists(port_name):
+            try:
+                res = subprocess.run(
+                    ["fuser", "-k", port_name],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5.0
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    logging.info(f"Released stale locks on {port_name}: {res.stdout.strip()}")
+            except (subprocess.SubprocessError, FileNotFoundError) as port_err:
+                logging.warning(f"Port cleanup warning for {port_name}: {port_err}")
+
+    for p in [PORT_TOUCH_UI, PORT_MASTER_API]:
+        try:
+            subprocess.run(["fuser", "-k", f"{p}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5.0)
+        except (subprocess.SubprocessError, FileNotFoundError) as ep_err:
+            logging.warning(f"Endpoint cleanup warning for port {p}: {ep_err}")
 
     # 1. Initialize RobotBackend HAL
     logging.info(f"Initializing RobotBackend on {serial_port}...")
@@ -1113,6 +1129,13 @@ def main() -> None:
         logging.info("Interrupted, shutting down servers...")
 
     stop_tap_detector()
+
+    if GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.active_app is not None:
+        try:
+            logging.info(f"Stopping active app '{GLOBAL_APP_MANAGER.current_app_name}' on server shutdown...")
+            GLOBAL_APP_MANAGER.stop_current_app()
+        except Exception as e:
+            logging.warning(f"Error stopping active app: {e}")
 
     if GLOBAL_POKEBALL:
         try:
