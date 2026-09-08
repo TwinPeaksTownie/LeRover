@@ -95,20 +95,20 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self._simulate_input(buttons=0x02, now=t0)
             self.assertFalse(self.service.is_armed)
 
-        # 1.5s (under 2.0s)
-        with patch("time.time", return_value=t0 + 1.5):
-            self._simulate_input(buttons=0x02, now=t0 + 1.5)
+        # 2.5s (under 3.0s)
+        with patch("time.time", return_value=t0 + 2.5):
+            self._simulate_input(buttons=0x02, now=t0 + 2.5)
             self.assertFalse(self.service.is_armed)
 
-        # 2.0s reached -> armed!
-        with patch("time.time", return_value=t0 + 2.05):
-            self._simulate_input(buttons=0x02, now=t0 + 2.05)
+        # 3.0s reached -> armed!
+        with patch("time.time", return_value=t0 + 3.05):
+            self._simulate_input(buttons=0x02, now=t0 + 3.05)
             self.assertTrue(self.service.is_armed)
-            self.assertAlmostEqual(self.service.arm_lockout_until, t0 + 2.05 + 4.25, delta=0.01)
+            self.assertAlmostEqual(self.service.arm_lockout_until, t0 + 3.05 + 4.25, delta=0.01)
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
         # Now tap Button B (0x01) -> Instant Emergency Brake!
-        t_tap = t0 + 3.0
+        t_tap = t0 + 4.0
         with patch("time.time", return_value=t_tap):
             self._simulate_input(buttons=0x01, now=t_tap)
         with patch("time.time", return_value=t_tap + 0.1):

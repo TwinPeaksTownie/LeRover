@@ -13,8 +13,8 @@
     "loop_rate_hz": 25
   },
   "hardware_interface": {
-    "assert_dtr": false,
-    "assert_rts": false,
+    "assert_dtr": true,
+    "assert_rts": true,
     "serial_timeout_sec": 0.01,
     "write_timeout_sec": 1.0
   }
