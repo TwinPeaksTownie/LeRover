@@ -104,6 +104,20 @@ class TestPokeballBlueTCleanup(unittest.TestCase):
         for call in calls:
             self.assertNotIn("remove", call[0][0])
 
+    @patch("subprocess.run")
+    def test_trust_device_error_propagation(self, mock_run):
+        import subprocess
+        mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["bluetoothctl", "trust", self.service.mac_address])
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.run(
+                ["bluetoothctl", "trust", self.service.mac_address],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+                timeout=3.0,
+            )
+
 
 class TestPokeballReconnectionAsyncLoop(unittest.IsolatedAsyncioTestCase):
     """Tests the asynchronous BleakScanner presence and connection logic."""

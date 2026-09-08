@@ -576,7 +576,7 @@ class PokeballService:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
-                timeout=3.0
+                timeout=3.0,
             )
             if remove:
                 subprocess.run(
@@ -584,12 +584,17 @@ class PokeballService:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     check=False,
-                    timeout=3.0
+                    timeout=3.0,
                 )
                 self.logger.info(f"Purged stale BlueZ device record: {self.mac_address}")
             time.sleep(0.2)
-        except Exception as e:
-            self.logger.debug(f"BlueZ cleanup warning: {e}")
+        except subprocess.TimeoutExpired as e:
+            self.logger.warning("bluetoothctl cleanup timed out for %s: %s", self.mac_address, e, exc_info=True)
+        except FileNotFoundError as e:
+            self.logger.error("bluetoothctl binary not found in PATH: %s", e, exc_info=True)
+            raise
+        except OSError as e:
+            self.logger.warning("BlueZ cleanup OS error for %s: %s", self.mac_address, e, exc_info=True)
 
     def _run_loop(self) -> None:
         if not BLEAK_AVAILABLE:
@@ -597,18 +602,6 @@ class PokeballService:
             return
 
         self.prompt_connect_announcement()
-
-        try:
-            subprocess.run(
-                ["bluetoothctl", "trust", self.mac_address],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=3.0
-            )
-            self.logger.info("Enforced permanent BlueZ trust for %s.", self.mac_address)
-        except Exception as trust_err:
-            self.logger.debug("Error enforcing BlueZ trust: %s", trust_err)
 
         async def _async_loop():
             self.logger.info(f"PokeballService background BLE loop started for {self.mac_address}...")
@@ -630,6 +623,25 @@ class PokeballService:
                         self.is_connected = True
                         self.consecutive_connection_failures = 0
                         self.logger.info("✅ Connected to Poké Ball Plus!")
+                        try:
+                            subprocess.run(
+                                ["bluetoothctl", "trust", self.mac_address],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                check=True,
+                                timeout=3.0,
+                            )
+                            self.logger.info("Ensured BlueZ trust for %s upon connection.", self.mac_address)
+                        except subprocess.TimeoutExpired as e:
+                            self.logger.warning("bluetoothctl trust timed out for %s: %s", self.mac_address, e, exc_info=True)
+                            raise
+                        except FileNotFoundError as e:
+                            self.logger.error("bluetoothctl not found in PATH; cannot set trust for %s", self.mac_address, exc_info=True)
+                            raise
+                        except subprocess.CalledProcessError as e:
+                            self.logger.warning("bluetoothctl trust failed for %s: exit code %d", self.mac_address, e.returncode, exc_info=True)
+                            raise
+
                         if not self.connect_chime_played:
                             play_chime(_CONFIG["chimes"]["ble_connect"])
                             self.connect_chime_played = True
