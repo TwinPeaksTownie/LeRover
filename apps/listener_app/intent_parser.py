@@ -30,12 +30,14 @@ APP_ALIAS_MAP = {
     "voice": "ornith_voice",
 }
 
-MOVE_PRIMITIVES = {
-    "home": "home",
-    "center": "center",
-    "park": "park",
-    "rest": "park",
-    "zero": "home",
+POSTURE_COMMANDS = {
+    "stand up": "stand",
+    "stand": "stand",
+    "sit down": "sit",
+    "sit": "sit",
+    "tiptoes": "tiptoes",
+    "tiptoe": "tiptoes",
+    "play dead": "play_dead",
 }
 
 
@@ -51,7 +53,7 @@ def parse_intent(text: str) -> Dict[str, Any]:
     
     Returns one of:
       {"intent": "SWITCH_APP", "app": str, "raw": str}
-      {"intent": "MOVE_PRIMITIVE", "action": str, "raw": str}
+      {"intent": "POSTURE", "action": str, "raw": str}
       {"intent": "DOWNLOAD_SONG", "title": str, "artist": str, "raw": str}
       {"intent": "PLAY_SONG", "title": str, "raw": str}
       {"intent": "EXIT", "raw": str}
@@ -75,10 +77,9 @@ def parse_intent(text: str) -> Dict[str, Any]:
             if alias in target:
                 return {"intent": "SWITCH_APP", "app": canonical, "raw": raw_clean}
 
-    # 3. Movement Primitive Intents (e.g. "home", "center arm", "park")
-    for prim in MOVE_PRIMITIVES:
-        if raw_clean == prim or raw_clean == f"{prim} arm" or raw_clean == f"go {prim}":
-            return {"intent": "MOVE_PRIMITIVE", "action": MOVE_PRIMITIVES[prim], "raw": raw_clean}
+    # 3. Exact Physical Posture Commands ('stand up', 'stand', 'sit down', 'sit', 'tiptoes', 'tiptoe', 'play dead')
+    if raw_clean in POSTURE_COMMANDS:
+        return {"intent": "POSTURE", "action": POSTURE_COMMANDS[raw_clean], "raw": raw_clean}
 
     # 4. Download Song Intent (e.g. "download <title> by <artist>" or "get <title> by <artist>")
     dl_match = re.match(r"^(?:download|fetch|get|learn)\s+(.+?)\s+by\s+(.+)$", raw_clean)

@@ -737,6 +737,23 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             new_idx = l_app.navigate_selection(delta)
             self._send_json({"status": "ok", "selected_index": new_idx})
 
+        elif parsed.path == "/api/apps/listener/command":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            if not l_app:
+                return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
+            if "command" not in body or not body["command"]:
+                return self._send_json({"status": "error", "message": "Missing required 'command' field"}, 400)
+            cmd = str(body["command"])
+            from apps.listener_app.intent_parser import parse_intent
+            intent = parse_intent(cmd)
+            intent_type = intent["intent"]
+            if intent_type == "POSTURE":
+                action = intent["action"]
+                l_app._execute_posture(self.backend, action)
+                l_app.transcript = cmd
+                return self._send_json({"status": "ok", "command": cmd, "intent": intent, "action_taken": l_app.action_taken})
+            return self._send_json({"status": "ok", "command": cmd, "intent": intent})
+
         elif parsed.path == "/api/pokeball_teleop_toggle":
             if "action" not in body:
                 return self._send_json({"status": "error", "message": "Missing required 'action' parameter"}, 400)

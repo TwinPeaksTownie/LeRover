@@ -104,10 +104,50 @@ def load_listener_config() -> Dict[str, Any]:
     _ = str(cfg["feedback"]["idle_transcript"])
     _ = int(cfg["network"]["pi4b_port"])
     _ = int(cfg["network"]["mac_port"])
+    _ = int(cfg["network"]["vosk_server_port"])
+    _ = int(cfg["network"]["vosk_websocket_port"])
+    _ = float(cfg["motion"]["interpolation_duration_sec"])
+    _ = int(cfg["motion"]["interpolation_steps"])
+    _ = str(cfg["motion"]["dead_posture"])
     return cfg
 
 
 _CONFIG = load_listener_config()
+
+DANCE_PRESETS_PATH_CANDIDATES = [
+    WORKSPACE_ROOT / "apps" / "preset_app" / "presets" / "presets_dance.json",
+    Path("/home/carson/touch_ui/apps/preset_app/presets/presets_dance.json"),
+    Path("/home/user/so101/apps/preset_app/presets/presets_dance.json"),
+]
+
+
+def load_dance_presets() -> Dict[str, Any]:
+    """Loads empirical dance presets fail-fast for physical voice posture execution."""
+    target_path: Optional[Path] = None
+    for p in DANCE_PRESETS_PATH_CANDIDATES:
+        if p.exists():
+            target_path = p
+            break
+    if target_path is None:
+        raise FileNotFoundError(f"Missing required presets_dance.json. Checked: {DANCE_PRESETS_PATH_CANDIDATES}")
+
+    with open(target_path, "r", encoding="utf-8") as f:
+        presets = json.load(f)
+
+    # Fail-fast validation of required posture entries
+    for req_key in ["stand", "arch"]:
+        if req_key not in presets:
+            raise KeyError(f"presets_dance.json missing required posture '{req_key}'")
+        if "normalized" not in presets[req_key]:
+            raise KeyError(f"presets_dance.json posture '{req_key}' missing 'normalized' coordinates")
+
+    if "sit" not in presets and "squat" not in presets:
+        raise KeyError("presets_dance.json missing required 'sit' or 'squat' posture")
+
+    if "tiptoe" not in presets and "tiptoes" not in presets:
+        raise KeyError("presets_dance.json missing required 'tiptoe' or 'tiptoes' posture")
+
+    return presets
 
 
 def load_calibration_limits(
@@ -184,6 +224,7 @@ class ListenerApp(BaseApp):
         self.asr_model: Any = None
         self.kws_engine: Any = None
         self.calib_limits: Dict[int, Dict[str, int]] = {}
+        self.dance_presets: Dict[str, Any] = {}
         self.last_analyzed_track: Optional[Dict[str, Any]] = None
         self._vosk_ready: bool = False
 
@@ -325,14 +366,25 @@ class ListenerApp(BaseApp):
         return target_track
 
     def setup(self, backend: RobotBackend) -> None:
-        """Pre-run setup: loads calibration limits and verifies resident Vosk standby server."""
+        """Pre-run setup: loads calibration limits, dance presets, and verifies resident Vosk standby server."""
         self.logger.info("Initializing ListenerApp dependencies...")
         self.calib_limits = load_calibration_limits(backend=backend)
+        self.dance_presets = load_dance_presets()
         self._verify_vosk_standby_server()
+
+    def _get_vosk_urls(self) -> Tuple[str, str, str]:
+        """Dynamically resolves Vosk Standby Server HTTP health, WebSocket streaming, and HTTP recognize URLs."""
+        server_port = int(self.config["network"]["vosk_server_port"])
+        ws_port = int(self.config["network"]["vosk_websocket_port"])
+        pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=server_port)
+        health_url = f"http://{pi4b_ip}:{server_port}/health"
+        ws_url = f"ws://{pi4b_ip}:{ws_port}"
+        recognize_url = f"http://{pi4b_ip}:{server_port}/recognize"
+        return health_url, ws_url, recognize_url
 
     def _verify_vosk_standby_server(self) -> None:
         """Verifies resident Vosk standby server is warm and ready on Pi 4B."""
-        health_url = str(self.config["asr"]["health_url"])
+        health_url, _, _ = self._get_vosk_urls()
         timeout_sec = float(self.config["asr"]["timeout_sec"])
         self.logger.info("Verifying resident Vosk standby server readiness at %s...", health_url)
         try:
@@ -358,7 +410,7 @@ class ListenerApp(BaseApp):
 
     def _get_pi4b_url(self) -> str:
         ip = network_resolver.get_pi4b_ip(prefer_port=self.config["network"]["pi4b_port"])
-        return f"http://{ip}:{self.config['network']['pi4b_port']}"
+        return f"http://{pi4b_ip}:{self.config['network']['pi4b_port']}"
 
     def _play_chime(self, chime_key: str) -> None:
         """Dispatches audio cue playback to the daemon audio system."""
@@ -384,8 +436,9 @@ class ListenerApp(BaseApp):
     def _extract_dynamic_grammar(self) -> List[str]:
         """Extracts dynamic grammar phrases from Beat Bandit manifest and command list."""
         phrases: List[str] = [
+            "stand up", "stand", "sit down", "sit", "tiptoes", "tiptoe", "play dead",
             "down town", "downtown", "macklemore", "sing downtown", "play downtown",
-            "home", "center", "park", "dance", "beat bandit", "teleop", "piranha", "exit", "quit"
+            "dance", "beat bandit", "teleop", "piranha", "exit", "quit"
         ]
         manifest_path = get_beat_bandit_manifest_path()
         if manifest_path.exists():
@@ -415,7 +468,7 @@ class ListenerApp(BaseApp):
             return ""
 
         full_pcm = b"".join(pcm_chunks)
-        server_url = str(self.config["asr"]["server_url"])
+        _, _, recognize_url = self._get_vosk_urls()
         timeout_sec = float(self.config["asr"]["timeout_sec"])
         use_grammar = bool(self.config["asr"]["use_dynamic_grammar"])
 
@@ -431,7 +484,7 @@ class ListenerApp(BaseApp):
 
         t0 = time.time()
         try:
-            req = urllib.request.Request(server_url, data=full_pcm, headers=headers, method="POST")
+            req = urllib.request.Request(recognize_url, data=full_pcm, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 if resp.status == 200:
                     res = json.loads(resp.read().decode("utf-8"))
@@ -446,23 +499,46 @@ class ListenerApp(BaseApp):
             self.logger.error("Vosk standby server transcription error: %s", e, exc_info=True)
             return ""
 
-    def _execute_movement_primitive(self, backend: RobotBackend, action: str) -> None:
-        """Executes calibrated movement primitive on hardware. Zero hardcoded 2048."""
-        if not self.calib_limits:
-            self.calib_limits = load_calibration_limits(backend=backend)
+    def _execute_posture(self, backend: RobotBackend, action: str) -> None:
+        """Executes calibrated posture on hardware via smooth cosine S-curve interpolation."""
+        if not self.dance_presets:
+            self.dance_presets = load_dance_presets()
 
-        self.logger.info("Executing movement primitive: '%s'", action)
-        if action in ("center", "home"):
-            # Move all follower arm motors (1-6) to their calibrated midpoints fail-fast
-            centers = {sid: self.calib_limits[sid]["center"] for sid in range(1, 7)}
-            backend.set_goal_positions(centers, speed=400)
-        elif action == "park":
-            # Calibrated park posture: shoulder tuck fail-fast
-            parks = {
-                sid: self.calib_limits[sid]["min"] if sid in (2, 3) else self.calib_limits[sid]["center"]
-                for sid in range(1, 7)
-            }
-            backend.set_goal_positions(parks, speed=300)
+        duration = float(self.config["motion"]["interpolation_duration_sec"])
+        steps = int(self.config["motion"]["interpolation_steps"])
+
+        self.logger.info("Executing posture action: '%s' (duration=%.1fs, steps=%d)", action, duration, steps)
+
+        if action == "stand":
+            backend.set_arm_torque(enable=True)
+            target_norm = self.dance_presets["stand"]["normalized"]
+            backend.interpolate_arm_norm(target_norm, duration=duration, steps=steps)
+            self.action_taken = "Moved to stand"
+
+        elif action == "sit":
+            backend.set_arm_torque(enable=True)
+            sit_key = "sit" if "sit" in self.dance_presets else "squat"
+            target_norm = self.dance_presets[sit_key]["normalized"]
+            backend.interpolate_arm_norm(target_norm, duration=duration, steps=steps)
+            self.action_taken = "Moved to sit"
+
+        elif action == "tiptoes":
+            backend.set_arm_torque(enable=True)
+            tiptoe_key = "tiptoe" if "tiptoe" in self.dance_presets else "tiptoes"
+            target_norm = self.dance_presets[tiptoe_key]["normalized"]
+            backend.interpolate_arm_norm(target_norm, duration=duration, steps=steps)
+            self.action_taken = "Moved to tiptoes"
+
+        elif action == "play_dead":
+            backend.set_arm_torque(enable=True)
+            dead_key = str(self.config["motion"]["dead_posture"])
+            target_norm = self.dance_presets[dead_key]["normalized"]
+            backend.interpolate_arm_norm(target_norm, duration=duration, steps=steps)
+            backend.set_arm_torque(enable=False)
+            self.action_taken = "Playing dead (torque relaxed)"
+
+        else:
+            raise KeyError(f"Unsupported posture action: '{action}'")
 
     def run(self, backend: RobotBackend, stop_event: threading.Event) -> None:
         """Main execution loop of ListenerApp. Must monitor stop_event.is_set()."""
@@ -527,7 +603,7 @@ class ListenerApp(BaseApp):
                     self.state = "CAPTURING"
                     self.transcript = ""
 
-                    server_url = str(self.config["asr"]["server_url"])
+                    _, server_url, _ = self._get_vosk_urls()
                     ws_client = None
                     msg_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
                     stop_rx = threading.Event()
@@ -684,10 +760,10 @@ class ListenerApp(BaseApp):
                             self.stop()
                             return
 
-                        elif intent_type == "MOVE_PRIMITIVE":
+                        elif intent_type == "POSTURE":
                             action = intent["action"]
-                            self.action_taken = f"Moving to {action}"
-                            self._execute_movement_primitive(backend, action)
+                            self._execute_posture(backend, action)
+                            self._play_chime("commit")
 
                         elif intent_type == "DOWNLOAD_SONG":
                             with self._selection_lock:
@@ -800,20 +876,11 @@ class ListenerApp(BaseApp):
                         if stop_event.is_set():
                             break
 
-                    # Single turn complete: close stream and transition to IDLE without looping wake chime
-                    if self._stream_resp is not None:
-                        try:
-                            self._stream_resp.close()
-                        except Exception as e:
-                            self.logger.debug("Closing stream after command completion: %s", e)
-                        self._stream_resp = None
-
+                    # Continuous listening: return to LISTENING state and await next voice command
                     with self._selection_lock:
                         if self.state not in ("SELECTING", "ANALYZING"):
-                            self.state = "IDLE"
-                    self.logger.info("ListenerApp single turn completed. Remaining in IDLE state.")
-                    stop_event.wait()
-                    break
+                            self.state = "LISTENING"
+                    self.logger.info("Command turn completed. ListenerApp remaining active in LISTENING state.")
 
         except Exception as e:
             self.logger.error("ListenerApp run error: %s", e, exc_info=True)

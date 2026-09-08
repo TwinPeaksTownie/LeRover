@@ -42,18 +42,43 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(res3["intent"], "SWITCH_APP")
         self.assertEqual(res3["app"], "beat_bandit_app")
 
-    def test_intent_parser_movement_primitives(self):
-        res1 = parse_intent("home arm")
-        self.assertEqual(res1["intent"], "MOVE_PRIMITIVE")
-        self.assertEqual(res1["action"], "home")
+    def test_intent_parser_posture_commands(self):
+        # Exact physical posture commands
+        res1 = parse_intent("stand up")
+        self.assertEqual(res1["intent"], "POSTURE")
+        self.assertEqual(res1["action"], "stand")
 
-        res2 = parse_intent("center")
-        self.assertEqual(res2["intent"], "MOVE_PRIMITIVE")
-        self.assertEqual(res2["action"], "center")
+        res1b = parse_intent("stand")
+        self.assertEqual(res1b["intent"], "POSTURE")
+        self.assertEqual(res1b["action"], "stand")
 
-        res3 = parse_intent("park")
-        self.assertEqual(res3["intent"], "MOVE_PRIMITIVE")
-        self.assertEqual(res3["action"], "park")
+        res2 = parse_intent("sit down")
+        self.assertEqual(res2["intent"], "POSTURE")
+        self.assertEqual(res2["action"], "sit")
+
+        res2b = parse_intent("sit")
+        self.assertEqual(res2b["intent"], "POSTURE")
+        self.assertEqual(res2b["action"], "sit")
+
+        res3 = parse_intent("tiptoes")
+        self.assertEqual(res3["intent"], "POSTURE")
+        self.assertEqual(res3["action"], "tiptoes")
+
+        res3b = parse_intent("tiptoe")
+        self.assertEqual(res3b["intent"], "POSTURE")
+        self.assertEqual(res3b["action"], "tiptoes")
+
+        res4 = parse_intent("play dead")
+        self.assertEqual(res4["intent"], "POSTURE")
+        self.assertEqual(res4["action"], "play_dead")
+
+        # Explicitly verify removed synthetic slop primitives return UNKNOWN
+        self.assertEqual(parse_intent("home")["intent"], "UNKNOWN")
+        self.assertEqual(parse_intent("center")["intent"], "UNKNOWN")
+        self.assertEqual(parse_intent("park")["intent"], "UNKNOWN")
+        self.assertEqual(parse_intent("rest")["intent"], "UNKNOWN")
+        self.assertEqual(parse_intent("zero")["intent"], "UNKNOWN")
+        self.assertEqual(parse_intent("ready")["intent"], "UNKNOWN")
 
     def test_intent_parser_download_song(self):
         res = parse_intent("download pink pony club by chappel roan")
@@ -95,10 +120,15 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["asr"]["engine"], "vosk")
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
-        self.assertEqual(cfg["vad"]["settle_delay_sec"], 3.0)
+        self.assertEqual(cfg["vad"]["settle_delay_sec"], 2.5)
         self.assertEqual(cfg["vad"]["pre_roll_chunks"], 15)
         self.assertEqual(cfg["vad"]["fuzzy_match_threshold"], 0.55)
         self.assertGreater(cfg["vad"]["settle_delay_sec"], 0)
+        self.assertEqual(cfg["motion"]["interpolation_duration_sec"], 1.2)
+        self.assertEqual(cfg["motion"]["interpolation_steps"], 35)
+        self.assertEqual(cfg["motion"]["dead_posture"], "arch")
+        self.assertEqual(cfg["network"]["vosk_server_port"], 8059)
+        self.assertEqual(cfg["network"]["vosk_websocket_port"], 2700)
 
         # Missing settle_delay_sec raises KeyError
         bad_cfg_missing = copy.deepcopy(cfg)
@@ -119,6 +149,13 @@ class TestListenerPipeline(unittest.TestCase):
         bad_cfg_pr["vad"]["pre_roll_chunks"] = 0
         with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_pr))):
             with self.assertRaises(ValueError):
+                load_listener_config()
+
+        # Missing motion section raises KeyError
+        bad_cfg_motion = copy.deepcopy(cfg)
+        del bad_cfg_motion["motion"]
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_motion))):
+            with self.assertRaises(KeyError):
                 load_listener_config()
 
     def test_find_beat_bandit_track_fuzzy(self):
@@ -167,9 +204,20 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(app.metadata.name, cfg["name"])
         self.assertEqual(app.metadata.title, cfg["title"])
         self.assertEqual(app.metadata.icon, cfg["icon"])
-        self.assertEqual(app.get_status()["transcript"], "")
+        self.assertEqual(app.get_status()["transcript"], "(none)")
         app.transcript = "play redwine supernova"
         self.assertEqual(app.get_status()["transcript"], "play redwine supernova")
+
+    def test_load_dance_presets(self):
+        from apps.listener_app.app import load_dance_presets
+        presets = load_dance_presets()
+        for k in ["stand", "sit", "tiptoe", "arch"]:
+            self.assertIn(k, presets)
+            self.assertIn("normalized", presets[k])
+            norm = presets[k]["normalized"]
+            for joint in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]:
+                self.assertIn(joint, norm)
+                self.assertIsInstance(norm[joint], (int, float))
 
     def test_app_manager_auto_discovery(self):
         mock_backend = MagicMock()

@@ -38,8 +38,15 @@
     "idle_action": "Awaiting voice command",
     "idle_transcript": "(none)"
   },
+  "motion": {
+    "interpolation_duration_sec": 1.2,
+    "interpolation_steps": 35,
+    "dead_posture": "arch"
+  },
   "network": {
     "pi4b_port": 8082,
-    "mac_port": 8086
+    "mac_port": 8086,
+    "vosk_server_port": 8059,
+    "vosk_websocket_port": 2700
   }
 }
