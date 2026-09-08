@@ -11,7 +11,9 @@
     "packet_timeout_sec": 5.0,
     "scan_timeout_sec": 4.0,
     "reconnect_delay_sec": 0.5,
-    "telemetry_file": "/tmp/pokeball_telemetry.json"
+    "telemetry_file": "/tmp/pokeball_telemetry.json",
+    "remove_device_on_failure": true,
+    "consecutive_failures_before_remove": 1
   },
   "control": {
     "deadzone": 0.15,

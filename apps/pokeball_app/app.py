@@ -66,6 +66,8 @@ def load_pokeball_config() -> dict:
     _ = cfg["ble"]["scan_timeout_sec"]
     _ = cfg["ble"]["reconnect_delay_sec"]
     _ = cfg["ble"]["telemetry_file"]
+    _ = bool(cfg["ble"]["remove_device_on_failure"])
+    _ = int(cfg["ble"]["consecutive_failures_before_remove"])
     _ = cfg["control"]["deadzone"]
     _ = cfg["control"]["speed_scale"]
     _ = cfg["control"]["poll_rate_hz"]
@@ -192,6 +194,9 @@ class PokeballService:
         self.packet_timeout_sec = float(self.config["ble"]["packet_timeout_sec"])
         self.scan_timeout_sec = float(self.config["ble"]["scan_timeout_sec"])
         self.reconnect_delay_sec = float(self.config["ble"]["reconnect_delay_sec"])
+        self.remove_device_on_failure = bool(self.config["ble"]["remove_device_on_failure"])
+        self.consecutive_failures_before_remove = int(self.config["ble"]["consecutive_failures_before_remove"])
+        self.consecutive_connection_failures: int = 0
 
         # Teleoperation and Rover state
         self.teleop_enabled = False
@@ -560,12 +565,27 @@ class PokeballService:
         except Exception as e:
             self.logger.error(f"Error in notification_handler: {e}")
 
-    def _cleanup_bluez_device(self) -> None:
+    def _cleanup_bluez_device(self, remove: bool = False) -> None:
         try:
-            subprocess.run(["bluetoothctl", "disconnect", self.mac_address], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(
+                ["bluetoothctl", "disconnect", self.mac_address],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=3.0
+            )
+            if remove:
+                subprocess.run(
+                    ["bluetoothctl", "remove", self.mac_address],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    timeout=3.0
+                )
+                self.logger.info(f"Purged stale BlueZ device record: {self.mac_address}")
             time.sleep(0.2)
         except Exception as e:
-            self.logger.debug(f"BlueZ disconnect warning: {e}")
+            self.logger.debug(f"BlueZ cleanup warning: {e}")
 
     def _run_loop(self) -> None:
         if not BLEAK_AVAILABLE:
@@ -578,7 +598,7 @@ class PokeballService:
             self.logger.info(f"PokeballService background BLE loop started for {self.mac_address}...")
             while not self.stop_event.is_set():
                 try:
-                    self._cleanup_bluez_device()
+                    self._cleanup_bluez_device(remove=False)
                     self.logger.info(f"Searching for Poké Ball Plus ({self.mac_address})...")
                     self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": None})
                     self.write_telemetry()
@@ -593,6 +613,7 @@ class PokeballService:
                     async with BleakClient(device, timeout=6.0) as client:
                         self.client = client
                         self.is_connected = True
+                        self.consecutive_connection_failures = 0
                         self.logger.info("✅ Connected to Poké Ball Plus!")
                         if not self.connect_chime_played:
                             play_chime(_CONFIG["chimes"]["ble_connect"])
@@ -628,15 +649,28 @@ class PokeballService:
                         except Exception as disc_err:
                             self.logger.debug(f"Explicit disconnect completed/timed out: {disc_err}")
 
+                        if self.remove_device_on_failure:
+                            self._cleanup_bluez_device(remove=True)
+
                 except Exception as e:
                     err_msg = str(e)
                     self.is_connected = False
+                    self.consecutive_connection_failures += 1
                     self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": err_msg})
                     self.write_telemetry()
                     if self.connect_chime_played:
                         play_chime(_CONFIG["chimes"]["ble_disconnect"])
                         self.connect_chime_played = False
-                    self.logger.info(f"Poké Ball BLE waiting for device... [{err_msg}]")
+                    self.logger.info(
+                        f"Poké Ball BLE waiting for device... [{err_msg}] (failures={self.consecutive_connection_failures})"
+                    )
+                    if self.remove_device_on_failure and self.consecutive_connection_failures >= self.consecutive_failures_before_remove:
+                        self.logger.info(
+                            f"Purging stale BlueZ cache for {self.mac_address} via bluetoothctl remove "
+                            f"(reached {self.consecutive_connection_failures} failure(s))..."
+                        )
+                        self._cleanup_bluez_device(remove=True)
+                        self.consecutive_connection_failures = 0
                     await asyncio.sleep(self.reconnect_delay_sec)
 
             self.telemetry.update({"running": False, "connected": False, "status": "DISCONNECTED"})
