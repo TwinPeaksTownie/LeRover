@@ -47,7 +47,7 @@ from telemetry_proxies import MOTOR_NAMES
 import network_resolver
 import audio_resolver
 
-from apps.listener_app.intent_parser import parse_intent
+from apps.listener_app.intent_parser import parse_intent, strip_hallucinated_the
 from apps.listener_app.song_pipeline import (
     download_and_compile,
     find_compiled_sequence,
@@ -737,9 +737,9 @@ class ListenerApp(BaseApp):
                         else:
                             authoritative_transcript = f"{complete_clean} {partial_clean}".strip()
 
-                    transcript = authoritative_transcript
+                    transcript = strip_hallucinated_the(authoritative_transcript)
                     self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
-                    self.logger.info("Finalized streaming transcript: '%s'", self.transcript)
+                    self.logger.info("Finalized streaming transcript: '%s' (raw: '%s')", self.transcript, authoritative_transcript)
                     if transcript:
                         intent = parse_intent(transcript)
                         self.logger.info("Parsed intent: %s", intent)

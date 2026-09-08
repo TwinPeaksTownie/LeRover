@@ -20,7 +20,7 @@ for p in [WORKSPACE_ROOT, PI500_DIR]:
     if ps not in sys.path:
         sys.path.insert(0, ps)
 
-from apps.listener_app.intent_parser import parse_intent, sanitize_input, APP_ALIAS_MAP
+from apps.listener_app.intent_parser import parse_intent, sanitize_input, strip_hallucinated_the, APP_ALIAS_MAP
 from apps.listener_app.song_pipeline import sanitize_slug, find_compiled_sequence, get_sequences_dir, find_beat_bandit_track
 from apps.listener_app.app import ListenerApp, load_listener_config, load_calibration_limits
 from app_manager import AppManager
@@ -72,6 +72,55 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(res4["intent"], "POSTURE")
         self.assertEqual(res4["action"], "play_dead")
 
+        # Physical posture commands with lingering words (e.g. "stand up the", "stand up now", "can you stand up")
+        res_ling1 = parse_intent("stand up the")
+        self.assertEqual(res_ling1["intent"], "POSTURE")
+        self.assertEqual(res_ling1["action"], "stand")
+
+        res_ling1b = parse_intent("the stand up")
+        self.assertEqual(res_ling1b["intent"], "POSTURE")
+        self.assertEqual(res_ling1b["action"], "stand")
+
+        res_ling1c = parse_intent("the stand up the")
+        self.assertEqual(res_ling1c["intent"], "POSTURE")
+        self.assertEqual(res_ling1c["action"], "stand")
+
+        res_ling1d = parse_intent("stand up now")
+        self.assertEqual(res_ling1d["intent"], "POSTURE")
+        self.assertEqual(res_ling1d["action"], "stand")
+
+        res_ling1e = parse_intent("stand up please")
+        self.assertEqual(res_ling1e["intent"], "POSTURE")
+        self.assertEqual(res_ling1e["action"], "stand")
+
+        res_ling1f = parse_intent("can you stand up")
+        self.assertEqual(res_ling1f["intent"], "POSTURE")
+        self.assertEqual(res_ling1f["action"], "stand")
+
+        res_ling2 = parse_intent("sit down the")
+        self.assertEqual(res_ling2["intent"], "POSTURE")
+        self.assertEqual(res_ling2["action"], "sit")
+
+        res_ling2b = parse_intent("sit down now")
+        self.assertEqual(res_ling2b["intent"], "POSTURE")
+        self.assertEqual(res_ling2b["action"], "sit")
+
+        res_ling3 = parse_intent("tiptoes the")
+        self.assertEqual(res_ling3["intent"], "POSTURE")
+        self.assertEqual(res_ling3["action"], "tiptoes")
+
+        res_ling3b = parse_intent("tiptoes please")
+        self.assertEqual(res_ling3b["intent"], "POSTURE")
+        self.assertEqual(res_ling3b["action"], "tiptoes")
+
+        res_ling4 = parse_intent("play dead the")
+        self.assertEqual(res_ling4["intent"], "POSTURE")
+        self.assertEqual(res_ling4["action"], "play_dead")
+
+        res_ling4b = parse_intent("play dead now")
+        self.assertEqual(res_ling4b["intent"], "POSTURE")
+        self.assertEqual(res_ling4b["action"], "play_dead")
+
         # Explicitly verify removed synthetic slop primitives return UNKNOWN
         self.assertEqual(parse_intent("home")["intent"], "UNKNOWN")
         self.assertEqual(parse_intent("center")["intent"], "UNKNOWN")
@@ -79,6 +128,42 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(parse_intent("rest")["intent"], "UNKNOWN")
         self.assertEqual(parse_intent("zero")["intent"], "UNKNOWN")
         self.assertEqual(parse_intent("ready")["intent"], "UNKNOWN")
+
+    def test_strip_hallucinated_the(self):
+        # 1. Only "the" (or repetitions) -> empty string
+        self.assertEqual(strip_hallucinated_the("the"), "")
+        self.assertEqual(strip_hallucinated_the("the the"), "")
+        self.assertEqual(strip_hallucinated_the("The"), "")
+        self.assertEqual(strip_hallucinated_the("The."), "")
+        self.assertEqual(strip_hallucinated_the("  the  "), "")
+        self.assertEqual(strip_hallucinated_the(""), "")
+
+        # 2. Starts with "the" -> stripped
+        self.assertEqual(strip_hallucinated_the("the stand up"), "stand up")
+        self.assertEqual(strip_hallucinated_the("the the stand up"), "stand up")
+        self.assertEqual(strip_hallucinated_the("The sit down"), "sit down")
+        self.assertEqual(strip_hallucinated_the("the play"), "play")
+
+        # 3. Ends with "the" -> stripped
+        self.assertEqual(strip_hallucinated_the("stand up the"), "stand up")
+        self.assertEqual(strip_hallucinated_the("stand up the the"), "stand up")
+        self.assertEqual(strip_hallucinated_the("sit down the"), "sit down")
+        self.assertEqual(strip_hallucinated_the("play dead the"), "play dead")
+
+        # 4. Starts and ends with "the" -> stripped
+        self.assertEqual(strip_hallucinated_the("the stand up the"), "stand up")
+        self.assertEqual(strip_hallucinated_the("the play dead the"), "play dead")
+
+        # 5. Internal "the" preserved
+        self.assertEqual(strip_hallucinated_the("dance to the beat"), "dance to the beat")
+        self.assertEqual(strip_hallucinated_the("sing the song"), "sing the song")
+        self.assertEqual(strip_hallucinated_the("the dance to the beat the"), "dance to the beat")
+
+        # 6. Subwords with "the" strictly preserved
+        self.assertEqual(strip_hallucinated_the("theme park"), "theme park")
+        self.assertEqual(strip_hallucinated_the("breathe"), "breathe")
+        self.assertEqual(strip_hallucinated_the("soothe"), "soothe")
+        self.assertEqual(strip_hallucinated_the("they are dancing"), "they are dancing")
 
     def test_intent_parser_download_song(self):
         res = parse_intent("download pink pony club by chappel roan")

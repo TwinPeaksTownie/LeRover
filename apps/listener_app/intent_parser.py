@@ -40,12 +40,36 @@ POSTURE_COMMANDS = {
     "play dead": "play_dead",
 }
 
+POSTURE_PATTERNS = [
+    (re.compile(r"\bstand\s+up\b"), "stand"),
+    (re.compile(r"\bsit\s+down\b"), "sit"),
+    (re.compile(r"\bplay\s+dead\b"), "play_dead"),
+    (re.compile(r"\btiptoes\b"), "tiptoes"),
+    (re.compile(r"\btiptoe\b"), "tiptoes"),
+    (re.compile(r"\bstand\b"), "stand"),
+    (re.compile(r"\bsit\b"), "sit"),
+]
+
+
+def strip_hallucinated_the(text: str) -> str:
+    """Smart filtering: strips the isolated word 'the' if it occurs at the start, end,
+    both, or if the transcription consists entirely of 'the'. Words with 'the' inside
+    the sentence or as subwords (e.g. 'theme', 'breathe', 'to the beat') are preserved.
+    """
+    if not text:
+        return ""
+    s = text.strip()
+    s = re.sub(r"^(?:the\b[^\w\s]*\s*)+", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:\s*[^\w\s]*\bthe[^\w\s]*)+$", "", s, flags=re.IGNORECASE)
+    return s.strip()
+
 
 def sanitize_input(text: str) -> str:
-    """Lowercases and cleans trailing punctuation from transcribed audio."""
+    """Lowercases, cleans trailing punctuation, and strips hallucinated 'the' from transcribed audio."""
     cleaned = text.lower().strip()
     cleaned = re.sub(r"[^\w\s]", "", cleaned)
-    return re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return strip_hallucinated_the(cleaned)
 
 
 def parse_intent(text: str) -> Dict[str, Any]:
@@ -77,9 +101,15 @@ def parse_intent(text: str) -> Dict[str, Any]:
             if alias in target:
                 return {"intent": "SWITCH_APP", "app": canonical, "raw": raw_clean}
 
-    # 3. Exact Physical Posture Commands ('stand up', 'stand', 'sit down', 'sit', 'tiptoes', 'tiptoe', 'play dead')
+    # 3. Exact and Phrase-Contained Physical Posture Commands ('stand up', 'stand', 'sit down', 'sit', 'tiptoes', 'tiptoe', 'play dead')
     if raw_clean in POSTURE_COMMANDS:
         return {"intent": "POSTURE", "action": POSTURE_COMMANDS[raw_clean], "raw": raw_clean}
+
+    for pattern, action in POSTURE_PATTERNS:
+        if pattern.search(raw_clean):
+            if action != "play_dead" and (raw_clean.startswith("play ") or raw_clean.startswith("sing ") or raw_clean.startswith("download ")):
+                continue
+            return {"intent": "POSTURE", "action": action, "raw": raw_clean}
 
     # 4. Download Song Intent (e.g. "download <title> by <artist>" or "get <title> by <artist>")
     dl_match = re.match(r"^(?:download|fetch|get|learn)\s+(.+?)\s+by\s+(.+)$", raw_clean)
