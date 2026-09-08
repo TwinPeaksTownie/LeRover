@@ -17,5 +17,11 @@
     "assert_rts": false,
     "serial_timeout_sec": 0.01,
     "write_timeout_sec": 1.0
+  },
+  "watchdog": {
+    "auto_recover_stalls": true,
+    "stall_timeout_sec": 2.5,
+    "uhubctl_location": "1-1",
+    "uhubctl_port": 3
   }
 }

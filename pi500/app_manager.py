@@ -311,9 +311,19 @@ class AppManager:
             self.stop_app(self.current_app_name)
 
     def stop_all(self) -> None:
-        """Stops whatever app is currently active."""
+        """Stops whatever app is currently active with full thread joining and mutex release."""
         if self.current_app_name:
             self.stop_app(self.current_app_name)
+        elif self.active_app:
+            try:
+                self.active_app.stop()
+                if self.active_app.thread and self.active_app.thread.is_alive() and self.active_app.thread != threading.current_thread():
+                    self.active_app.thread.join(timeout=2.0)
+            except Exception as e:
+                self.logger.warning(f"Error stopping lingering active_app: {e}")
+            self.active_app = None
+        if self.lock.owner is not None:
+            self.lock.release(self.lock.owner)
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured AppManager status for REST API inspection."""

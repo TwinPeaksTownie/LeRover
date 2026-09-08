@@ -73,6 +73,7 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["version"]
     _ = cfg["icon"]
     _ = cfg["tags"]
+    _ = bool(cfg["execution"]["single_turn"])
     _ = int(cfg["hotword"]["chunk_samples"])
     _ = int(cfg["hotword"]["sample_rate"])
     _ = float(cfg["hotword"]["energy_multiplier"])
@@ -230,6 +231,10 @@ class ListenerApp(BaseApp):
         self.dance_presets: Dict[str, Any] = {}
         self.last_analyzed_track: Optional[Dict[str, Any]] = None
         self._vosk_ready: bool = False
+        self.single_turn: bool = bool(self.config["execution"]["single_turn"])
+        self.start_listen_event = threading.Event()
+        self.abort_listen_event = threading.Event()
+        self.caller_app: Optional[str] = None
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured status dictionary for Master API inspection."""
@@ -561,6 +566,24 @@ class ListenerApp(BaseApp):
             self.logger.info("Stop event signaled during acoustic settle delay. Exiting...")
             return
 
+        # Initial trigger: wait for single B Button tap or stop_event
+        self.state = "IDLE"
+        self.action_taken = "Press Button B to speak"
+        self.logger.info("ListenerApp initialized in IDLE. Awaiting Button B single tap to start listening...")
+
+        # If start_listen_event is not already set, await operator trigger
+        while not stop_event.is_set() and not self.abort_listen_event.is_set():
+            if self.start_listen_event.wait(timeout=0.1):
+                self.start_listen_event.clear()
+                break
+
+        if stop_event.is_set() or self.abort_listen_event.is_set():
+            self.logger.info("Exit signaled before listening started. Exiting ListenerApp...")
+            return
+
+        self.state = "LISTENING"
+        self._play_chime("wake")
+
         pre_roll_chunks = int(self.config["vad"]["pre_roll_chunks"])
         pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
 
@@ -573,7 +596,7 @@ class ListenerApp(BaseApp):
                 self.logger.warning("Could not open daemon audio stream (%s), entering command polling mode...", e, exc_info=True)
 
             # Utterance capture loop
-            while not stop_event.is_set():
+            while not stop_event.is_set() and not self.abort_listen_event.is_set():
                 if self._stream_resp is not None:
                     chunk = self._stream_resp.read(chunk_bytes)
                     if not chunk:
@@ -654,8 +677,11 @@ class ListenerApp(BaseApp):
                     complete_parts: List[str] = []
                     partial_text: str = ""
 
-                    # Stream spoken command until silence
+                    # Stream spoken command until silence or abort
                     while not stop_event.is_set():
+                        if self.abort_listen_event.is_set():
+                            self.logger.info("Abort listen event signaled during capture. Aborting speech stream...")
+                            break
                         c = self._stream_resp.read(chunk_bytes)
                         if not c:
                             break
@@ -701,8 +727,8 @@ class ListenerApp(BaseApp):
                         if (now - last_voice_time) > silence_timeout or (now - record_start) > max_record_sec:
                             break
 
-                    if stop_event.is_set():
-                        self.logger.info("Stop event signaled during speech capture. Aborting turn...")
+                    if stop_event.is_set() or self.abort_listen_event.is_set():
+                        self.logger.info("Stop or abort signaled during speech capture. Aborting turn...")
                         stop_rx.set()
                         if rx_thread is not None:
                             rx_thread.join(timeout=0.2)
@@ -711,6 +737,8 @@ class ListenerApp(BaseApp):
                                 ws_client.close()
                             except Exception as ws_err:
                                 self.logger.debug("Error closing WebSocket on abort: %s", ws_err)
+                        if self.abort_listen_event.is_set():
+                            self._play_chime("cancel")
                         break
 
                     self.state = "PROCESSING"
@@ -891,7 +919,21 @@ class ListenerApp(BaseApp):
                         if stop_event.is_set():
                             break
 
-                    # Continuous listening: cycle stream to flush buffered motor/chime noise and await next command
+                    if self.single_turn:
+                        self.logger.info("Single-turn voice command completed. Terminating ListenerApp...")
+                        if self.caller_app and self.app_manager is not None:
+                            caller = str(self.caller_app)
+                            def _return_to_caller():
+                                try:
+                                    self.logger.info("Returning to caller app '%s'...", caller)
+                                    self.app_manager.start_app_by_name(caller)
+                                except Exception as ex:
+                                    self.logger.error("Failed to return to caller app '%s': %s", caller, ex)
+                            threading.Thread(target=_return_to_caller, daemon=True).start()
+                        self.stop()
+                        return
+
+                    # Continuous listening fallback if single_turn is disabled in config
                     if self._stream_resp is not None:
                         try:
                             self._stream_resp.close()
@@ -938,14 +980,19 @@ class ListenerApp(BaseApp):
         """Signals the application loop to stop and release all hardware."""
         self.logger.info("Stopping ListenerApp...")
         self.stop_event.set()
+        self.abort_listen_event.set()
         if self._stream_resp is not None:
             try:
-                import socket
-                raw_sock = self._stream_resp.fp.raw._sock
-                raw_sock.shutdown(socket.SHUT_RDWR)
-            except (AttributeError, OSError) as sock_err:
-                self.logger.debug("Socket shutdown during stop: %s", sock_err)
-            try:
+                if hasattr(self._stream_resp, "fp") and self._stream_resp.fp is not None:
+                    fp = self._stream_resp.fp
+                    if hasattr(fp, "raw") and fp.raw is not None:
+                        raw = fp.raw
+                        if hasattr(raw, "_sock") and raw._sock is not None:
+                            try:
+                                import socket
+                                raw._sock.shutdown(socket.SHUT_RDWR)
+                            except OSError as e:
+                                self.logger.debug("Socket shutdown already completed: %s", e)
                 self._stream_resp.close()
             except Exception as e:
                 self.logger.debug("Error closing stream on stop: %s", e)

@@ -5,6 +5,9 @@
   "version": "1.0.0",
   "icon": "👂",
   "tags": ["voice", "hotword", "kws", "listener", "offline"],
+  "execution": {
+    "single_turn": true
+  },
   "hotword": {
     "chunk_samples": 1280,
     "sample_rate": 16000,

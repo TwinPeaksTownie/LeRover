@@ -153,12 +153,39 @@ class TestPokeballServiceGestures(unittest.TestCase):
             with patch("threading.Thread") as mock_thread:
                 self._simulate_input(buttons=0x01, now=t0 + 3.05)
                 self.assertTrue(self.service.b_hold_triggered)
-                mock_thread.assert_called_once_with(
-                    target=self.service.app_manager.start_app_by_name,
-                    args=("listener_app",),
-                    daemon=True,
-                )
+                self.assertEqual(mock_thread.call_args[1]["daemon"], True)
                 mock_thread.return_value.start.assert_called_once()
+                # Run the thread target
+                launch_fn = mock_thread.call_args[1]["target"]
+                launch_fn()
+                self.service.app_manager.start_app_by_name.assert_called_with("listener_app")
+
+    @patch("apps.pokeball_app.app.play_chime")
+    def test_button_b_gestures_while_listener_app_active(self, mock_play_chime):
+        """While listener_app is active: single tap triggers start_listen_event, double tap aborts."""
+        self.service.app_manager = MagicMock()
+        self.service.app_manager.current_app_name = "listener_app"
+        mock_listener = MagicMock()
+        self.service.app_manager.active_app = mock_listener
+
+        t0 = 400.0
+
+        # 1. Single tap Button B: press and release
+        with patch("time.time", return_value=t0):
+            self._simulate_input(buttons=0x01, now=t0)
+        with patch("time.time", return_value=t0 + 0.1):
+            self._simulate_input(buttons=0x00, now=t0 + 0.1)
+            mock_listener.start_listen_event.set.assert_called_once()
+            mock_listener.abort_listen_event.set.assert_not_called()
+
+        # 2. Double tap Button B: second click within b_double_tap_sec (0.40s)
+        t_click2 = t0 + 0.30
+        with patch("time.time", return_value=t_click2):
+            self._simulate_input(buttons=0x01, now=t_click2)
+        with patch("time.time", return_value=t_click2 + 0.08):
+            self._simulate_input(buttons=0x00, now=t_click2 + 0.08)
+            mock_listener.abort_listen_event.set.assert_called_once()
+            mock_play_chime.assert_called_with("ornith_abort_recording")
 
     def test_gantry_up_nudges_right_in_aux_mode(self):
         """In AUX mode, tilting stick UP (norm_y < -0.35) must dispatch /api/nudge_physical with direction='right'."""

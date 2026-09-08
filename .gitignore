@@ -34,3 +34,6 @@ lessons_learned.md
 scratch/
 *audit_result*.json
 reference/
+.pio/
+**/.pio/
+

@@ -215,6 +215,7 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["motion"]["interpolation_duration_sec"], 1.2)
         self.assertEqual(cfg["motion"]["interpolation_steps"], 35)
         self.assertEqual(cfg["motion"]["dead_posture"], "arch")
+        self.assertTrue(cfg["execution"]["single_turn"])
         self.assertEqual(cfg["network"]["vosk_server_port"], 8059)
         self.assertEqual(cfg["network"]["vosk_websocket_port"], 2700)
 
