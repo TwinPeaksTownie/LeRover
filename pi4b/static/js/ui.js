@@ -1484,6 +1484,7 @@ export function updateTelemetryUI(data) {
     // Vosk Standby Health LED Indicator
     const topVoskDot = document.getElementById('topVoskDot');
     const topVoskLabel = document.getElementById('topVoskLabel');
+    const topVoskIndicator = document.getElementById('topVoskIndicator');
     const railVoskDot = document.getElementById('railVoskDot');
     const listenerCardVoskDot = document.getElementById('listenerCardVoskDot');
     const isVoskReady = Boolean(data.vosk_ready);
@@ -1493,13 +1494,21 @@ export function updateTelemetryUI(data) {
     if (topVoskLabel) {
         topVoskLabel.style.color = isVoskReady ? '#00ff66' : '#888888';
     }
+    if (topVoskIndicator) {
+        topVoskIndicator.title = isVoskReady ? 'Vosk Standby Server (Ready)' : 'Vosk Standby Server (Offline/Loading)';
+    }
     if (railVoskDot) {
         railVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
         const label = document.getElementById('railVoskLabel');
         if (label) label.style.color = isVoskReady ? '#00ff66' : '#888888';
+        const railPill = railVoskDot.closest ? railVoskDot.closest('.rail-status-pill') : null;
+        if (railPill) {
+            railPill.title = isVoskReady ? 'Vosk Standby Server (Ready)' : 'Vosk Standby Server (Offline/Loading)';
+        }
     }
     if (listenerCardVoskDot) {
         listenerCardVoskDot.className = isVoskReady ? 'status-led led-green' : 'status-led led-red';
+        listenerCardVoskDot.title = isVoskReady ? 'Vosk Standby Server (Ready)' : 'Vosk Standby Server (Offline/Loading)';
     }
 
     renderButtonStates();

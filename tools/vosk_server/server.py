@@ -56,6 +56,9 @@ def load_vosk_config() -> Dict[str, Any]:
     _ = str(cfg["model_path"])
     _ = int(cfg["sample_rate"])
     _ = int(cfg["timeout_sec"])
+    _ = bool(cfg["auto_start_on_boot"])
+    _ = bool(cfg["start_on_ui_ready"])
+    _ = str(cfg["service_name"])
     return cfg
 
 

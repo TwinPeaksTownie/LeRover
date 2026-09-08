@@ -389,3 +389,12 @@ export function sendListenerNavigate(delta) {
         body: JSON.stringify({ delta: parseInt(delta, 10) })
     }, 2500);
 }
+
+// Deferred Vosk Standby Service Launcher
+export function startVoskService() {
+    return safeFetch('/api/vosk/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }, 5000);
+}

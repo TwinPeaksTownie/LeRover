@@ -4,5 +4,8 @@
   "websocket_port": 2700,
   "model_path": "/home/carson/models/vosk-model-en-us-0.22",
   "sample_rate": 16000,
-  "timeout_sec": 300
+  "timeout_sec": 300,
+  "auto_start_on_boot": false,
+  "start_on_ui_ready": true,
+  "service_name": "vosk-server.service"
 }

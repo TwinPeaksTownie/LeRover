@@ -2348,6 +2348,9 @@ function initApp() {
 
     // Start sequential telemetry loop
     pollTelemetry();
+
+    // Trigger deferred background launch of resident Vosk standby server now that Touch UI is loaded
+    api.startVoskService().catch(() => {});
 }
 
 if (document.readyState === 'loading') {

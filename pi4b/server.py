@@ -18,6 +18,7 @@ import time
 import traceback
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 # Ensure virtualenv site-packages are available even if started via system Python
@@ -289,6 +290,72 @@ def manage_local_backend(action: str) -> Optional[int]:
             logging.error(f"[BackendLifecycle] Backend connect error: {ex}")
         return os.getpid()
     return None
+
+
+VOSK_CONFIG_PATH_CANDIDATES = [
+    Path("/home/carson/vosk_server/vosk_config.json"),
+    Path("/home/carson/touch_ui/config/vosk_config.json"),
+    Path(__file__).resolve().parent.parent / "config" / "vosk_config.json",
+    Path(__file__).resolve().parent / "config" / "vosk_config.json",
+    Path("config/vosk_config.json"),
+]
+
+
+def load_vosk_config() -> Dict[str, Any]:
+    target_path: Optional[Path] = None
+    for p in VOSK_CONFIG_PATH_CANDIDATES:
+        if p.exists():
+            target_path = p
+            break
+    if target_path is None:
+        raise FileNotFoundError(f"Missing canonical Vosk configuration. Checked: {VOSK_CONFIG_PATH_CANDIDATES}")
+
+    with open(target_path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    # Fail-fast schema validation
+    _ = str(cfg["host"])
+    _ = int(cfg["port"])
+    _ = str(cfg["service_name"])
+    _ = bool(cfg["start_on_ui_ready"])
+    return cfg
+
+
+VOSK_LAUNCH_LOCK = threading.Lock()
+VOSK_LAUNCH_TRIGGERED = False
+
+
+def launch_vosk_service() -> bool:
+    """Launches resident Vosk standby server in background thread upon UI readiness."""
+    global VOSK_LAUNCH_TRIGGERED
+    with VOSK_LAUNCH_LOCK:
+        if VOSK_LAUNCH_TRIGGERED:
+            return False
+        VOSK_LAUNCH_TRIGGERED = True
+
+    def _launcher() -> None:
+        service_name = "vosk-server.service"
+        try:
+            cfg = load_vosk_config()
+            service_name = str(cfg["service_name"])
+            logging.info(f"[VoskLifecycle] Touch UI load confirmed. Initiating background start for {service_name}...")
+            res = subprocess.run(
+                ["sudo", "-n", "systemctl", "start", service_name],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=15,
+                text=True
+            )
+            if res.returncode == 0:
+                logging.info(f"[VoskLifecycle] Successfully signaled systemd to start {service_name}.")
+            else:
+                logging.warning(f"[VoskLifecycle] systemctl start {service_name} returned code {res.returncode}: {res.stderr.strip()}")
+        except Exception as ex:
+            logging.error(f"[VoskLifecycle] Failed to launch {service_name}: {ex}", exc_info=True)
+
+    threading.Thread(target=_launcher, daemon=True, name="VoskDeferredLauncher").start()
+    return True
 
 
 def poll_status_loop() -> None:
@@ -921,6 +988,18 @@ class UnifiedHandler(MasterApiHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": f"Backend lifecycle failure: {ex}", "status": "failed"}).encode())
                 return
+
+        if path == "/api/vosk/start":
+            launched = launch_vosk_service()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "launched": launched,
+                "vosk_ready": bool(STATUS_CACHE["vosk_ready"])
+            }).encode())
+            return
 
         # 3. Audio / Tap detector muting during motion sequences
         if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
