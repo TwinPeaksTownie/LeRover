@@ -1134,8 +1134,8 @@ def main() -> None:
         try:
             logging.info(f"Stopping active app '{GLOBAL_APP_MANAGER.current_app_name}' on server shutdown...")
             GLOBAL_APP_MANAGER.stop_current_app()
-        except Exception as e:
-            logging.warning(f"Error stopping active app: {e}")
+        except (AttributeError, RuntimeError, TypeError, OSError) as e:
+            logging.exception(f"Error stopping active app '{GLOBAL_APP_MANAGER.current_app_name}': {e}")
 
     if GLOBAL_POKEBALL:
         try:
