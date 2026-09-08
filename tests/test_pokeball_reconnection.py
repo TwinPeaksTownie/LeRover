@@ -35,9 +35,12 @@ class TestPokeballConfigSchema(unittest.TestCase):
         self.assertIn("packet_timeout_sec", cfg["ble"])
         self.assertIn("scan_timeout_sec", cfg["ble"])
         self.assertIn("reconnect_delay_sec", cfg["ble"])
+        self.assertIn("client_connect_timeout_sec", cfg["ble"])
         self.assertAlmostEqual(cfg["ble"]["packet_timeout_sec"], 5.0)
         self.assertAlmostEqual(cfg["ble"]["scan_timeout_sec"], 4.0)
         self.assertAlmostEqual(cfg["ble"]["reconnect_delay_sec"], 0.5)
+        self.assertAlmostEqual(cfg["ble"]["client_connect_timeout_sec"], 10.0)
+        self.assertFalse(cfg["ble"]["remove_device_on_failure"])
 
     def test_fail_fast_on_missing_key(self):
         with patch.dict(pokeball_module._CONFIG["ble"], {}, clear=False):
@@ -47,6 +50,12 @@ class TestPokeballConfigSchema(unittest.TestCase):
 
             with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_cfg))):
                 with self.assertRaises(KeyError):
+                    load_pokeball_config()
+
+            bad_cfg_zero = json.loads(json.dumps(original_cfg))
+            bad_cfg_zero["ble"]["client_connect_timeout_sec"] = 0.0
+            with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_cfg_zero))):
+                with self.assertRaises(ValueError):
                     load_pokeball_config()
 
 

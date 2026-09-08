@@ -68,6 +68,9 @@ def load_pokeball_config() -> dict:
     _ = cfg["ble"]["telemetry_file"]
     _ = bool(cfg["ble"]["remove_device_on_failure"])
     _ = int(cfg["ble"]["consecutive_failures_before_remove"])
+    connect_timeout = float(cfg["ble"]["client_connect_timeout_sec"])
+    if connect_timeout <= 0:
+        raise ValueError("client_connect_timeout_sec must be positive")
     _ = cfg["control"]["deadzone"]
     _ = cfg["control"]["speed_scale"]
     _ = cfg["control"]["poll_rate_hz"]
@@ -196,6 +199,7 @@ class PokeballService:
         self.reconnect_delay_sec = float(self.config["ble"]["reconnect_delay_sec"])
         self.remove_device_on_failure = bool(self.config["ble"]["remove_device_on_failure"])
         self.consecutive_failures_before_remove = int(self.config["ble"]["consecutive_failures_before_remove"])
+        self.client_connect_timeout_sec = float(self.config["ble"]["client_connect_timeout_sec"])
         self.consecutive_connection_failures: int = 0
 
         # Teleoperation and Rover state
@@ -594,11 +598,22 @@ class PokeballService:
 
         self.prompt_connect_announcement()
 
+        try:
+            subprocess.run(
+                ["bluetoothctl", "trust", self.mac_address],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=3.0
+            )
+            self.logger.info("Enforced permanent BlueZ trust for %s.", self.mac_address)
+        except Exception as trust_err:
+            self.logger.debug("Error enforcing BlueZ trust: %s", trust_err)
+
         async def _async_loop():
             self.logger.info(f"PokeballService background BLE loop started for {self.mac_address}...")
             while not self.stop_event.is_set():
                 try:
-                    self._cleanup_bluez_device(remove=False)
                     self.logger.info(f"Searching for Poké Ball Plus ({self.mac_address})...")
                     self.telemetry.update({"connected": False, "status": "SEARCHING", "last_error": None})
                     self.write_telemetry()
@@ -610,7 +625,7 @@ class PokeballService:
                         continue
 
                     self.logger.info(f"Discovered Poké Ball Plus ({device.name or device.address}). Connecting...")
-                    async with BleakClient(device, timeout=6.0) as client:
+                    async with BleakClient(device, timeout=self.client_connect_timeout_sec) as client:
                         self.client = client
                         self.is_connected = True
                         self.consecutive_connection_failures = 0
@@ -648,9 +663,6 @@ class PokeballService:
                             await asyncio.wait_for(client.disconnect(), timeout=1.5)
                         except Exception as disc_err:
                             self.logger.debug(f"Explicit disconnect completed/timed out: {disc_err}")
-
-                        if self.remove_device_on_failure:
-                            self._cleanup_bluez_device(remove=True)
 
                 except Exception as e:
                     err_msg = str(e)
