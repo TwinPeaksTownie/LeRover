@@ -85,7 +85,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
 
     @patch("apps.pokeball_app.app.play_chime")
     def test_rover_arm_hold_and_mode_toggle(self, mock_play_chime):
-        """Holding Button A for 3.0s arms drivetrain. Button B click toggles ROVER <-> AUX mode."""
+        """Holding Button A for 1.5s arms drivetrain. Button B click switches to AUX mode. Button A click switches to ROVER mode."""
         self.service.teleop_enabled = True
         self.service.control_mode = "ROVER"
         self.service.rover_ctrl = MagicMock()
@@ -118,27 +118,41 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.service.rover_ctrl.set_drive.assert_called_with(0.0, 0.0)
             mock_play_chime.assert_called_with("mode_switch_aux")
 
-        # Second tap Button B while already in AUX mode -> Remains in AUX Mode!
-        t_tap2 = t0 + 5.0
-        with patch("time.time", return_value=t_tap2):
-            self._simulate_input(buttons=0x01, now=t_tap2)
-        with patch("time.time", return_value=t_tap2 + 0.1):
-            self._simulate_input(buttons=0x00, now=t_tap2 + 0.1)
-            self.assertEqual(self.service.control_mode, "AUX")
-
-        # Holding Button A for 1.5s from AUX mode -> Switches back to ROVER mode & arms!
-        t_hold_a = t0 + 6.0
-        with patch("time.time", return_value=t_hold_a):
-            self._simulate_input(buttons=0x02, now=t_hold_a)
-        with patch("time.time", return_value=t_hold_a + 1.55):
-            self._simulate_input(buttons=0x02, now=t_hold_a + 1.55)
+        # Click Button A (0x02) while in AUX mode -> Switches back to ROVER mode & arms!
+        t_click_a = t0 + 6.0
+        with patch("time.time", return_value=t_click_a):
+            self._simulate_input(buttons=0x02, now=t_click_a)
+        with patch("time.time", return_value=t_click_a + 0.1):
+            self._simulate_input(buttons=0x00, now=t_click_a + 0.1)
             self.assertEqual(self.service.control_mode, "ROVER")
             self.assertTrue(self.service.is_armed)
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
     @patch("apps.pokeball_app.app.play_chime")
+    def test_button_a_hold_starts_pokeball_app_when_inactive(self, mock_play_chime):
+        """Holding Button A for 1.5s when pokeball app is inactive stops active apps and launches pokeball_teleop_app."""
+        self.service.app_manager = MagicMock()
+        self.service.app_manager.current_app_name = "listener_app"
+        self.service.teleop_enabled = False
+        t0 = 250.0
+
+        with patch("time.time", return_value=t0):
+            self._simulate_input(buttons=0x02, now=t0)
+        with patch("time.time", return_value=t0 + 1.55):
+            with patch("threading.Thread") as mock_thread:
+                self._simulate_input(buttons=0x02, now=t0 + 1.55)
+                self.assertTrue(self.service.a_hold_triggered)
+                self.assertTrue(self.service.is_armed)
+                mock_thread.return_value.start.assert_called_once()
+                launch_fn = mock_thread.call_args[1]["target"]
+                with patch("urllib.request.urlopen"):
+                    launch_fn()
+                self.service.app_manager.stop_all.assert_called_once()
+                self.service.app_manager.start_app_by_name.assert_called_with("pokeball_teleop_app")
+
+    @patch("apps.pokeball_app.app.play_chime")
     def test_button_b_hold_launches_listener_app(self, mock_play_chime):
-        """Holding Button B for 3.0s must launch listener_app via AppManager."""
+        """Holding Button B for 3.0s must stop active apps and launch listener_app via AppManager."""
         self.service.app_manager = MagicMock()
         t0 = 300.0
 
@@ -158,6 +172,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 # Run the thread target
                 launch_fn = mock_thread.call_args[1]["target"]
                 launch_fn()
+                self.service.app_manager.stop_all.assert_called_once()
                 self.service.app_manager.start_app_by_name.assert_called_with("listener_app")
 
     @patch("apps.pokeball_app.app.play_chime")

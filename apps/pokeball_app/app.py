@@ -418,10 +418,12 @@ class PokeballService:
                     self.telemetry["hold_progress"] = min(1.0, hold_duration_b / b_hold_sec)
                     if hold_duration_b >= b_hold_sec and not self.b_hold_triggered:
                         self.b_hold_triggered = True
-                        self.logger.info("🎙️ [TRIGGER] Button B hold detected! Launching ListenerApp...")
+                        self.logger.info("🎙️ [TRIGGER] Button B hold detected (%.1fs)! Stopping active apps and launching ListenerApp...", hold_duration_b)
                         if self.app_manager:
                             def _launch_listener():
                                 try:
+                                    self.logger.info("🛑 Forcefully stopping all running apps via app_manager before launching listener...")
+                                    self.app_manager.stop_all()
                                     self.app_manager.start_app_by_name("listener_app")
                                     if self.app_manager.active_app:
                                         if hasattr(self.app_manager.active_app, "caller_app"):
@@ -463,16 +465,17 @@ class PokeballService:
                             self.logger.info("🔘 Button B single click detected.")
                             self.button_b_click_event.set()
 
-                            # In PokeballApp: Button B tap while in ROVER mode switches to AUX mode
-                            if self.teleop_enabled:
-                                if self.control_mode == "ROVER":
-                                    self.control_mode = "AUX"
-                                    if self.rover_ctrl:
-                                        self.rover_ctrl.set_drive(0.0, 0.0)
-                                    self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to AUX Mode (Gantry & Pedestal).")
-                                    play_chime(_CONFIG["chimes"]["mode_switch_aux"])
-                                else:
-                                    self.logger.info("ℹ️ Button B clicked while already in AUX mode (hold Button A for %.1fs to enter ROVER mode).", a_hold_sec)
+                            # In PokeballApp: Button B tap switches to AUX mode (gantry & pedestal)
+                            is_pokeball_active = (
+                                self.teleop_enabled or
+                                (self.app_manager is not None and self.app_manager.current_app_name == "pokeball_teleop_app")
+                            )
+                            if is_pokeball_active:
+                                self.control_mode = "AUX"
+                                if self.rover_ctrl:
+                                    self.rover_ctrl.set_drive(0.0, 0.0)
+                                self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to AUX Mode (Gantry & Pedestal).")
+                                play_chime(_CONFIG["chimes"]["mode_switch_aux"])
 
                     self.btn_b_press_start_time = None
                 self.b_hold_triggered = False
@@ -487,56 +490,87 @@ class PokeballService:
                 hold_duration_a = now - self.btn_a_press_start_time
 
                 # Hold for a_hold_sec (1.5s):
-                # Kills other apps, silences audio, starts PokeballApp, switches to ROVER mode, and arms rover drivetrain
+                # Starts PokeballApp if inactive; arms rover in ROVER mode if already active
                 if hold_duration_a >= a_hold_sec and not self.a_hold_triggered:
                     self.a_hold_triggered = True
-                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)! Forcefully killing active apps and launching pokeball_teleop_app...", hold_duration_a)
-                    self.control_mode = "ROVER"
-                    self.teleop_enabled = True
-                    self.is_armed = True
-                    self.arm_lockout_until = now + arm_lockout_sec
-                    if self.rover_ctrl:
-                        self.rover_ctrl.set_drive(0.0, 0.0)
+                    self.logger.info("🏎️ [TRIGGER] Button A hold detected (%.1fs)!", hold_duration_a)
+                    is_pokeball_active = (
+                        self.teleop_enabled or
+                        (self.app_manager is not None and self.app_manager.current_app_name == "pokeball_teleop_app")
+                    )
+                    if not is_pokeball_active:
+                        self.logger.info("🚀 Launching pokeball_teleop_app via Button A hold...")
+                        self.control_mode = "ROVER"
+                        self.teleop_enabled = True
+                        self.is_armed = True
+                        self.arm_lockout_until = now + arm_lockout_sec
+                        if self.rover_ctrl:
+                            self.rover_ctrl.set_drive(0.0, 0.0)
 
-                    def _force_clean_and_launch():
-                        try:
-                            # 1. Force silence all audio streams on Pi 4B
+                        def _force_clean_and_launch():
                             try:
-                                stop_payload = json.dumps({"stop_all": True}).encode('utf-8')
-                                stop_req = urllib.request.Request(
-                                    f"{get_pi4b_base_url()}/api/stop_sound",
-                                    data=stop_payload,
-                                    headers={'Content-Type': 'application/json'}
-                                )
-                                with urllib.request.urlopen(stop_req, timeout=1.5):
-                                    pass
-                                self.logger.info("🛑 Silenced active audio playback before launching pokeball_teleop_app.")
-                            except Exception as sound_err:
-                                self.logger.debug("Audio silence request: %s", sound_err)
-
-                            # 2. Universal cleanup of all active applications
-                            if self.app_manager:
-                                self.logger.info("🛑 Forcefully stopping all running apps via app_manager...")
-                                self.app_manager.stop_all()
-
-                            # 3. Clean up existing rover_ctrl if any
-                            if self.rover_ctrl:
+                                # 1. Force silence all audio streams on Pi 4B
                                 try:
-                                    self.rover_ctrl.shutdown()
-                                except Exception as rc_err:
-                                    self.logger.warning("Error shutting down previous rover_ctrl: %s", rc_err)
-                                self.rover_ctrl = None
+                                    stop_payload = json.dumps({"stop_all": True}).encode('utf-8')
+                                    stop_req = urllib.request.Request(
+                                        f"{get_pi4b_base_url()}/api/stop_sound",
+                                        data=stop_payload,
+                                        headers={'Content-Type': 'application/json'}
+                                    )
+                                    with urllib.request.urlopen(stop_req, timeout=1.5):
+                                        pass
+                                    self.logger.info("🛑 Silenced active audio playback before launching pokeball_teleop_app.")
+                                except Exception as sound_err:
+                                    self.logger.debug("Audio silence request: %s", sound_err)
 
-                            # 4. Start fresh pokeball_teleop_app
-                            if self.app_manager:
-                                self.logger.info("🚀 Launching fresh pokeball_teleop_app instance...")
-                                self.app_manager.start_app_by_name("pokeball_teleop_app")
-                        except Exception as ex:
-                            self.logger.error("Error during Button A universal teardown and launch: %s", ex, exc_info=True)
+                                # 2. Universal cleanup of all active applications
+                                if self.app_manager:
+                                    self.logger.info("🛑 Forcefully stopping all running apps via app_manager...")
+                                    self.app_manager.stop_all()
 
-                    threading.Thread(target=_force_clean_and_launch, daemon=True).start()
-                    play_chime(_CONFIG["chimes"]["arm_rover"])
+                                # 3. Clean up existing rover_ctrl if any
+                                if self.rover_ctrl:
+                                    try:
+                                        self.rover_ctrl.shutdown()
+                                    except Exception as rc_err:
+                                        self.logger.warning("Error shutting down previous rover_ctrl: %s", rc_err)
+                                    self.rover_ctrl = None
+
+                                # 4. Start fresh pokeball_teleop_app
+                                if self.app_manager:
+                                    self.logger.info("🚀 Launching fresh pokeball_teleop_app instance...")
+                                    self.app_manager.start_app_by_name("pokeball_teleop_app")
+                            except Exception as ex:
+                                self.logger.error("Error during Button A universal teardown and launch: %s", ex, exc_info=True)
+
+                        threading.Thread(target=_force_clean_and_launch, daemon=True).start()
+                        play_chime(_CONFIG["chimes"]["arm_rover"])
+                    else:
+                        # Pokeball app is already active: switch to ROVER and arm without teardown
+                        self.logger.info("🏎️ Button A held while pokeball_teleop_app already active -> arming rover in ROVER mode.")
+                        self.control_mode = "ROVER"
+                        self.is_armed = True
+                        self.arm_lockout_until = now + arm_lockout_sec
+                        if self.rover_ctrl:
+                            self.rover_ctrl.set_drive(0.0, 0.0)
+                        play_chime(_CONFIG["chimes"]["arm_rover"])
             else:
+                if self.btn_a_press_start_time is not None:
+                    duration_a = now - self.btn_a_press_start_time
+                    if 0.05 <= duration_a < 1.0 and not self.a_hold_triggered:
+                        self.logger.info("🔘 Button A single click detected (%.2fs).", duration_a)
+                        is_pokeball_active = (
+                            self.teleop_enabled or
+                            (self.app_manager is not None and self.app_manager.current_app_name == "pokeball_teleop_app")
+                        )
+                        if is_pokeball_active:
+                            self.control_mode = "ROVER"
+                            self.is_armed = True
+                            self.arm_lockout_until = now + arm_lockout_sec
+                            if self.rover_ctrl:
+                                self.rover_ctrl.set_drive(0.0, 0.0)
+                            self.logger.info("🏎️ [MODE SWITCH] Button A clicked -> Switched to ROVER Drive Mode and armed drivetrain.")
+                            play_chime(_CONFIG["chimes"]["arm_rover"])
                 self.btn_a_press_start_time = None
                 self.stick_press_start_time = None
                 self.a_hold_triggered = False

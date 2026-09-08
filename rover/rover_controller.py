@@ -100,6 +100,8 @@ class RoverController:
         self.uhubctl_location = str(self.config["watchdog"]["uhubctl_location"])
         self.uhubctl_port = int(self.config["watchdog"]["uhubctl_port"])
         self._last_stall_recovery: float = time.time()
+        self._port_opened_time: float = time.time()
+        self._packets_since_open: int = 0
         self.mock_mode = mock_mode
 
         # Enforce strict serial port presence when mock_mode is False (No silent auto-mock fallbacks)
@@ -290,6 +292,9 @@ class RoverController:
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)
+                    self._last_stall_recovery = time.time()
+                    self._port_opened_time = time.time()
+                    self._packets_since_open = 0
                 except Exception as e:
                     logger.warning("Failed to open serial port %s: %s. Retrying in 2s...", self.serial_port, e)
                     time.sleep(2.0)
@@ -300,15 +305,16 @@ class RoverController:
                 now_check = time.time()
                 last_rx = self.telemetry["last_seen"]
                 is_stalled = (
-                    (last_rx == 0.0 and self.telemetry["packets_sent"] > 25 and (now_check - self._last_stall_recovery) > self.stall_timeout_sec) or
+                    (last_rx == 0.0 and self._packets_since_open > 100 and (now_check - self._port_opened_time) > 5.0 and (now_check - self._last_stall_recovery) > 5.0) or
                     (last_rx > 0.0 and (now_check - last_rx) > self.stall_timeout_sec and (now_check - self._last_stall_recovery) > (self.stall_timeout_sec * 2.0))
                 )
                 if is_stalled:
                     logger.warning(
-                        "🚨 Microcontroller USB endpoint stall detected on %s! (last_seen=%.1f, packets_sent=%d). Triggering uhubctl power cycle...",
-                        self.serial_port, last_rx, self.telemetry["packets_sent"]
+                        "🚨 Microcontroller USB endpoint stall detected on %s! (last_seen=%.1f, packets_since_open=%d). Triggering uhubctl power cycle...",
+                        self.serial_port, last_rx, self._packets_since_open
                     )
                     self._last_stall_recovery = now_check
+                    self._packets_since_open = 0
                     try:
                         ser.close()
                     except Exception as e:
@@ -396,6 +402,7 @@ class RoverController:
                 self.telemetry["left_out"] = left_pulse
                 self.telemetry["right_out"] = right_pulse
                 self.telemetry["packets_sent"] += 1
+                self._packets_since_open += 1
 
             # Dispatch to hardware serial or mock sink
             if ser and ser.is_open:
@@ -405,8 +412,8 @@ class RoverController:
                     logger.warning("Serial write error on %s: %s", self.serial_port, e)
                     try:
                         ser.close()
-                    except Exception:
-                        pass
+                    except Exception as close_err:
+                        logger.debug("Error closing serial port after write failure: %s", close_err)
                     ser = None
             elif self.mock_mode and self._mock_packet_sink:
                 try:

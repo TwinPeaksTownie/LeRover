@@ -20,7 +20,7 @@
   },
   "watchdog": {
     "auto_recover_stalls": true,
-    "stall_timeout_sec": 2.5,
+    "stall_timeout_sec": 3.5,
     "uhubctl_location": "1-1",
     "uhubctl_port": 3
   }
