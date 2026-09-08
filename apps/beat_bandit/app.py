@@ -382,7 +382,8 @@ class BeatBanditApp(BaseApp):
             dispatch_audio_event(kind="incorrect")
 
     def _handle_player_loop(self, wav_path: str, st: float, et: Optional[float]) -> None:
-        self.audio_client.dispatch_playback(wav_path, start_sec=st, end_sec=et)
+        self.audio_client.prepare_track(wav_path, start_sec=st, end_sec=et)
+        self.audio_client.start_playback()
 
     def _handle_player_finish(self) -> None:
         self.current_state = "IDLE"
@@ -415,7 +416,15 @@ class BeatBanditApp(BaseApp):
 
         wav_path = self.active_track["wav_path"]
 
-        # 1. Instantiate ChoreographyPlayer with synchronous audio start callback
+        # Validate canonical audio configuration keys per fail-fast schema rules
+        audio_engine = self.config["audio_engine"]
+        audio_driver = self.config["audio_driver"]
+        sync_mode = self.config["sync_mode"]
+
+        # Pre-load audio in memory before starting choreography loop (<1ms startup)
+        self.audio_client.prepare_track(wav_path, start_sec=start_sec, end_sec=end_sec)
+
+        # 1. Instantiate ChoreographyPlayer with master audio clock callback
         self.player = ChoreographyPlayer(
             backend=backend,
             choreography=choreo,
@@ -423,9 +432,10 @@ class BeatBanditApp(BaseApp):
             start_sec=start_sec,
             end_sec=end_sec,
             loop=loop,
-            on_start_audio_callback=lambda: self.audio_client.dispatch_playback(wav_path, start_sec=start_sec, end_sec=end_sec),
+            on_start_audio_callback=lambda: self.audio_client.start_playback(),
             on_loop_callback=lambda st, et: self._handle_player_loop(wav_path, st, et),
             on_finish_callback=self._handle_player_finish,
+            get_audio_time_fn=self.audio_client.get_audio_playback_time,
         )
 
         self.current_state = "DANCING"

@@ -11,6 +11,9 @@
   "homing_speed": 500,
   "chimes": {
     "app_start": "app_start"
-  }
+  },
+  "audio_engine": "pygame",
+  "audio_driver": "pulse",
+  "sync_mode": "master_audio_clock"
 }
 

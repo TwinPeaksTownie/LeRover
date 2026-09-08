@@ -40,6 +40,7 @@ class ChoreographyPlayer:
         on_start_audio_callback: Optional[Callable[[], None]] = None,
         on_loop_callback: Optional[Callable[[float, Optional[float]], None]] = None,
         on_finish_callback: Optional[Callable[[], None]] = None,
+        get_audio_time_fn: Optional[Callable[[], float]] = None,
     ) -> None:
         self.backend = backend
         if not isinstance(choreography, dict):
@@ -77,6 +78,7 @@ class ChoreographyPlayer:
         self.on_start_audio_callback = on_start_audio_callback
         self.on_loop_callback = on_loop_callback
         self.on_finish_callback = on_finish_callback
+        self.get_audio_time_fn = get_audio_time_fn
 
         # State Telemetry
         self.is_playing = False
@@ -201,14 +203,21 @@ class ChoreographyPlayer:
 
             if hasattr(self.backend, "dispatch_dance_frame"):
                 self.backend.dispatch_dance_frame(base_home_rom, s7_rom=50.0, s8_goal=50.0, s8_is_rom=True)
-            start_clock = time.time()
             if self.on_start_audio_callback:
                 self.on_start_audio_callback()
+            start_clock = time.time()
             logger.info(f"Choreography player loop active ({self.start_sec:.1f}s -> {self.end_sec:.1f}s, loop={self.loop})...")
 
             while not self._stop_event.is_set():
                 loop_start = time.time()
-                elapsed = (loop_start - start_clock) + self.start_sec
+                if self.get_audio_time_fn is not None:
+                    audio_t = self.get_audio_time_fn()
+                    if audio_t >= 0.0:
+                        elapsed = audio_t
+                    else:
+                        elapsed = (loop_start - start_clock) + self.start_sec
+                else:
+                    elapsed = (loop_start - start_clock) + self.start_sec
                 self.current_time_sec = elapsed
 
                 if elapsed >= self.end_sec:

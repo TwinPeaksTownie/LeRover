@@ -183,17 +183,48 @@ def validate_probabilities_schema(data: Dict[str, Any], source_desc: str = "prob
 
 
 
-DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
+def get_choreo_settings_path() -> Path:
+    """Resolves canonical choreo_settings.json file path."""
+    base_dir = Path(__file__).resolve().parent.parent
+    p1 = base_dir / "library" / "beat_bandit" / "choreo_settings.json"
+    if p1.exists():
+        return p1
+    p2 = Path.home() / "so101" / "library" / "beat_bandit" / "choreo_settings.json"
+    if p2.exists():
+        return p2
+    raise FileNotFoundError(f"choreo_settings.json not found at {p1} or {p2}")
 
-DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = {
-    "jaw_gate_threshold": 0.18,
-    "jaw_max_open_rom": 45.0,
-    "head_nod_depth_rom": 6.0,
-    "vibrato_amplitude": 20.0,
-    "groove_max_sway_rom": 15.0,
-    "head_tilt_max_rom": 15.0,
-    "gantry_default_speed": 500,
-}
+
+def load_choreo_settings(filepath: Optional[str] = None) -> Dict[str, Any]:
+    """Loads master choreography default settings strictly from JSON."""
+    if filepath is None:
+        fpath = str(get_choreo_settings_path())
+    else:
+        fpath = filepath
+    if not os.path.exists(fpath):
+        raise FileNotFoundError(f"Choreography settings configuration file not found at: {fpath}")
+    with open(fpath, "r", encoding="utf-8-sig") as f:
+        data = json.load(f)
+    required_keys = [
+        "smoothing_alpha_pan",
+        "smoothing_alpha_roll",
+        "neutral_pose",
+        "jaw_gate_threshold",
+        "jaw_max_open_rom",
+        "head_nod_depth_rom",
+        "vibrato_amplitude",
+        "groove_max_sway_rom",
+        "head_tilt_max_rom",
+        "gantry_default_speed"
+    ]
+    for k in required_keys:
+        if k not in data:
+            raise KeyError(f"choreo_settings.json missing mandatory key '{k}'")
+    return data
+
+
+DEFAULT_CHOREO_PROBABILITIES: Dict[str, Any] = load_choreography_probabilities()
+DEFAULT_CHOREO_SETTINGS: Dict[str, Any] = load_choreo_settings()
 
 
 def sec_to_beat_index(sec: float, beat_times: List[float]) -> int:

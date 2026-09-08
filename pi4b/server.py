@@ -189,17 +189,28 @@ def sync_rover_speed_config(pct: int):
     except Exception as e:
         print(f"Error syncing rover speed locally: {e}", flush=True)
 
+CURRENT_PAPLAY_PROC: Optional[subprocess.Popen] = None
+
 def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = ""):
     """Dispatches audio playback on Pi 4B PulseAudio daemon with fail-fast validation and full traceback logging."""
     def _work():
+        global CURRENT_PAPLAY_PROC
         try:
             active_event = event if event else kind
 
             if stop_previous or active_event == "stop_audio" or active_event in ("trex_roar", "trex_roar_isolated"):
-                subprocess.run(["pkill", "-9", "mpg123"], check=False)
-                subprocess.run(["pkill", "-9", "paplay"], check=False)
-                subprocess.run(["pkill", "-9", "aplay"], check=False)
+                if CURRENT_PAPLAY_PROC is not None and CURRENT_PAPLAY_PROC.poll() is None:
+                    try:
+                        CURRENT_PAPLAY_PROC.terminate()
+                        CURRENT_PAPLAY_PROC.wait(timeout=0.05)
+                    except Exception:
+                        try:
+                            CURRENT_PAPLAY_PROC.kill()
+                        except Exception as kill_err:
+                            logging.debug("Error killing previous paplay process: %s", kill_err)
+                    CURRENT_PAPLAY_PROC = None
                 if active_event == "stop_audio":
+                    subprocess.run(["pkill", "-9", "-f", "mpg123|paplay|aplay"], check=False)
                     return
 
             if delay_sec > 0:
@@ -223,13 +234,22 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
                     raise FileNotFoundError(f"Resolved audio asset '{cand}' does not exist on disk.")
                 target_wav = cand
 
-            res = subprocess.run(["paplay", target_wav], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
-            if res.returncode != 0:
-                if res.returncode in (-9, -15, 137, 143):
-                    logging.info("Audio playback for %s cancelled by subsequent audio request (signal %d).", target_wav, res.returncode)
+            CURRENT_PAPLAY_PROC = subprocess.Popen(
+                ["paplay", "--latency-msec=20", target_wav],
+                env=PULSE_ENV,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE
+            )
+            _, stderr_data = CURRENT_PAPLAY_PROC.communicate()
+            rc = CURRENT_PAPLAY_PROC.returncode
+            if rc != 0:
+                if rc in (-9, -15, 137, 143):
+                    logging.info("Audio playback for %s cancelled by subsequent audio request (signal %d).", target_wav, rc)
                     return
-                err_txt = res.stderr.decode('utf-8', errors='replace')
-                raise RuntimeError(f"PulseAudio paplay failed for {target_wav} (code {res.returncode}): {err_txt}")
+                err_txt = ""
+                if stderr_data:
+                    err_txt = stderr_data.decode('utf-8', errors='replace')
+                raise RuntimeError(f"PulseAudio paplay failed for {target_wav} (code {rc}): {err_txt}")
         except Exception as e:
             traceback.print_exc()
             logging.exception("Sound playback failure for event='%s', wav_path='%s': %s", event, wav_path, e)
