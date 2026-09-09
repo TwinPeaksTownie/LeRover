@@ -205,6 +205,10 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["asr"]["engine"], "vosk")
         self.assertIn("app_start", cfg["chimes"])
         self.assertIn("wake", cfg["chimes"])
+        self.assertIn("commit", cfg["chimes"])
+        self.assertIn("cancel", cfg["chimes"])
+        self.assertIn("exit", cfg["chimes"])
+        self.assertIn("play_dead", cfg["chimes"])
         self.assertEqual(cfg["vad"]["settle_delay_sec"], 0.65)
         self.assertEqual(cfg["vad"]["post_chime_settle_sec"], 1.5)
         self.assertEqual(cfg["vad"]["energy_threshold"], 450)
@@ -258,6 +262,13 @@ class TestListenerPipeline(unittest.TestCase):
         bad_cfg_motion = copy.deepcopy(cfg)
         del bad_cfg_motion["motion"]
         with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_motion))):
+            with self.assertRaises(KeyError):
+                load_listener_config()
+
+        # Missing play_dead chime raises KeyError
+        bad_cfg_play_dead = copy.deepcopy(cfg)
+        del bad_cfg_play_dead["chimes"]["play_dead"]
+        with patch("builtins.open", mock_open(read_data=json.dumps(bad_cfg_play_dead))):
             with self.assertRaises(KeyError):
                 load_listener_config()
 
@@ -541,6 +552,79 @@ class TestListenerPipeline(unittest.TestCase):
                 self.assertIn("Moved to sit", app.action_taken)
                 self.assertIn("Press Button B to speak", app.action_taken)
                 self.assertFalse(stop_event.is_set())
+
+                stop_event.set()
+                t.join(timeout=1.0)
+
+    def test_execute_posture_play_dead_chime(self):
+        """Verifies _execute_posture disarms torque and plays play_dead chime."""
+        from unittest.mock import MagicMock, patch, call
+        app = ListenerApp(running_on_pi=False)
+        mock_backend = MagicMock()
+
+        with patch.object(app, "_play_chime") as mock_chime:
+            app._execute_posture(mock_backend, "play_dead")
+            self.assertTrue(mock_backend.interpolate_arm_norm.called)
+            mock_backend.set_arm_torque.assert_has_calls([call(enable=True), call(enable=False)])
+            mock_chime.assert_called_once_with("play_dead")
+            self.assertEqual(app.action_taken, "Playing dead (torque relaxed)")
+
+    def test_listener_play_dead_suppresses_commit_chime(self):
+        """Verifies that play dead plays play_dead chime and suppresses the posture commit chime."""
+        import time
+        import threading
+        from unittest.mock import patch, MagicMock
+
+        app = ListenerApp(running_on_pi=False)
+        mock_backend = MagicMock()
+        stop_event = threading.Event()
+
+        played_chimes = []
+
+        def record_chime(chime_name):
+            played_chimes.append(chime_name)
+
+        with patch.object(app, "_play_chime", side_effect=record_chime), \
+             patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
+             patch.object(app, "_get_vosk_urls", return_value=("http://127.0.0.1:8059/health", "ws://127.0.0.1:2700", "http://127.0.0.1:8059/recognize")):
+
+            mock_stream = MagicMock()
+            loud_pcm = b"\xff\x7f" * 1280
+            mock_stream.read.side_effect = [loud_pcm, b"", b"", b""]
+            mock_stream_conn.return_value = mock_stream
+
+            app.config["vad"]["settle_delay_sec"] = 0.01
+            app.config["vad"]["post_chime_settle_sec"] = 0.01
+            app.config["vad"]["max_record_sec"] = 0.05
+            app.config["vad"]["silence_timeout_sec"] = 0.02
+
+            with patch("apps.listener_app.app.ws_connect") as mock_ws:
+                mock_ws_client = MagicMock()
+                mock_ws.return_value = mock_ws_client
+                mock_ws_client.recv.side_effect = [
+                    '{"type": "connected"}',
+                    '{"type": "final_result", "text": "play dead"}',
+                    '{"type": "final_result", "text": "play dead"}'
+                ]
+
+                app.start_listen_event.set()
+                t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
+                t.start()
+
+                # Wait for turn completion back to IDLE
+                t_start = time.time()
+                while time.time() - t_start < 2.0:
+                    if app.state == "IDLE" and "Playing dead" in app.action_taken:
+                        break
+                    time.sleep(0.01)
+
+                self.assertEqual(app.state, "IDLE")
+                self.assertIn("Playing dead", app.action_taken)
+                self.assertIn("Press Button B to speak", app.action_taken)
+                self.assertIn("play_dead", played_chimes)
+                # Verify speech end played 1 commit chime, but posture execution did not play a 2nd commit chime
+                self.assertEqual(played_chimes.count("commit"), 1)
+                self.assertEqual(played_chimes[-1], "play_dead")
 
                 stop_event.set()
                 t.join(timeout=1.0)

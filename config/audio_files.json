@@ -111,6 +111,10 @@
     "smw_shell_ricochet": {
       "file": "smw_shell_ricochet.wav",
       "description": "Shell ricochet for sequence angry stance"
+    },
+    "play_dead": {
+      "file": "smw_lost_a_life.wav",
+      "description": "Play dead posture sound effect"
     }
   }
 }

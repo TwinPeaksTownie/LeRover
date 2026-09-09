@@ -103,6 +103,7 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["chimes"]["commit"]
     _ = cfg["chimes"]["cancel"]
     _ = cfg["chimes"]["exit"]
+    _ = cfg["chimes"]["play_dead"]
     _ = str(cfg["feedback"]["unmatched_action"])
     _ = str(cfg["feedback"]["idle_action"])
     _ = str(cfg["feedback"]["idle_transcript"])
@@ -544,6 +545,7 @@ class ListenerApp(BaseApp):
             backend.interpolate_arm_norm(target_norm, duration=duration, steps=steps)
             backend.set_arm_torque(enable=False)
             self.action_taken = "Playing dead (torque relaxed)"
+            self._play_chime("play_dead")
 
         else:
             raise KeyError(f"Unsupported posture action: '{action}'")
@@ -827,7 +829,8 @@ class ListenerApp(BaseApp):
                             elif intent_type == "POSTURE":
                                 action = intent["action"]
                                 self._execute_posture(backend, action)
-                                self._play_chime("commit")
+                                if action != "play_dead":
+                                    self._play_chime("commit")
                                 command_executed = True
 
                             elif intent_type == "DOWNLOAD_SONG":
