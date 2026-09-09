@@ -480,7 +480,7 @@ class PiranhaPoseApp(BaseApp):
 
         if ctrl:
             try:
-                ctrl.set_drive(0.0, -throttle)
+                ctrl.set_drive(0.0, throttle)
                 time.sleep(duration_sec)
                 ctrl.set_drive(0.0, 0.0)
             except Exception as e:
