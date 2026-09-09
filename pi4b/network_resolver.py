@@ -102,8 +102,8 @@ def validate_network_config(cfg: Dict[str, Any]) -> None:
         if sec not in cfg:
             raise KeyError(f"Missing required section '{sec}' in network configuration")
 
-    if cfg["topology_mode"] not in ["STANDALONE_PI4B", "DUAL_SBC"]:
-        raise ValueError(f"Invalid topology_mode '{cfg['topology_mode']}'. Permitted: ['STANDALONE_PI4B', 'DUAL_SBC']")
+    if cfg["topology_mode"] not in ["STANDALONE_PI4B", "DUAL_NODE"]:
+        raise ValueError(f"Invalid topology_mode '{cfg['topology_mode']}'. Permitted: ['STANDALONE_PI4B', 'DUAL_NODE']")
 
     for k in ["master_backend", "touch_ui", "mac_teleop", "voice_bridge"]:
         if k not in cfg["endpoints"]:
@@ -148,8 +148,6 @@ def find_config_path() -> str:
         "/home/user/so101/config/network_config.json",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_config.json"),
         "/home/carson/touch_ui/network_config.json",
-        "/home/carson/so101/pi500/network_config.json",
-        "/home/user/so101/pi500/network_config.json",
     ]
     for p in search_paths:
         if p and os.path.exists(p):
@@ -193,7 +191,6 @@ def find_secrets_path() -> str:
         "/home/user/so101/config/secrets.json",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.json"),
         "/home/carson/touch_ui/secrets.json",
-        "/home/user/so101/pi500/secrets.json",
     ]
     for p in search_paths:
         if p and os.path.exists(p):

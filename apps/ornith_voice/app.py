@@ -23,8 +23,8 @@ from robot_backend import RobotBackend
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 config_dir = os.path.join(workspace_root, "config")
-pi500_dir = os.path.join(workspace_root, "pi500")
-for p in [workspace_root, config_dir, pi500_dir]:
+pi4b_dir = os.path.join(workspace_root, "pi4b")
+for p in [workspace_root, config_dir, pi4b_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 

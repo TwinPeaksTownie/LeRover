@@ -23,9 +23,9 @@ from typing import Dict, Any, Optional, List
 logger = logging.getLogger("so101.listener_app.song_pipeline")
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-PI500_DIR = WORKSPACE_ROOT / "pi500"
-if str(PI500_DIR) not in sys.path:
-    sys.path.insert(0, str(PI500_DIR))
+PI4B_DIR = WORKSPACE_ROOT / "pi4b"
+if str(PI4B_DIR) not in sys.path:
+    sys.path.insert(0, str(PI4B_DIR))
 
 import network_resolver
 

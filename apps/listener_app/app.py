@@ -32,10 +32,10 @@ from websockets.sync.client import connect as ws_connect
 
 APP_DIR = Path(__file__).resolve().parent
 WORKSPACE_ROOT = APP_DIR.parent.parent
-PI500_DIR = WORKSPACE_ROOT / "pi500"
+PI4B_DIR = WORKSPACE_ROOT / "pi4b"
 CONFIG_DIR = WORKSPACE_ROOT / "config"
 
-for p in [WORKSPACE_ROOT, PI500_DIR, CONFIG_DIR]:
+for p in [WORKSPACE_ROOT, PI4B_DIR, CONFIG_DIR]:
     ps = str(p)
     if ps not in sys.path:
         sys.path.insert(0, ps)

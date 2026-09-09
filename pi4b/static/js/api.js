@@ -63,10 +63,6 @@ export function sendFollowerToggle(action) {
     }, 2500);
 }
 
-export function sendPi500FollowerToggle(action) {
-    return sendFollowerToggle(action);
-}
-
 export function sendPokeballTeleopToggle(action) {
     return safeFetch('/api/pokeball_teleop_toggle', {
         method: 'POST',
@@ -289,10 +285,6 @@ export function fetchArmPresets(mode, timestamp = Date.now()) {
 // Power & Backend Tools
 export function sendConnectHotspot() {
     return safeFetch('/api/connect_hotspot', { method: 'POST' }, 4000);
-}
-
-export function sendPi500PowerOn() {
-    return sendConnectHotspot();
 }
 
 export function sendBackendRestart(action) {

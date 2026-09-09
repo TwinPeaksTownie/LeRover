@@ -70,7 +70,6 @@ STATUS_CACHE: Dict[str, Any] = {
     "ornith_state": "IDLE",
     "topology_mode": "STANDALONE_PI4B",
     "backend_online": False,
-    "pi500_online": False,
     "vosk_ready": False,
     "hardware_telemetry": None,
     "last_telemetry_time": 0,
@@ -381,7 +380,6 @@ def poll_status_loop() -> None:
             is_connected = bool(GLOBAL_BACKEND and GLOBAL_BACKEND.hardware_active)
             STATUS_CACHE["backend_online"] = is_connected
             STATUS_CACHE["hardware_connected"] = is_connected
-            STATUS_CACHE["pi500_online"] = False
 
             if isinstance(ht, dict) and "follower" in ht:
                 STATUS_CACHE["follower"] = ht["follower"]
@@ -887,19 +885,6 @@ class UnifiedHandler(MasterApiHandler):
             }).encode('utf-8'))
             return
 
-        if path == "/api/pi500_poweron":
-            # Legacy alias redirected to connect_hotspot
-            def _switch_to_hotspot_legacy():
-                subprocess.run(["sudo", "nmcli", "connection", "up", "iPhone"], check=False)
-
-            threading.Thread(target=_switch_to_hotspot_legacy, daemon=True).start()
-            play_sound_helper(kind="connect")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "Initiated connection to iPhone hotspot"}).encode())
-            return
-
         if path == "/api/clack_pose_toggle":
             if "action" not in req_data:
                 self.send_response(400)
@@ -958,7 +943,7 @@ class UnifiedHandler(MasterApiHandler):
                     self.wfile.write(json.dumps({"status": "ok", "message": "Detector not active"}).encode())
                     return
 
-        if path in ["/api/backend_restart", "/api/pi500_master_daemon_restart"]:
+        if path == "/api/backend_restart":
             if "action" not in req_data:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")

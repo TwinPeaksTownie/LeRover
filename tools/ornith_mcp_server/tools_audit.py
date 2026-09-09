@@ -162,7 +162,7 @@ def get_active_conversation_transcript(
         "recent_history": recent_history
     }
 
-def get_git_diff(repo_path: str = None, max_chars: int = 250000) -> dict:
+def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
     """
     Captures complete git diff including untracked and modified text source files.
     """

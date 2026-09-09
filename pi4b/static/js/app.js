@@ -188,7 +188,6 @@ export function toggleFollower() {
     }
     api.sendFollowerToggle(action).catch(() => {});
 }
-export const togglePi500Follower = toggleFollower;
 
 export function togglePokeballTeleop() {
     const action = isPokeballRunning ? 'stop' : 'start';
@@ -884,10 +883,6 @@ export function triggerConnectHotspot() {
         });
 }
 
-export function triggerPi500PowerOn() {
-    triggerConnectHotspot();
-}
-
 export function triggerBackendRestart() {
     const action = isMasterDaemonRunning ? 'stop' : 'start';
     const btn = document.getElementById('masterDaemonBtn');
@@ -913,7 +908,6 @@ export function triggerBackendRestart() {
             }
         });
 }
-export const triggerPi500MasterDaemonRestart = triggerBackendRestart;
 
 export function triggerEmergencyKillAll() {
     api.sendEmergencyKillAll().catch(() => {});
@@ -2243,14 +2237,14 @@ function bindEventListeners() {
     const powerBackBtn = document.getElementById('powerBackBtn');
     const masterDaemonBtn = document.getElementById('masterDaemonBtn');
     const wifiRestoreBtn = document.getElementById('wifiRestoreBtn');
-    const pi500PowerOnBtn = document.getElementById('connectHotspotBtn') || document.getElementById('pi500PowerOnBtn');
+    const connectHotspotBtn = document.getElementById('connectHotspotBtn');
     const wifiDisableBtn = document.getElementById('wifiDisableBtn');
     const emergencyKillBtn = document.getElementById('emergencyKillBtn');
 
     if (powerBackBtn) powerBackBtn.addEventListener('click', () => ui.openBackendSubView('main'));
     if (masterDaemonBtn) masterDaemonBtn.addEventListener('click', () => triggerBackendRestart());
     if (wifiRestoreBtn) wifiRestoreBtn.addEventListener('click', () => triggerWifiRestore());
-    if (pi500PowerOnBtn) pi500PowerOnBtn.addEventListener('click', () => triggerConnectHotspot());
+    if (connectHotspotBtn) connectHotspotBtn.addEventListener('click', () => triggerConnectHotspot());
     if (wifiDisableBtn) wifiDisableBtn.addEventListener('click', () => triggerWifiDisable());
     if (emergencyKillBtn) emergencyKillBtn.addEventListener('click', () => triggerEmergencyKillAll());
 

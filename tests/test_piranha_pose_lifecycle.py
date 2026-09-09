@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "pi500"))
+sys.path.insert(0, str(REPO_ROOT / "pi4b"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "preset_app"))
 
 from apps.preset_app.app import PiranhaPoseApp
@@ -104,7 +104,7 @@ class TestApiServerLifecycleGate(unittest.TestCase):
     """Verifies that API server enforces HTTP 409 for motion endpoints when app is stopped."""
 
     def setUp(self):
-        from pi500.api_server import MasterApiHandler
+        from pi4b.api_server import MasterApiHandler
         self.handler_cls = MasterApiHandler
 
     def _run_post(self, path: str, body: dict, current_app: str = None):

@@ -18,8 +18,8 @@ from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-PI500_DIR = REPO_ROOT / "pi500"
-sys.path.insert(0, str(PI500_DIR))
+PI4B_DIR = REPO_ROOT / "pi4b"
+sys.path.insert(0, str(PI4B_DIR))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "beat_bandit"))
 
 

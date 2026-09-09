@@ -41,8 +41,8 @@
       "id": "DEPLOYMENT_PARITY",
       "severity": "VIOLATION",
       "engine": "deployment_md5",
-      "file_patterns": ["pi500/**", "pi4b/**"],
-      "description": "Modified hardware or UI code must be synced to physical target devices (Pi 500 @ 192.168.0.130 or Pi 4B @ 192.168.0.86) and MD5-verified before approval."
+      "file_patterns": ["pi4b/**", "apps/**"],
+      "description": "Modified hardware or UI code must be synced to physical target devices (Pi 4B @ 192.168.0.86) and MD5-verified before approval."
     },
     {
       "id": "CONFIG_PARITY",
@@ -55,7 +55,7 @@
       "id": "SCHEMA_KEY_COMPLETENESS",
       "severity": "VIOLATION",
       "engine": "python_ast",
-      "file_patterns": ["pi500/beat_studio.py", "apps/beat_bandit/app.py"],
+      "file_patterns": ["pi4b/beat_studio.py", "apps/beat_bandit/app.py"],
       "description": "Choreography sanitization and save routines must preserve mandatory schema keys (specifically 'probabilities' and 'tracks')."
     },
     {
@@ -76,7 +76,7 @@
       "id": "TARGET_PATH_EXISTS",
       "severity": "VIOLATION",
       "engine": "target_path",
-      "file_patterns": ["apps/**/config.json", "pi500/*.py"],
+      "file_patterns": ["apps/**/config.json", "pi4b/*.py"],
       "description": "Configured storage paths and library subdirectories must resolve to valid, un-bifurcated directories on target host devices."
     }
   ]

@@ -227,7 +227,7 @@ def sample_motor_telemetry(
     }
 
 def query_daemon_logs(
-    node: str = "pi500",
+    node: str = "pi4b",
     service_name: str = "backend.service",
     lines: Optional[int] = None,
     since: str = "10 minutes ago"

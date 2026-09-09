@@ -15,8 +15,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
-PI500_DIR = WORKSPACE_ROOT / "pi500"
-for p in [WORKSPACE_ROOT, PI500_DIR]:
+PI4B_DIR = WORKSPACE_ROOT / "pi4b"
+for p in [WORKSPACE_ROOT, PI4B_DIR]:
     ps = str(p)
     if ps not in sys.path:
         sys.path.insert(0, ps)

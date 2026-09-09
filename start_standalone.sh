@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # SO-101 Unified Standalone Host Launcher for Raspberry Pi 4B
-# Launches both master hardware backend (pi500/main.py on 8085) and Touch UI (pi4b/server.py on 8082)
+# Launches unified robot backend and Touch UI (pi4b/server.py on dual ports 8082 & 8085)
 # ==============================================================================
 set -e
 
@@ -11,6 +11,7 @@ cd "$DIR"
 echo "=== [SO-101] Initializing Standalone Environment on Pi 4B ==="
 
 # 1. Clean up stale processes
+pkill -9 -f "pi4b/server.py" 2>/dev/null || true
 pkill -9 -f main.py 2>/dev/null || true
 fuser -k 8085/tcp 2>/dev/null || true
 fuser -k 8082/tcp 2>/dev/null || true

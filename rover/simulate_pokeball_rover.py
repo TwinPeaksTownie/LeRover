@@ -27,15 +27,16 @@ if hasattr(sys.stdout, "reconfigure"):
 # Configure paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(current_dir, ".."))
-pi500_dir = os.path.join(workspace_root, "pi500")
+pi4b_dir = os.path.join(workspace_root, "pi4b")
+apps_dir = os.path.join(workspace_root, "apps")
 
-for p in [workspace_root, pi500_dir, current_dir]:
+for p in [workspace_root, pi4b_dir, apps_dir, current_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
 from rover.rover_controller import RoverController
-import pokeball_app
-from pokeball_app import PokeballApp
+import apps.pokeball_app.app as pokeball_app
+from apps.pokeball_app.app import PokeballApp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("so101.simulator")

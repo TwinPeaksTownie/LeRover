@@ -17,8 +17,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 PIPELINE_FILES = [
-    Path("pi500/choreography_compiler.py"),
-    Path("pi500/beat_bandit_app.py"),
+    Path("pi4b/choreography_compiler.py"),
+    Path("apps/beat_bandit/app.py"),
 ]
 
 

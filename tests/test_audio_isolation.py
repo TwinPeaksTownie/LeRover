@@ -18,7 +18,7 @@ from unittest.mock import patch, MagicMock
 # Strictly verify beat_bandit_app is NOT imported
 assert "beat_bandit_app" not in sys.modules, "beat_bandit_app must NOT be imported for audio isolation test"
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "pi500"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "pi4b"))
 import beat_bandit_audio
 
 assert "beat_bandit_app" not in sys.modules, "beat_bandit_app must NOT be imported by beat_bandit_audio"

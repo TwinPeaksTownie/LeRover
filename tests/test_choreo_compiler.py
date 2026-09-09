@@ -3,8 +3,8 @@ import sys
 import unittest
 from pathlib import Path
 
-# Add pi500 to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pi500"))
+# Add pi4b to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pi4b"))
 
 from choreography_compiler import (
     compile_choreography_tracks,

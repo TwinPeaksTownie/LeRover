@@ -28,12 +28,12 @@ if hasattr(sys.stdout, "reconfigure"):
 # Ensure workspace paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(current_dir, ".."))
-for p in [workspace_root, os.path.join(workspace_root, "pi500"), current_dir]:
+for p in [workspace_root, os.path.join(workspace_root, "pi4b"), os.path.join(workspace_root, "apps"), current_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
 from rover.rover_controller import RoverController
-from pokeball_app import PokeballApp
+from apps.pokeball_app.app import PokeballApp
 
 try:
     from bleak import BleakScanner, BleakClient
@@ -75,7 +75,7 @@ def on_sound_triggered(kind: str):
         audio_event_seq += 1
     logger.info("🔊 Simulated Audio Event Dispatched: '%s'", kind)
 
-import pokeball_app
+import apps.pokeball_app.app as pokeball_app
 pokeball_app.play_chime = on_sound_triggered
 
 

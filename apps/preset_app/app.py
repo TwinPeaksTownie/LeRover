@@ -23,13 +23,13 @@ from robot_backend import RobotBackend, SERIAL_LOCK, pct_to_ticks_s7, ticks_to_p
 try:
     import network_resolver
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "pi500"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "pi4b"))
     import network_resolver
 
 try:
     import audio_resolver
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "pi500"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "pi4b"))
     import audio_resolver
 
 try:

@@ -8,10 +8,10 @@ import sys
 import time
 from pathlib import Path
 
-# Add pi500 module path for AuxiliaryServoController import
-pi500_path = Path(__file__).parent.parent / "pi500"
-if str(pi500_path) not in sys.path:
-    sys.path.insert(0, str(pi500_path))
+# Add pi4b module path for AuxiliaryServoController import
+pi4b_path = Path(__file__).parent.parent / "pi4b"
+if str(pi4b_path) not in sys.path:
+    sys.path.insert(0, str(pi4b_path))
 
 try:
     from aux_servo_controller import AuxiliaryServoController
@@ -26,7 +26,7 @@ def main() -> None:
 
     print(f"Scanning serial bus on {args.port} (Read-Only)...")
     if not AuxiliaryServoController:
-        print("Error: AuxiliaryServoController module not found in pi500/ directory.")
+        print("Error: AuxiliaryServoController module not found in pi4b/ directory.")
         sys.exit(1)
 
     ctrl = AuxiliaryServoController(port=args.port)

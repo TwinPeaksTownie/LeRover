@@ -9,7 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "pi500"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "pi4b"))
 from choreography_compiler import compile_choreography_tracks, CHOREO_SCHEMA_VERSION
 
 

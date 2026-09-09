@@ -32,8 +32,7 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
 
-PI500_IP = "192.168.0.130"
-PI500_API_URL = f"http://{PI500_IP}:8085"
+BACKEND_API_URL = "http://127.0.0.1:8085"
 MARIO_SOUNDS_DIR = "/home/carson/mario_sounds"
 
 PULSE_ENV = dict(os.environ)
@@ -46,7 +45,7 @@ class AudioTapDetector:
 
     def __init__(
         self,
-        pi500_url: str = PI500_API_URL,
+        backend_url: str = BACKEND_API_URL,
         peak_threshold: int = 3500,
         tap_window: float = 0.85,
         refractory_ms: int = 300,
@@ -55,7 +54,7 @@ class AudioTapDetector:
         play_sound_cb: Optional[Callable[[str], None]] = None,
         is_active_cb: Optional[Callable[[], bool]] = None,
     ) -> None:
-        self.pi500_url = pi500_url
+        self.backend_url = backend_url
         self.peak_threshold = peak_threshold
         self.tap_window = tap_window
         self.refractory_sec = refractory_ms / 1000.0
@@ -195,12 +194,10 @@ class AudioTapDetector:
 
     def _get_api_url(self) -> str:
         try:
-            from network_resolver import get_pi500_ip
+            from network_resolver import get_master_backend_ip
         except ImportError:
-            from pi4b.network_resolver import get_pi500_ip
-        ip = get_pi500_ip(prefer_port=8085)
-        if not ip:
-            raise KeyError("Failed to resolve Pi 500 IP address from network_resolver")
+            from pi4b.network_resolver import get_master_backend_ip
+        ip = get_master_backend_ip()
         return f"http://{ip}:8085"
 
     def _dispatch_action(self, count: int, intervals: List[int], max_amp: int) -> None:

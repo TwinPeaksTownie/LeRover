@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "config"))
-sys.path.insert(0, str(REPO_ROOT / "pi500"))
+sys.path.insert(0, str(REPO_ROOT / "pi4b"))
 sys.path.insert(0, str(REPO_ROOT / "apps"))
 
 import apps.pokeball_app.app as pokeball_module

@@ -21,7 +21,7 @@ from robot_backend import RobotBackend
 try:
     import network_resolver
 except ImportError:
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pi500"))
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pi4b"))
     import network_resolver
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
