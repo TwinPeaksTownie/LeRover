@@ -215,7 +215,7 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["motion"]["interpolation_duration_sec"], 1.2)
         self.assertEqual(cfg["motion"]["interpolation_steps"], 35)
         self.assertEqual(cfg["motion"]["dead_posture"], "arch")
-        self.assertTrue(cfg["execution"]["single_turn"])
+        self.assertFalse(cfg["execution"]["single_turn"])
         self.assertEqual(cfg["network"]["vosk_server_port"], 8059)
         self.assertEqual(cfg["network"]["vosk_websocket_port"], 2700)
 
@@ -482,6 +482,68 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertIn(str(app.config["network"]["vosk_server_port"]), health_url)
         self.assertIn(str(app.config["network"]["vosk_websocket_port"]), ws_url)
         self.assertIn(str(app.config["network"]["vosk_server_port"]), recognize_url)
+
+    def test_listener_multiturn_persists_in_idle(self):
+        """Verifies that ListenerApp returns to IDLE after posture execution and awaits Button B."""
+        import time
+        import threading
+        from unittest.mock import patch, MagicMock
+
+        app = ListenerApp(running_on_pi=False)
+        self.assertFalse(app.single_turn)
+
+        mock_backend = MagicMock()
+        stop_event = threading.Event()
+
+        with patch.object(app, "_play_chime"), \
+             patch.object(app, "_execute_posture", side_effect=lambda b, a: setattr(app, "action_taken", f"Moved to {a}")), \
+             patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
+             patch.object(app, "_get_vosk_urls", return_value=("http://127.0.0.1:8059/health", "ws://127.0.0.1:2700", "http://127.0.0.1:8059/recognize")):
+
+            mock_stream = MagicMock()
+            loud_pcm = b"\xff\x7f" * 1280
+            mock_stream.read.side_effect = [loud_pcm, b"", b"", b""]
+            mock_stream_conn.return_value = mock_stream
+
+            app.config["vad"]["settle_delay_sec"] = 0.01
+            app.config["vad"]["post_chime_settle_sec"] = 0.01
+            app.config["vad"]["max_record_sec"] = 0.05
+            app.config["vad"]["silence_timeout_sec"] = 0.02
+
+            with patch("apps.listener_app.app.ws_connect") as mock_ws:
+                mock_ws_client = MagicMock()
+                mock_ws.return_value = mock_ws_client
+                mock_ws_client.recv.side_effect = [
+                    '{"type": "connected"}',
+                    '{"type": "final_result", "text": "sit down"}',
+                    '{"type": "final_result", "text": "sit down"}'
+                ]
+
+                app.start_listen_event.set()
+                t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
+                t.start()
+
+                # 1. Wait for listener to wake up into LISTENING or CAPTURING
+                t_start = time.time()
+                while time.time() - t_start < 2.0:
+                    if app.state in ("LISTENING", "CAPTURING", "PROCESSING"):
+                        break
+                    time.sleep(0.01)
+
+                # 2. Wait for listener to finish the turn and return to IDLE
+                t_start = time.time()
+                while time.time() - t_start < 2.0:
+                    if app.state == "IDLE" and "Moved to sit" in app.action_taken:
+                        break
+                    time.sleep(0.01)
+
+                self.assertEqual(app.state, "IDLE")
+                self.assertIn("Moved to sit", app.action_taken)
+                self.assertIn("Press Button B to speak", app.action_taken)
+                self.assertFalse(stop_event.is_set())
+
+                stop_event.set()
+                t.join(timeout=1.0)
 
 
 if __name__ == "__main__":

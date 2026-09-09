@@ -6,7 +6,7 @@
   "icon": "👂",
   "tags": ["voice", "hotword", "kws", "listener", "offline"],
   "execution": {
-    "single_turn": true
+    "single_turn": false
   },
   "hotword": {
     "chunk_samples": 1280,
