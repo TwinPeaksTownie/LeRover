@@ -191,8 +191,14 @@ def sync_rover_speed_config(pct: int):
 
 CURRENT_PAPLAY_PROC: Optional[subprocess.Popen] = None
 
-def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = ""):
+def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = "") -> float:
     """Dispatches audio playback on Pi 4B PulseAudio daemon with fail-fast validation and full traceback logging."""
+    active_event = event if event else kind
+    if active_event == "stop_audio":
+        duration_sec = 0.0
+    else:
+        duration_sec = audio_resolver.get_audio_duration_sec(wav_path if wav_path else active_event)
+
     def _work():
         global CURRENT_PAPLAY_PROC
         try:
@@ -256,6 +262,7 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
             logging.exception("Sound playback failure for event='%s', wav_path='%s': %s", event, wav_path, e)
             raise
     threading.Thread(target=_work, daemon=True).start()
+    return duration_sec
 
 def manage_local_backend(action: str) -> Optional[int]:
     """Manages the in-memory master hardware backend.
@@ -828,11 +835,11 @@ class UnifiedHandler(MasterApiHandler):
             if "action" in req_data:
                 action = req_data["action"]
                 if action in ("stop", "clear"):
-                    play_sound_helper(event="stop_audio", wav_path="", stop_previous=True, delay_sec=0.0)
+                    dur = play_sound_helper(event="stop_audio", wav_path="", stop_previous=True, delay_sec=0.0)
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped"}).encode('utf-8'))
+                    self.wfile.write(json.dumps({"status": "ok", "action": "stopped", "duration_sec": dur}).encode('utf-8'))
                     return
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
@@ -857,11 +864,11 @@ class UnifiedHandler(MasterApiHandler):
             delay_s = float(req_data["delay_sec"])
             wav_p = str(req_data["wav_path"])
 
-            play_sound_helper(event=event_name, wav_path=wav_p, stop_previous=stop_prev, delay_sec=delay_s)
+            dur = play_sound_helper(event=event_name, wav_path=wav_p, stop_previous=stop_prev, delay_sec=delay_s)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p, "duration_sec": dur}).encode('utf-8'))
             return
 
         if path == "/api/connect_hotspot":

@@ -6,7 +6,8 @@
   "icon": "👂",
   "tags": ["voice", "hotword", "kws", "listener", "offline"],
   "execution": {
-    "single_turn": false
+    "single_turn": false,
+    "max_retries": 2
   },
   "hotword": {
     "chunk_samples": 1280,
@@ -24,6 +25,8 @@
     "settle_delay_sec": 0.65,
     "post_chime_settle_sec": 1.5,
     "silence_timeout_sec": 2.5,
+    "post_speech_silence_sec": 0.85,
+    "acoustic_decay_pad_sec": 0.05,
     "max_record_sec": 10.0,
     "min_record_sec": 0.5,
     "energy_threshold": 450,
@@ -34,6 +37,8 @@
     "app_start": "ornith_app_start",
     "wake": "ornith_listen_start",
     "commit": "ornith_commit_speech",
+    "error": "incorrect",
+    "lost_life": "play_dead",
     "cancel": "ornith_abort_recording",
     "exit": "app_exit_idle",
     "play_dead": "play_dead"

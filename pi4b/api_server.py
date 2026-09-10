@@ -766,6 +766,13 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                 return self._send_json({"status": "ok", "command": cmd, "intent": intent, "action_taken": l_app.action_taken})
             return self._send_json({"status": "ok", "command": cmd, "intent": intent})
 
+        elif parsed.path == "/api/apps/listener/trigger":
+            l_app = self.app_manager.active_app if (self.app_manager.current_app_name == "listener_app") else None
+            if not l_app or not hasattr(l_app, "start_listen_event"):
+                return self._send_json({"status": "error", "message": "ListenerApp is not currently active"}, 400)
+            l_app.start_listen_event.set()
+            return self._send_json({"status": "ok", "action": "listen_triggered"})
+
         elif parsed.path == "/api/pokeball_teleop_toggle":
             if "action" not in body:
                 return self._send_json({"status": "error", "message": "Missing required 'action' parameter"}, 400)

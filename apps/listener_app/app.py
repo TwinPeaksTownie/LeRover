@@ -74,6 +74,9 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["icon"]
     _ = cfg["tags"]
     _ = bool(cfg["execution"]["single_turn"])
+    max_retries = int(cfg["execution"]["max_retries"])
+    if max_retries < 0:
+        raise ValueError("max_retries cannot be negative")
     _ = int(cfg["hotword"]["chunk_samples"])
     _ = int(cfg["hotword"]["sample_rate"])
     _ = float(cfg["hotword"]["energy_multiplier"])
@@ -89,6 +92,12 @@ def load_listener_config() -> Dict[str, Any]:
     if post_settle_sec <= 0:
         raise ValueError("post_chime_settle_sec must be positive")
     _ = float(cfg["vad"]["silence_timeout_sec"])
+    post_speech_silence_sec = float(cfg["vad"]["post_speech_silence_sec"])
+    if post_speech_silence_sec <= 0:
+        raise ValueError("post_speech_silence_sec must be positive")
+    acoustic_decay_pad_sec = float(cfg["vad"]["acoustic_decay_pad_sec"])
+    if acoustic_decay_pad_sec < 0:
+        raise ValueError("acoustic_decay_pad_sec cannot be negative")
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
     _ = int(cfg["vad"]["energy_threshold"])
@@ -101,6 +110,8 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["chimes"]["app_start"]
     _ = cfg["chimes"]["wake"]
     _ = cfg["chimes"]["commit"]
+    _ = cfg["chimes"]["error"]
+    _ = cfg["chimes"]["lost_life"]
     _ = cfg["chimes"]["cancel"]
     _ = cfg["chimes"]["exit"]
     _ = cfg["chimes"]["play_dead"]
@@ -224,6 +235,7 @@ class ListenerApp(BaseApp):
         self.search_results: List[Dict[str, Any]] = []
         self.selected_index: int = 0
         self._selection_lock = threading.RLock()
+        self._stream_lock = threading.Lock()
         self._stream_resp: Any = None
         self.app_manager: Any = None
         self.asr_model: Any = None
@@ -421,13 +433,49 @@ class ListenerApp(BaseApp):
         pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=self.config["network"]["pi4b_port"])
         return f"http://{pi4b_ip}:{self.config['network']['pi4b_port']}"
 
-    def _play_chime(self, chime_key: str) -> None:
-        """Dispatches audio cue playback to the daemon audio system."""
-        event_name = self.config["chimes"][chime_key]
+    def _play_chime(self, chime_key: str, blocking: bool = False) -> float:
+        """Dispatches audio cue playback to the daemon audio system and returns exact duration in seconds."""
+        event_name = str(self.config["chimes"][chime_key])
         try:
-            dispatch_audio_event(event_name)
+            return audio_resolver.dispatch_audio_event(event_name, blocking=blocking)
         except Exception as e:
             self.logger.warning("Failed to dispatch audio chime '%s': %s", event_name, e, exc_info=True)
+            return 0.0
+
+    def _flush_stream(self, stream_resp: Any, drain_bytes: int = 3200) -> None:
+        """Reads and discards initial bytes to flush startup transients or acoustic residues."""
+        if stream_resp is None:
+            return
+        try:
+            _ = stream_resp.read(drain_bytes)
+        except Exception as e:
+            self.logger.debug("Stream flush read note: %s", e)
+
+    def _watchdog_cleanup(self) -> None:
+        """Restarts the Vosk recognition service and terminates any orphaned microphone processes."""
+        self.logger.warning("Executing watchdog cleanup: killing mic processes and restarting vosk-server.service...")
+        with self._stream_lock:
+            if self._stream_resp is not None:
+                try:
+                    self._stream_resp.close()
+                except Exception as e:
+                    self.logger.warning("Failed to close stream response during watchdog cleanup: %s", e)
+                self._stream_resp = None
+
+        import subprocess
+        try:
+            subprocess.run(["pkill", "-9", "-f", "parecord"], check=False)
+        except Exception as pe:
+            self.logger.warning("pkill parecord warning: %s", pe)
+
+        try:
+            subprocess.run(["sudo", "-n", "systemctl", "restart", "vosk-server.service"], check=False, timeout=10)
+            self.logger.info("Successfully signaled systemd to restart vosk-server.service.")
+        except Exception as se:
+            self.logger.error("Failed to restart vosk-server.service: %s", se)
+
+        time.sleep(1.0)
+        self._verify_vosk_standby_server()
 
     def _connect_daemon_audio_stream(self) -> Any:
         """Opens streaming PCM connection to the daemon on Pi 4B."""
@@ -563,6 +611,9 @@ class ListenerApp(BaseApp):
         energy_thresh = int(self.config["vad"]["energy_threshold"])
         pre_roll_chunks = int(self.config["vad"]["pre_roll_chunks"])
         post_settle_sec = float(self.config["vad"]["post_chime_settle_sec"])
+        max_retries = int(self.config["execution"]["max_retries"])
+        acoustic_decay_pad = float(self.config["vad"]["acoustic_decay_pad_sec"])
+        post_speech_silence = float(self.config["vad"]["post_speech_silence_sec"])
 
         self._stream_resp = None
 
@@ -584,363 +635,391 @@ class ListenerApp(BaseApp):
                     self.logger.info("Stop or abort signaled while in IDLE. Exiting ListenerApp...")
                     break
 
-                # 2. Single tap detected! Play wake whistle chime
-                self._play_chime("wake")
-
-                # 3. Wait for wake chime sound wave to clear before opening/reading mic
-                self.logger.info("Awaiting %.2fs acoustic settle delay for wake chime...", settle_delay)
-                if stop_event.wait(timeout=settle_delay) or self.abort_listen_event.is_set():
-                    self.logger.info("Exit signaled during wake settle delay. Exiting ListenerApp...")
-                    break
-
-                with self._selection_lock:
-                    self.state = "LISTENING"
-                self.action_taken = "Listening for voice command..."
-
-                pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
-
-                try:
-                    self._stream_resp = self._connect_daemon_audio_stream()
-                    self.logger.info("Successfully bound to live daemon microphone stream.")
-                except Exception as e:
-                    self.logger.warning("Could not open daemon audio stream (%s), entering command polling mode...", e, exc_info=True)
-
-                listen_start_time = time.time()
+                attempt = 0
                 command_executed = False
+                turn_success = False
 
-                # 4. Utterance capture loop
-                while not stop_event.is_set() and not self.abort_listen_event.is_set():
-                    if self._stream_resp is not None:
-                        chunk = self._stream_resp.read(chunk_bytes)
-                        if not chunk:
-                            self.logger.warning("Daemon audio stream EOF, attempting stream reconnect...")
-                            try:
-                                self._stream_resp.close()
-                            except (OSError, ValueError) as close_err:
-                                self.logger.debug("Closing stream on EOF: %s", close_err)
-                            time.sleep(1.0)
-                            try:
-                                self._stream_resp = self._connect_daemon_audio_stream()
-                                self.logger.info("Reconnected to daemon audio stream.")
-                            except Exception as rec_err:
-                                self.logger.error("Failed to reconnect to daemon audio stream: %s", rec_err, exc_info=True)
-                                raise ConnectionError(f"Daemon audio stream dropped and reconnect failed: {rec_err}") from rec_err
-                            continue
+                while attempt <= max_retries and not stop_event.is_set() and not self.abort_listen_event.is_set():
+                    if attempt == 0:
+                        dur = self._play_chime("wake")
                     else:
-                        time.sleep(0.08)
-                        continue
+                        dur = self._play_chime("error")
+                        self.action_taken = f"Could not hear speech (retry {attempt}/{max_retries}). Speak now..."
 
-                    energy = self._calculate_frame_energy(chunk)
-                    pre_roll_buffer.append(chunk)
-
-                    # Voice Activity Detection: speech onset detected when volume exceeds energy_thresh
-                    speech_detected = (energy > energy_thresh)
-
-                    # Listen timeout: if no speech detected within max_record_sec, return to IDLE
-                    if not speech_detected and (time.time() - listen_start_time) > max_record_sec:
-                        self.logger.info("No speech detected within %.1fs timeout. Returning to IDLE.", max_record_sec)
-                        self.action_taken = "Listening timed out. Press Button B to speak"
-                        self._play_chime("cancel")
+                    # Exact audio delay based on WAV file length + decay pad
+                    delay_wait = dur + acoustic_decay_pad
+                    self.logger.info("Awaiting exact audio delay %.3fs (dur=%.3fs, pad=%.3fs) before mic capture (attempt %d/%d)...",
+                                     delay_wait, dur, acoustic_decay_pad, attempt + 1, max_retries + 1)
+                    if stop_event.wait(timeout=delay_wait) or self.abort_listen_event.is_set():
                         break
 
-                    if speech_detected:
-                        self.logger.info("Speech onset detected (energy=%.1f > %d)! Entering streaming capture window...", energy, energy_thresh)
-                        with self._selection_lock:
-                            self.state = "CAPTURING"
-                        self.transcript = ""
-
-                        _, server_url, _ = self._get_vosk_urls()
-                        ws_client = None
-                        msg_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
-                        stop_rx = threading.Event()
-                        rx_thread: Optional[threading.Thread] = None
-
-                        try:
-                            ws_client = ws_connect(server_url, open_timeout=3.0)
+                    # Audio stream flush: close prior stream, connect fresh stream, and drain initial samples
+                    with self._stream_lock:
+                        if self._stream_resp is not None:
                             try:
-                                _ = ws_client.recv(timeout=1.0)
-                            except Exception as ex_init:
-                                self.logger.debug("Initial greeting read skipped: %s", ex_init)
+                                self._stream_resp.close()
+                            except Exception as e:
+                                self.logger.warning("Failed to close previous stream response: %s", e)
+                            self._stream_resp = None
+                        try:
+                            self._stream_resp = self._connect_daemon_audio_stream()
+                            self._flush_stream(self._stream_resp, drain_bytes=3200)
+                            self.logger.info("Fresh daemon microphone stream connected and flushed.")
+                        except Exception as e:
+                            self.logger.warning("Could not open daemon audio stream (%s), entering polling mode...", e, exc_info=True)
 
-                            def _rx_worker() -> None:
-                                while not stop_rx.is_set():
-                                    try:
-                                        if ws_client is None:
-                                            break
-                                        raw = ws_client.recv(timeout=0.1)
-                                        msg = json.loads(raw)
-                                        msg_queue.put(msg)
-                                    except TimeoutError:
-                                        continue
-                                    except Exception as rx_err:
-                                        self.logger.debug("WebSocket receiver terminated: %s", rx_err)
-                                        break
+                    with self._selection_lock:
+                        self.state = "LISTENING"
+                    if attempt == 0:
+                        self.action_taken = "Listening for voice command..."
 
-                            rx_thread = threading.Thread(target=_rx_worker, daemon=True)
-                            rx_thread.start()
+                    pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
+                    listen_start_time = time.time()
+                    speech_detected = False
 
-                            for prc in pre_roll_buffer:
+                    # Await speech onset
+                    while not stop_event.is_set() and not self.abort_listen_event.is_set():
+                        chunk = None
+                        with self._stream_lock:
+                            if self._stream_resp is not None:
                                 try:
-                                    ws_client.send(prc)
-                                except Exception as pre_err:
-                                    self.logger.debug("Pre-roll send error: %s", pre_err)
-                                    break
+                                    chunk = self._stream_resp.read(chunk_bytes)
+                                except Exception as r_err:
+                                    self.logger.warning("Stream read error: %s", r_err)
+                                    chunk = None
 
-                        except Exception as conn_err:
-                            self.logger.warning("Could not establish streaming WebSocket session to %s: %s", server_url, conn_err)
-                            ws_client = None
-
-                        record_start = time.time()
-                        last_voice_time = time.time()
-                        complete_parts: List[str] = []
-                        partial_text: str = ""
-                        authoritative_transcript = ""
-
-                        while not stop_event.is_set():
-                            if self.abort_listen_event.is_set():
-                                self.logger.info("Abort listen event signaled during capture. Aborting speech stream...")
+                        if chunk:
+                            energy = self._calculate_frame_energy(chunk)
+                            pre_roll_buffer.append(chunk)
+                            if energy > energy_thresh:
+                                speech_detected = True
                                 break
-                            c = self._stream_resp.read(chunk_bytes)
-                            if not c:
-                                break
+                        else:
+                            time.sleep(0.05)
 
-                            if ws_client is not None:
-                                try:
-                                    ws_client.send(c)
-                                except Exception as send_err:
-                                    self.logger.warning("WebSocket chunk send error: %s", send_err)
-
-                            while not msg_queue.empty():
-                                try:
-                                    m = msg_queue.get_nowait()
-                                    m_type = str(m["type"])
-                                    if m_type == "final":
-                                        f_txt = str(m["text"]).strip()
-                                        if f_txt:
-                                            complete_parts.append(f_txt)
-                                            partial_text = ""
-                                    elif m_type == "partial":
-                                        partial_text = str(m["text"]).strip()
-                                    elif m_type == "final_result":
-                                        authoritative_transcript = str(m["text"]).strip()
-
-                                    complete_clean = " ".join(complete_parts).strip()
-                                    partial_clean = partial_text.strip()
-                                    if complete_clean in partial_clean:
-                                        combined = partial_clean
-                                    else:
-                                        combined = f"{complete_clean} {partial_clean}".strip()
-
-                                    if combined:
-                                        self.transcript = combined
-                                except queue.Empty:
-                                    break
-
-                            e = self._calculate_frame_energy(c)
-                            now = time.time()
-                            if e > energy_thresh:
-                                last_voice_time = now
-
-                            if (now - last_voice_time) > silence_timeout or (now - record_start) > max_record_sec:
-                                break
-
-                        if stop_event.is_set() or self.abort_listen_event.is_set():
-                            self.logger.info("Stop or abort signaled during speech capture. Aborting turn...")
-                            stop_rx.set()
-                            if rx_thread is not None:
-                                rx_thread.join(timeout=0.2)
-                            if ws_client is not None:
-                                try:
-                                    ws_client.close()
-                                except Exception as ws_err:
-                                    self.logger.debug("Error closing WebSocket on abort: %s", ws_err)
-                            if self.abort_listen_event.is_set():
-                                self._play_chime("cancel")
+                        if (time.time() - listen_start_time) > max_record_sec:
+                            self.logger.info("No speech detected within %.1fs on attempt %d.", max_record_sec, attempt + 1)
                             break
 
-                        with self._selection_lock:
-                            self.state = "PROCESSING"
-                        self._play_chime("commit")
-                        pre_roll_buffer.clear()
+                    if not speech_detected:
+                        attempt += 1
+                        continue
 
-                        if not authoritative_transcript and ws_client is not None:
-                            try:
-                                ws_client.send(json.dumps({"type": "final"}))
-                                t_wait = time.time()
-                                while (time.time() - t_wait) < 2.5:
-                                    try:
-                                        m = msg_queue.get(timeout=0.2)
-                                        if str(m["type"]) == "final_result":
-                                            authoritative_transcript = str(m["text"]).strip()
-                                            break
-                                    except queue.Empty:
-                                        continue
-                            except Exception as fin_err:
-                                self.logger.warning("Error requesting final result: %s", fin_err)
-                            finally:
-                                stop_rx.set()
-                                if rx_thread is not None:
-                                    rx_thread.join(timeout=0.5)
+                    # Voice capture begins
+                    self.logger.info("Speech onset detected (energy > %d)! Entering streaming capture window...", energy_thresh)
+                    with self._selection_lock:
+                        self.state = "CAPTURING"
+                    self.transcript = ""
+
+                    _, server_url, _ = self._get_vosk_urls()
+                    ws_client = None
+                    msg_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
+                    stop_rx = threading.Event()
+                    rx_thread: Optional[threading.Thread] = None
+
+                    try:
+                        ws_client = ws_connect(server_url, open_timeout=3.0)
+                        try:
+                            _ = ws_client.recv(timeout=1.0)
+                        except Exception as ex_init:
+                            self.logger.debug("Initial greeting read skipped: %s", ex_init)
+
+                        def _rx_worker() -> None:
+                            while not stop_rx.is_set():
                                 try:
-                                    ws_client.close()
-                                except Exception as ex_close:
-                                    self.logger.debug("WebSocket client close error: %s", ex_close)
-                        else:
+                                    if ws_client is None:
+                                        break
+                                    raw = ws_client.recv(timeout=0.1)
+                                    msg = json.loads(raw)
+                                    msg_queue.put(msg)
+                                except TimeoutError:
+                                    continue
+                                except Exception as rx_err:
+                                    self.logger.debug("WebSocket receiver terminated: %s", rx_err)
+                                    break
+
+                        rx_thread = threading.Thread(target=_rx_worker, daemon=True)
+                        rx_thread.start()
+
+                        for prc in pre_roll_buffer:
+                            try:
+                                ws_client.send(prc)
+                            except Exception as pre_err:
+                                self.logger.debug("Pre-roll send error: %s", pre_err)
+                                break
+                    except Exception as conn_err:
+                        self.logger.warning("Could not establish streaming WebSocket session to %s: %s", server_url, conn_err)
+                        ws_client = None
+
+                    record_start = time.time()
+                    last_voice_time = time.time()
+                    complete_parts: List[str] = []
+                    partial_text: str = ""
+                    authoritative_transcript = ""
+
+                    while not stop_event.is_set() and not self.abort_listen_event.is_set():
+                        c = None
+                        with self._stream_lock:
+                            if self._stream_resp is not None:
+                                try:
+                                    c = self._stream_resp.read(chunk_bytes)
+                                except Exception:
+                                    c = None
+                        if not c:
+                            break
+
+                        if ws_client is not None:
+                            try:
+                                ws_client.send(c)
+                            except Exception as send_err:
+                                self.logger.warning("WebSocket chunk send error: %s", send_err)
+
+                        while not msg_queue.empty():
+                            try:
+                                m = msg_queue.get_nowait()
+                                m_type = str(m["type"])
+                                if m_type == "final":
+                                    f_txt = str(m["text"]).strip()
+                                    if f_txt:
+                                        complete_parts.append(f_txt)
+                                        partial_text = ""
+                                elif m_type == "partial":
+                                    partial_text = str(m["text"]).strip()
+                                elif m_type == "final_result":
+                                    authoritative_transcript = str(m["text"]).strip()
+
+                                complete_clean = " ".join(complete_parts).strip()
+                                partial_clean = partial_text.strip()
+                                if complete_clean in partial_clean:
+                                    combined = partial_clean
+                                else:
+                                    combined = f"{complete_clean} {partial_clean}".strip()
+
+                                if combined:
+                                    self.transcript = combined
+                            except queue.Empty:
+                                break
+
+                        e = self._calculate_frame_energy(c)
+                        now = time.time()
+                        if e > energy_thresh:
+                            last_voice_time = now
+
+                        # Snappy silence detection
+                        if (now - last_voice_time) > post_speech_silence or (now - record_start) > max_record_sec:
+                            self.logger.info("Silence detected after speech (post-speech silence > %.2fs). Capturing complete.", post_speech_silence)
+                            break
+
+                    if stop_event.is_set() or self.abort_listen_event.is_set():
+                        self.logger.info("Stop or abort signaled during capture.")
+                        stop_rx.set()
+                        if rx_thread is not None:
+                            rx_thread.join(timeout=0.2)
+                        if ws_client is not None:
+                            try:
+                                ws_client.close()
+                            except Exception as e:
+                                self.logger.warning("Failed to close Vosk websocket client on abort: %s", e)
+                        break
+
+                    # Silence detected: Sound 2 plays (commit chime: smw_midway_gate.wav)
+                    with self._selection_lock:
+                        self.state = "PROCESSING"
+                    self._play_chime("commit")
+                    pre_roll_buffer.clear()
+
+                    # Settle Vosk service and await final transcription
+                    if not authoritative_transcript and ws_client is not None:
+                        try:
+                            ws_client.send(json.dumps({"type": "final"}))
+                            t_wait = time.time()
+                            while (time.time() - t_wait) < 2.0:
+                                try:
+                                    m = msg_queue.get(timeout=0.2)
+                                    if str(m["type"]) == "final_result":
+                                        authoritative_transcript = str(m["text"]).strip()
+                                        break
+                                except queue.Empty:
+                                    continue
+                        except Exception as fin_err:
+                            self.logger.warning("Error requesting final result: %s", fin_err)
+                        finally:
                             stop_rx.set()
                             if rx_thread is not None:
                                 rx_thread.join(timeout=0.5)
-                            if ws_client is not None:
-                                try:
-                                    ws_client.close()
-                                except Exception as ex_close:
-                                    self.logger.debug("WebSocket client close error: %s", ex_close)
+                            try:
+                                ws_client.close()
+                            except Exception as e:
+                                self.logger.warning("Failed to close Vosk websocket client after final result: %s", e)
+                    else:
+                        stop_rx.set()
+                        if rx_thread is not None:
+                            rx_thread.join(timeout=0.5)
+                        if ws_client is not None:
+                            try:
+                                ws_client.close()
+                            except Exception as e:
+                                self.logger.warning("Failed to close Vosk websocket client: %s", e)
 
-                        if not authoritative_transcript:
-                            complete_clean = " ".join(complete_parts).strip()
-                            partial_clean = partial_text.strip()
-                            if complete_clean in partial_clean:
-                                authoritative_transcript = partial_clean
-                            else:
-                                authoritative_transcript = f"{complete_clean} {partial_clean}".strip()
+                    if not authoritative_transcript:
+                        complete_clean = " ".join(complete_parts).strip()
+                        partial_clean = partial_text.strip()
+                        if complete_clean in partial_clean:
+                            authoritative_transcript = partial_clean
+                        else:
+                            authoritative_transcript = f"{complete_clean} {partial_clean}".strip()
 
-                        transcript = strip_hallucinated_the(authoritative_transcript)
-                        self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
-                        self.logger.info("Finalized streaming transcript: '%s' (raw: '%s')", self.transcript, authoritative_transcript)
-                        if transcript:
-                            intent = parse_intent(transcript)
-                            self.logger.info("Parsed intent: %s", intent)
+                    transcript = strip_hallucinated_the(authoritative_transcript)
+                    self.transcript = transcript if transcript else str(self.config["feedback"]["idle_transcript"])
+                    self.logger.info("Finalized streaming transcript: '%s' (raw: '%s')", self.transcript, authoritative_transcript)
 
-                            intent_type = intent["intent"]
-                            if intent_type == "SWITCH_APP":
-                                target_app = intent["app"]
-                                self.action_taken = f"Switching to {target_app}"
-                                self.logger.info("Switching to app '%s', terminating listener...", target_app)
+                    if transcript:
+                        intent = parse_intent(transcript)
+                        self.logger.info("Parsed intent: %s", intent)
+
+                        intent_type = intent["intent"]
+                        if intent_type == "SWITCH_APP":
+                            target_app = intent["app"]
+                            self.action_taken = f"Switching to {target_app}"
+                            self.logger.info("Switching to app '%s', terminating listener...", target_app)
+                            self._play_chime("commit")
+                            if self.app_manager is not None:
+                                def _switch_app():
+                                    try:
+                                        self.app_manager.start_app_by_name(target_app)
+                                    except Exception as ex:
+                                        self.logger.error("Failed switching to app '%s': %s", target_app, ex, exc_info=True)
+                                threading.Thread(target=_switch_app, daemon=True).start()
+                            self.stop()
+                            return
+
+                        elif intent_type == "POSTURE":
+                            action = intent["action"]
+                            self._execute_posture(backend, action)
+                            if action != "play_dead":
+                                self._play_chime("commit")
+                            command_executed = True
+                            turn_success = True
+                            break
+
+                        elif intent_type == "DOWNLOAD_SONG":
+                            with self._selection_lock:
+                                if self.state == "ANALYZING":
+                                    self.logger.warning("Rejecting search query: track analysis active on Mac")
+                                    self._play_chime("cancel")
+                                    break
+                            title = intent["title"]
+                            artist = intent["artist"]
+                            query_str = f"{title} {artist}".strip()
+                            self.action_taken = f"Searching tracks: '{query_str}'"
+                            with self._selection_lock:
+                                self.search_query = query_str
+                                self.state = "SEARCHING"
+                            self.logger.info("Querying top 4 tracks for '%s'...", query_str)
+                            try:
+                                candidates = fetch_search_candidates(query_str, limit=4)
+                                with self._selection_lock:
+                                    self.search_results = candidates
+                                    self.selected_index = 0
+                                    self.state = "SELECTING"
+                                self._play_chime("commit")
+                                self.logger.info("Retrieved %d candidates for selection: %s", len(candidates), [c["title"] for c in candidates])
+                            except Exception as e:
+                                self.logger.error("Search query failed for '%s': %s", query_str, e, exc_info=True)
+                                with self._selection_lock:
+                                    self.error = str(e)
+                                    self.state = "IDLE"
+                                self._play_chime("cancel")
+                            command_executed = True
+                            turn_success = True
+                            break
+
+                        elif intent_type == "PLAY_SONG":
+                            title = intent["title"]
+                            bb_track = find_beat_bandit_track(title)
+                            if bb_track is not None:
+                                track_id = str(bb_track["track_id"])
+                                track_title = str(bb_track["title"])
+                                self.action_taken = f"Playing Beat Bandit: '{track_title}'"
+                                self.logger.info("Found Beat Bandit library track '%s' (ID: %s), transitioning to Beat Bandit...", track_title, track_id)
                                 self._play_chime("commit")
                                 if self.app_manager is not None:
-                                    def _switch_app():
+                                    def _launch_bb():
                                         try:
-                                            self.app_manager.start_app_by_name(target_app)
+                                            self.logger.info("Engaging Beat Bandit app session...")
+                                            ok = self.app_manager.start_app_by_name("beat_bandit_app")
+                                            if not ok:
+                                                self.logger.error("Failed to start beat_bandit_app via AppManager")
+                                                return
+                                            bb_app = self.app_manager.active_app
+                                            if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):
+                                                self.logger.info("Triggering Beat Bandit track playback for '%s'...", track_id)
+                                                robot_backend = self.app_manager.backend
+                                                bb_app.start_track_by_url_or_id(robot_backend, track_id)
+                                            else:
+                                                self.logger.error("Active app is not a valid BeatBanditApp instance")
                                         except Exception as ex:
-                                            self.logger.error("Failed switching to app '%s': %s", target_app, ex, exc_info=True)
-                                    threading.Thread(target=_switch_app, daemon=True).start()
+                                            self.logger.error("Beat Bandit launch error: %s", ex, exc_info=True)
+                                    threading.Thread(target=_launch_bb, daemon=True).start()
                                 self.stop()
                                 return
-
-                            elif intent_type == "POSTURE":
-                                action = intent["action"]
-                                self._execute_posture(backend, action)
-                                if action != "play_dead":
-                                    self._play_chime("commit")
-                                command_executed = True
-
-                            elif intent_type == "DOWNLOAD_SONG":
-                                with self._selection_lock:
-                                    if self.state == "ANALYZING":
-                                        self.logger.warning("Rejecting search query: track analysis active on Mac")
-                                        self._play_chime("cancel")
-                                        break
-                                title = intent["title"]
-                                artist = intent["artist"]
-                                query_str = f"{title} {artist}".strip()
-                                self.action_taken = f"Searching tracks: '{query_str}'"
-                                with self._selection_lock:
-                                    self.search_query = query_str
-                                    self.state = "SEARCHING"
-                                self.logger.info("Querying top 4 tracks for '%s'...", query_str)
-                                try:
-                                    candidates = fetch_search_candidates(query_str, limit=4)
-                                    with self._selection_lock:
-                                        self.search_results = candidates
-                                        self.selected_index = 0
-                                        self.state = "SELECTING"
-                                    self._play_chime("commit")
-                                    self.logger.info("Retrieved %d candidates for selection: %s", len(candidates), [c["title"] for c in candidates])
-                                except Exception as e:
-                                    self.logger.error("Search query failed for '%s': %s", query_str, e, exc_info=True)
-                                    with self._selection_lock:
-                                        self.error = str(e)
-                                        self.state = "IDLE"
-                                    self._play_chime("cancel")
-                                command_executed = True
-
-                            elif intent_type == "PLAY_SONG":
-                                title = intent["title"]
-                                bb_track = find_beat_bandit_track(title)
-                                if bb_track is not None:
-                                    track_id = str(bb_track["track_id"])
-                                    track_title = str(bb_track["title"])
-                                    self.action_taken = f"Playing Beat Bandit: '{track_title}'"
-                                    self.logger.info("Found Beat Bandit library track '%s' (ID: %s), transitioning to Beat Bandit...", track_title, track_id)
+                            else:
+                                seq_file = find_compiled_sequence(title)
+                                if seq_file is not None:
+                                    self.action_taken = f"Playing Preset: '{title}'"
+                                    self.logger.info("Found compiled sequence '%s', launching preset playback...", seq_file)
                                     self._play_chime("commit")
                                     if self.app_manager is not None:
-                                        def _launch_bb():
+                                        def _launch_preset():
                                             try:
-                                                self.logger.info("Engaging Beat Bandit app session...")
-                                                ok = self.app_manager.start_app_by_name("beat_bandit_app")
-                                                if not ok:
-                                                    self.logger.error("Failed to start beat_bandit_app via AppManager")
-                                                    return
-                                                bb_app = self.app_manager.active_app
-                                                if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):
-                                                    self.logger.info("Triggering Beat Bandit track playback for '%s'...", track_id)
-                                                    robot_backend = self.app_manager.backend
-                                                    bb_app.start_track_by_url_or_id(robot_backend, track_id)
-                                                else:
-                                                    self.logger.error("Active app is not a valid BeatBanditApp instance")
+                                                self.app_manager.start_app_by_name("preset_app")
                                             except Exception as ex:
-                                                self.logger.error("Beat Bandit launch error: %s", ex, exc_info=True)
-                                        threading.Thread(target=_launch_bb, daemon=True).start()
+                                                self.logger.error("Failed to start preset_app: %s", ex, exc_info=True)
+                                        threading.Thread(target=_launch_preset, daemon=True).start()
                                     self.stop()
                                     return
                                 else:
-                                    seq_file = find_compiled_sequence(title)
-                                    if seq_file is not None:
-                                        self.action_taken = f"Playing Preset: '{title}'"
-                                        self.logger.info("Found compiled sequence '%s', launching preset playback...", seq_file)
-                                        self._play_chime("commit")
-                                        if self.app_manager is not None:
-                                            def _launch_preset():
-                                                try:
-                                                    self.app_manager.start_app_by_name("preset_app")
-                                                except Exception as ex:
-                                                    self.logger.error("Failed to start preset_app: %s", ex, exc_info=True)
-                                            threading.Thread(target=_launch_preset, daemon=True).start()
-                                        self.stop()
-                                        return
-                                    else:
-                                        self.action_taken = str(self.config["feedback"]["unmatched_action"])
-                                        self.logger.warning("No Beat Bandit track or compiled sequence found for '%s'.", title)
-                                        self._play_chime("cancel")
-                                        command_executed = True
+                                    self.action_taken = str(self.config["feedback"]["unmatched_action"])
+                                    self.logger.warning("No Beat Bandit track or compiled sequence found for '%s'.", title)
+                                    self._play_chime("cancel")
+                                    command_executed = True
+                                    turn_success = True
+                                    break
 
-                            elif intent_type == "EXIT":
-                                self.action_taken = "Exiting Voice Listener"
-                                self.logger.info("Exit command received, stopping listener app...")
-                                if self.caller_app and self.app_manager is not None:
-                                    caller = str(self.caller_app)
-                                    def _return_to_caller_exit():
-                                        try:
-                                            self.logger.info("Returning to caller app '%s' on exit...", caller)
-                                            self.app_manager.start_app_by_name(caller)
-                                        except Exception as ex:
-                                            self.logger.error("Failed to return to caller app '%s': %s", caller, ex)
-                                    threading.Thread(target=_return_to_caller_exit, daemon=True).start()
-                                self.stop()
-                                return
-
-                            else:
-                                self.action_taken = str(self.config["feedback"]["unmatched_action"])
-                                self.logger.warning("Unrecognized voice command '%s'. Action: %s", transcript, self.action_taken)
-                                self._play_chime("cancel")
-                                command_executed = True
+                        elif intent_type == "EXIT":
+                            self.action_taken = "Exiting Voice Listener"
+                            self.logger.info("Exit command received, stopping listener app...")
+                            if self.caller_app and self.app_manager is not None:
+                                caller = str(self.caller_app)
+                                def _return_to_caller_exit():
+                                    try:
+                                        self.logger.info("Returning to caller app '%s' on exit...", caller)
+                                        self.app_manager.start_app_by_name(caller)
+                                    except Exception as ex:
+                                        self.logger.error("Failed to return to caller app '%s': %s", caller, ex)
+                                threading.Thread(target=_return_to_caller_exit, daemon=True).start()
+                            self.stop()
+                            return
 
                         else:
                             self.action_taken = str(self.config["feedback"]["unmatched_action"])
+                            self.logger.warning("Unrecognized voice command '%s'. Action: %s", transcript, self.action_taken)
                             self._play_chime("cancel")
                             command_executed = True
+                            turn_success = True
+                            break
+                    else:
+                        self.logger.warning("Attempt %d/%d yielded empty/hallucinated transcript.", attempt + 1, max_retries + 1)
+                        attempt += 1
+                        if attempt > max_retries:
+                            break
 
-                        # Speech turn handled, break utterance capture loop
-                        break
+                if not turn_success and not stop_event.is_set() and not self.abort_listen_event.is_set():
+                    self.logger.error("All %d attempts failed to capture valid speech. Triggering lose-a-life sound and watchdog reset...", max_retries + 1)
+                    self.action_taken = "Voice capture failed. Resetting..."
+                    dur = self._play_chime("lost_life")
+                    time.sleep(dur + 0.1)
+                    self._watchdog_cleanup()
 
                 # 5. Clean up stream and handle track selection waiting
                 with self._selection_lock:
@@ -999,12 +1078,13 @@ class ListenerApp(BaseApp):
             self.logger.error("ListenerApp run error: %s", e, exc_info=True)
             self.error = str(e)
         finally:
-            if self._stream_resp is not None:
-                try:
-                    self._stream_resp.close()
-                except Exception as e:
-                    self.logger.warning("Error closing daemon stream response: %s", e, exc_info=True)
-                self._stream_resp = None
+            with self._stream_lock:
+                if self._stream_resp is not None:
+                    try:
+                        self._stream_resp.close()
+                    except Exception as e:
+                        self.logger.warning("Error closing daemon stream response: %s", e, exc_info=True)
+                    self._stream_resp = None
             self.state = "IDLE"
             self._play_chime("exit")
             self.logger.info("ListenerApp execution loop exited.")
@@ -1014,19 +1094,20 @@ class ListenerApp(BaseApp):
         self.logger.info("Stopping ListenerApp...")
         self.stop_event.set()
         self.abort_listen_event.set()
-        if self._stream_resp is not None:
-            try:
-                if hasattr(self._stream_resp, "fp") and self._stream_resp.fp is not None:
-                    fp = self._stream_resp.fp
-                    if hasattr(fp, "raw") and fp.raw is not None:
-                        raw = fp.raw
-                        if hasattr(raw, "_sock") and raw._sock is not None:
-                            try:
-                                import socket
-                                raw._sock.shutdown(socket.SHUT_RDWR)
-                            except OSError as e:
-                                self.logger.debug("Socket shutdown already completed: %s", e)
-                self._stream_resp.close()
-            except Exception as e:
-                self.logger.debug("Error closing stream on stop: %s", e)
-            self._stream_resp = None
+        with self._stream_lock:
+            if self._stream_resp is not None:
+                try:
+                    if hasattr(self._stream_resp, "fp") and self._stream_resp.fp is not None:
+                        fp = self._stream_resp.fp
+                        if hasattr(fp, "raw") and fp.raw is not None:
+                            raw = fp.raw
+                            if hasattr(raw, "_sock") and raw._sock is not None:
+                                try:
+                                    import socket
+                                    raw._sock.shutdown(socket.SHUT_RDWR)
+                                except OSError as e:
+                                    self.logger.debug("Socket shutdown already completed: %s", e)
+                    self._stream_resp.close()
+                except Exception as e:
+                    self.logger.debug("Error closing stream on stop: %s", e)
+                self._stream_resp = None

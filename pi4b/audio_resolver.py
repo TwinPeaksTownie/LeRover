@@ -10,6 +10,7 @@ import os
 import threading
 import time
 import urllib.request
+import wave
 from typing import Dict, Any, Optional
 
 try:
@@ -22,6 +23,7 @@ except ImportError:
 logger = logging.getLogger("audio_resolver")
 
 _AUDIO_CONFIG_CACHE: Optional[Dict[str, Any]] = None
+_AUDIO_DURATION_CACHE: Dict[str, float] = {}
 
 
 def find_audio_config_path() -> str:
@@ -77,16 +79,67 @@ def get_audio_filename(event_name: str) -> str:
     return event["file"]
 
 
+def resolve_audio_file_path(event_name_or_wav: str) -> str:
+    """Resolves local absolute path to an audio WAV file. Raises FileNotFoundError if missing."""
+    if event_name_or_wav and os.path.isabs(event_name_or_wav) and os.path.exists(event_name_or_wav):
+        return os.path.abspath(event_name_or_wav)
+
+    config = load_audio_config()
+    events = config["events"]
+    if event_name_or_wav in events:
+        sound_file = events[event_name_or_wav]["file"]
+    else:
+        sound_file = event_name_or_wav
+
+    search_dirs = [
+        "/home/carson/mario_sounds",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "sounds"),
+        "i:/aux_servo_interface/assets/sounds",
+        "/home/user/so101/assets/sounds",
+        "/home/carson/touch_ui/assets/sounds",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "sounds"),
+    ]
+    for d in search_dirs:
+        cand = os.path.join(d, sound_file)
+        if os.path.exists(cand):
+            return os.path.abspath(cand)
+
+    raise FileNotFoundError(f"Audio asset '{sound_file}' (event: '{event_name_or_wav}') not found in search paths: {search_dirs}")
+
+
+def get_audio_duration_sec(event_name_or_wav: str) -> float:
+    """Calculates and caches the exact duration in seconds of a WAV audio asset.
+    Raises FileNotFoundError if asset is missing, ValueError if invalid WAV format.
+    """
+    global _AUDIO_DURATION_CACHE
+    if event_name_or_wav in _AUDIO_DURATION_CACHE:
+        return _AUDIO_DURATION_CACHE[event_name_or_wav]
+
+    target_path = resolve_audio_file_path(event_name_or_wav)
+    with wave.open(target_path, "rb") as wf:
+        frames = wf.getnframes()
+        rate = wf.getframerate()
+        if rate <= 0:
+            raise ValueError(f"Invalid frame rate {rate} in audio file: {target_path}")
+        duration = frames / float(rate)
+
+    _AUDIO_DURATION_CACHE[event_name_or_wav] = duration
+    return duration
+
+
 def get_pi4b_sound_url() -> str:
     """Returns the audio dispatch URL on the Pi 4B."""
     pi4b_ip = network_resolver.get_pi4b_ip(prefer_port=8082)
     return f"http://{pi4b_ip}:8082/api/play_sound"
 
 
-def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> None:
-    """Dispatches sound playback event to Pi 4B audio service asynchronously."""
-    sound_file = get_audio_filename(kind)
+def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0, blocking: bool = False) -> float:
+    """Dispatches sound playback event to Pi 4B audio service asynchronously or blocking.
+    Returns exact audio duration in seconds.
+    """
     event_name = kind
+    sound_file = get_audio_filename(kind) if not wav_path else os.path.basename(wav_path)
+    duration_sec = get_audio_duration_sec(wav_path if wav_path else kind)
 
     def _work():
         try:
@@ -108,5 +161,12 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
                 pass
         except Exception as e:
             logger.exception("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
-    threading.Thread(target=_work, daemon=True).start()
+
+    if blocking:
+        _work()
+        time.sleep(duration_sec)
+    else:
+        threading.Thread(target=_work, daemon=True).start()
+
+    return duration_sec
 
