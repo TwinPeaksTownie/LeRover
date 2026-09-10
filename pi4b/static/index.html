@@ -905,60 +905,77 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; flex-grow: 1; min-height: 0;">
-                    <!-- Config 1: Sensitivity Threshold -->
-                    <div class="cfg-card">
-                        <div class="cfg-card-header">
-                            <span style="font-size: 15px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
-                            <span id="cfgSensVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">5200</span>
+                <div style="display: grid; grid-template-columns: 1fr 140px; gap: 8px; flex-grow: 1; min-height: 0;">
+                    <!-- Left: 2x2 Grid of Selectable Cards -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 0;">
+                        <!-- Config 1: Volume -->
+                        <div id="cfgCardVol" class="cfg-card cfg-selectable" data-cfg-key="volume_pct">
+                            <div class="cfg-card-header">
+                                <span style="font-size: 15px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
+                                <span id="cfgVolVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">100%</span>
+                            </div>
+                            <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                                <button id="cfgVol50" class="btn-action cfg-btn">50%</button>
+                                <button id="cfgVol75" class="btn-action cfg-btn">75%</button>
+                                <button id="cfgVol100" class="btn-action cfg-btn">100%</button>
+                                <button id="cfgVol150" class="btn-action cfg-btn">150% 🚀</button>
+                            </div>
                         </div>
-                        <div class="cfg-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                            <button id="cfgSensLow" class="btn-action cfg-btn">Low</button>
-                            <button id="cfgSensNorm" class="btn-action cfg-btn">Normal</button>
-                            <button id="cfgSensHi" class="btn-action cfg-btn">Hi</button>
+
+                        <!-- Config 2: Rover Max Speed -->
+                        <div id="cfgCardSpeed" class="cfg-card cfg-selectable" data-cfg-key="rover_max_speed_pct">
+                            <div class="cfg-card-header">
+                                <span style="font-size: 15px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
+                                <span id="cfgSpeedVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">35% (175µs)</span>
+                            </div>
+                            <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                                <button id="cfgSpeed35" class="btn-action cfg-btn">35%</button>
+                                <button id="cfgSpeed50" class="btn-action cfg-btn">50%</button>
+                                <button id="cfgSpeed70" class="btn-action cfg-btn">70%</button>
+                                <button id="cfgSpeed100" class="btn-action cfg-btn">100%</button>
+                            </div>
+                        </div>
+
+                        <!-- Config 3: Arm Move Speed -->
+                        <div id="cfgCardArm" class="cfg-card cfg-selectable" data-cfg-key="arm_speed_sec">
+                            <div class="cfg-card-header">
+                                <span style="font-size: 15px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
+                                <span id="cfgArmVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">1.0s</span>
+                            </div>
+                            <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
+                                <button id="cfgArm03" class="btn-action cfg-btn">0.3s</button>
+                                <button id="cfgArm06" class="btn-action cfg-btn">0.6s</button>
+                                <button id="cfgArm10" class="btn-action cfg-btn">1.0s</button>
+                                <button id="cfgArm15" class="btn-action cfg-btn">1.5s</button>
+                            </div>
+                        </div>
+
+                        <!-- Config 4: Sensitivity Threshold -->
+                        <div id="cfgCardSens" class="cfg-card cfg-selectable" data-cfg-key="clack_threshold">
+                            <div class="cfg-card-header">
+                                <span style="font-size: 15px; font-weight: 900; color: #ffaa00;">🎤 SENSITIVITY GATE</span>
+                                <span id="cfgSensVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">5200</span>
+                            </div>
+                            <div class="cfg-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                                <button id="cfgSensLow" class="btn-action cfg-btn">Low</button>
+                                <button id="cfgSensNorm" class="btn-action cfg-btn">Normal</button>
+                                <button id="cfgSensHi" class="btn-action cfg-btn">Hi</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Config 2: Volume -->
-                    <div class="cfg-card">
-                        <div class="cfg-card-header">
-                            <span style="font-size: 15px; font-weight: 900; color: #00ff66;">🔊 SPEAKER VOLUME</span>
-                            <span id="cfgVolVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">100%</span>
-                        </div>
-                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
-                            <button id="cfgVol50" class="btn-action cfg-btn">50%</button>
-                            <button id="cfgVol75" class="btn-action cfg-btn">75%</button>
-                            <button id="cfgVol100" class="btn-action cfg-btn">100%</button>
-                            <button id="cfgVol150" class="btn-action cfg-btn">150% 🚀</button>
-                        </div>
-                    </div>
-
-                    <!-- Config 3: Max Speed -->
-                    <div class="cfg-card">
-                        <div class="cfg-card-header">
-                            <span style="font-size: 15px; font-weight: 900; color: #00e5ff;">🏎️ ROVER MAX SPEED</span>
-                            <span id="cfgSpeedVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">35% (175µs)</span>
-                        </div>
-                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
-                            <button id="cfgSpeed35" class="btn-action cfg-btn">35%</button>
-                            <button id="cfgSpeed50" class="btn-action cfg-btn">50%</button>
-                            <button id="cfgSpeed70" class="btn-action cfg-btn">70%</button>
-                            <button id="cfgSpeed100" class="btn-action cfg-btn">100%</button>
-                        </div>
-                    </div>
-
-                    <!-- Config 4: Arm Speed -->
-                    <div class="cfg-card">
-                        <div class="cfg-card-header">
-                            <span style="font-size: 15px; font-weight: 900; color: #ff33aa;">🦾 ARM MOVE SPEED</span>
-                            <span id="cfgArmVal" style="font-size: 14px; font-weight: 900; font-family: monospace; color: #fff;">1.0s</span>
-                        </div>
-                        <div class="cfg-grid" style="grid-template-columns: repeat(4, 1fr);">
-                            <button id="cfgArm03" class="btn-action cfg-btn">0.3s</button>
-                            <button id="cfgArm06" class="btn-action cfg-btn">0.6s</button>
-                            <button id="cfgArm10" class="btn-action cfg-btn">1.0s</button>
-                            <button id="cfgArm15" class="btn-action cfg-btn">1.5s</button>
-                        </div>
+                    <!-- Right: Massive 50% Height Stepper Buttons -->
+                    <div style="display: flex; flex-direction: column; gap: 8px; height: 100%;">
+                        <button id="cfgStepUpBtn" class="btn-action cfg-step-btn cfg-step-up" style="flex: 1; min-height: 0;">
+                            <span class="cfg-step-arrow">▲</span>
+                            <span class="cfg-step-label">+5%</span>
+                            <span class="cfg-step-sub">STEP UP</span>
+                        </button>
+                        <button id="cfgStepDownBtn" class="btn-action cfg-step-btn cfg-step-down" style="flex: 1; min-height: 0;">
+                            <span class="cfg-step-arrow">▼</span>
+                            <span class="cfg-step-label">-5%</span>
+                            <span class="cfg-step-sub">STEP DOWN</span>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -41,6 +41,8 @@ import {
     selectedPoseName,
     currentCustomPoseJoints,
     currentConfig,
+    selectedConfigKey,
+    setConfigLimits,
     mergeConfigTelemetry,
     lastRenderedButtonsKey,
     lastRenderedConfigKey,
@@ -432,12 +434,23 @@ export function updateConfigUI() {
     const v = currentConfig.volume_pct !== undefined ? currentConfig.volume_pct : 100;
     const sp = currentConfig.rover_max_speed_pct || 35;
     const a = currentConfig.arm_speed_sec || 1.0;
+    const sel = selectedConfigKey || 'volume_pct';
 
-    const stateKey = `${s}_${v}_${sp}_${a}`;
+    const stateKey = `${s}_${v}_${sp}_${a}_${sel}`;
     if (lastRenderedConfigKey === stateKey) {
         return; // Zero DOM churn
     }
     setLastRenderedConfigKey(stateKey);
+
+    // Active Card Selection Highlight
+    const cardVol = document.getElementById('cfgCardVol');
+    const cardSpeed = document.getElementById('cfgCardSpeed');
+    const cardArm = document.getElementById('cfgCardArm');
+    const cardSens = document.getElementById('cfgCardSens');
+    if (cardVol) cardVol.classList.toggle('selected', sel === 'volume_pct');
+    if (cardSpeed) cardSpeed.classList.toggle('selected', sel === 'rover_max_speed_pct');
+    if (cardArm) cardArm.classList.toggle('selected', sel === 'arm_speed_sec');
+    if (cardSens) cardSens.classList.toggle('selected', sel === 'clack_threshold');
 
     // 1. Sensitivity Threshold
     const elSens = document.getElementById('cfgSensVal');
@@ -1547,6 +1560,9 @@ export function updateTelemetryUI(data) {
         }
     }
 
+    if (data.config_limits) {
+        setConfigLimits(data.config_limits);
+    }
     if (data.config) {
         mergeConfigTelemetry(data.config);
         updateConfigUI();

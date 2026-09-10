@@ -38,6 +38,9 @@ import {
     selectedPoseName,
     currentCustomPoseJoints,
     currentConfig,
+    selectedConfigKey,
+    setSelectedConfigKey,
+    configLimits,
     isPollingInProgress,
     isFetchingTracks,
     isFetchingPresets,
@@ -936,6 +939,50 @@ export function applyConfig(key, val) {
             ui.updateConfigUI();
             api.sendPlaySound({ event: 'incorrect', stop_previous: false, delay_sec: 0.0, wav_path: '' }).catch(() => {});
         });
+}
+
+export function stepConfigVariable(direction) {
+    const key = selectedConfigKey || 'volume_pct';
+    const limits = configLimits[key];
+    const stepPct = currentConfig.config_step_pct || 5;
+
+    let curVal = currentConfig[key];
+    if (curVal === undefined || curVal === null) {
+        if (key === 'volume_pct') curVal = 100;
+        else if (key === 'rover_max_speed_pct') curVal = 35;
+        else if (key === 'arm_speed_sec') curVal = 1.0;
+        else if (key === 'clack_threshold') curVal = 5200;
+    }
+
+    let minVal = 0;
+    let maxVal = 100;
+    let stepDelta = 5;
+
+    if (limits && typeof limits === 'object') {
+        minVal = limits.min;
+        maxVal = limits.max;
+        if (limits.is_percentage) {
+            stepDelta = stepPct;
+        } else {
+            const span = (limits.max - limits.min);
+            stepDelta = span * (stepPct / 100.0);
+        }
+    } else {
+        if (key === 'volume_pct') { minVal = 0; maxVal = 150; stepDelta = 5; }
+        else if (key === 'rover_max_speed_pct') { minVal = 10; maxVal = 100; stepDelta = 5; }
+        else if (key === 'arm_speed_sec') { minVal = 0.24; maxVal = 3.19; stepDelta = (3.19 - 0.24) * 0.05; }
+        else if (key === 'clack_threshold') { minVal = 1000; maxVal = 10000; stepDelta = (10000 - 1000) * 0.05; }
+    }
+
+    let newVal = curVal + direction * stepDelta;
+    newVal = Math.max(minVal, Math.min(maxVal, newVal));
+    if (key === 'arm_speed_sec') {
+        newVal = Math.round(newVal * 100) / 100;
+    } else {
+        newVal = Math.round(newVal);
+    }
+
+    applyConfig(key, newVal);
 }
 
 // ==========================================
@@ -2266,25 +2313,62 @@ function bindEventListeners() {
     const cfgArm10 = document.getElementById('cfgArm10');
     const cfgArm15 = document.getElementById('cfgArm15');
 
+    // Card Selection
+    const cardVol = document.getElementById('cfgCardVol');
+    const cardSpeed = document.getElementById('cfgCardSpeed');
+    const cardArm = document.getElementById('cfgCardArm');
+    const cardSens = document.getElementById('cfgCardSens');
+
+    if (cardVol) cardVol.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('cfg-btn')) {
+            setSelectedConfigKey('volume_pct');
+            ui.updateConfigUI();
+        }
+    });
+    if (cardSpeed) cardSpeed.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('cfg-btn')) {
+            setSelectedConfigKey('rover_max_speed_pct');
+            ui.updateConfigUI();
+        }
+    });
+    if (cardArm) cardArm.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('cfg-btn')) {
+            setSelectedConfigKey('arm_speed_sec');
+            ui.updateConfigUI();
+        }
+    });
+    if (cardSens) cardSens.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('cfg-btn')) {
+            setSelectedConfigKey('clack_threshold');
+            ui.updateConfigUI();
+        }
+    });
+
+    // Right Stepper Buttons (±5% per tap)
+    const cfgStepUpBtn = document.getElementById('cfgStepUpBtn');
+    const cfgStepDownBtn = document.getElementById('cfgStepDownBtn');
+    if (cfgStepUpBtn) cfgStepUpBtn.addEventListener('click', () => stepConfigVariable(1));
+    if (cfgStepDownBtn) cfgStepDownBtn.addEventListener('click', () => stepConfigVariable(-1));
+
     if (configBackBtn) configBackBtn.addEventListener('click', () => ui.openBackendSubView('main'));
-    if (cfgSensLow) cfgSensLow.addEventListener('click', () => applyConfig('clack_threshold', 7500));
-    if (cfgSensNorm) cfgSensNorm.addEventListener('click', () => applyConfig('clack_threshold', 5200));
-    if (cfgSensHi) cfgSensHi.addEventListener('click', () => applyConfig('clack_threshold', 3500));
+    if (cfgSensLow) cfgSensLow.addEventListener('click', () => { setSelectedConfigKey('clack_threshold'); applyConfig('clack_threshold', 7500); });
+    if (cfgSensNorm) cfgSensNorm.addEventListener('click', () => { setSelectedConfigKey('clack_threshold'); applyConfig('clack_threshold', 5200); });
+    if (cfgSensHi) cfgSensHi.addEventListener('click', () => { setSelectedConfigKey('clack_threshold'); applyConfig('clack_threshold', 3500); });
 
-    if (cfgVol50) cfgVol50.addEventListener('click', () => applyConfig('volume_pct', 50));
-    if (cfgVol75) cfgVol75.addEventListener('click', () => applyConfig('volume_pct', 75));
-    if (cfgVol100) cfgVol100.addEventListener('click', () => applyConfig('volume_pct', 100));
-    if (cfgVol150) cfgVol150.addEventListener('click', () => applyConfig('volume_pct', 150));
+    if (cfgVol50) cfgVol50.addEventListener('click', () => { setSelectedConfigKey('volume_pct'); applyConfig('volume_pct', 50); });
+    if (cfgVol75) cfgVol75.addEventListener('click', () => { setSelectedConfigKey('volume_pct'); applyConfig('volume_pct', 75); });
+    if (cfgVol100) cfgVol100.addEventListener('click', () => { setSelectedConfigKey('volume_pct'); applyConfig('volume_pct', 100); });
+    if (cfgVol150) cfgVol150.addEventListener('click', () => { setSelectedConfigKey('volume_pct'); applyConfig('volume_pct', 150); });
 
-    if (cfgSpeed35) cfgSpeed35.addEventListener('click', () => applyConfig('rover_max_speed_pct', 35));
-    if (cfgSpeed50) cfgSpeed50.addEventListener('click', () => applyConfig('rover_max_speed_pct', 50));
-    if (cfgSpeed70) cfgSpeed70.addEventListener('click', () => applyConfig('rover_max_speed_pct', 70));
-    if (cfgSpeed100) cfgSpeed100.addEventListener('click', () => applyConfig('rover_max_speed_pct', 100));
+    if (cfgSpeed35) cfgSpeed35.addEventListener('click', () => { setSelectedConfigKey('rover_max_speed_pct'); applyConfig('rover_max_speed_pct', 35); });
+    if (cfgSpeed50) cfgSpeed50.addEventListener('click', () => { setSelectedConfigKey('rover_max_speed_pct'); applyConfig('rover_max_speed_pct', 50); });
+    if (cfgSpeed70) cfgSpeed70.addEventListener('click', () => { setSelectedConfigKey('rover_max_speed_pct'); applyConfig('rover_max_speed_pct', 70); });
+    if (cfgSpeed100) cfgSpeed100.addEventListener('click', () => { setSelectedConfigKey('rover_max_speed_pct'); applyConfig('rover_max_speed_pct', 100); });
 
-    if (cfgArm03) cfgArm03.addEventListener('click', () => applyConfig('arm_speed_sec', 0.3));
-    if (cfgArm06) cfgArm06.addEventListener('click', () => applyConfig('arm_speed_sec', 0.6));
-    if (cfgArm10) cfgArm10.addEventListener('click', () => applyConfig('arm_speed_sec', 1.0));
-    if (cfgArm15) cfgArm15.addEventListener('click', () => applyConfig('arm_speed_sec', 1.5));
+    if (cfgArm03) cfgArm03.addEventListener('click', () => { setSelectedConfigKey('arm_speed_sec'); applyConfig('arm_speed_sec', 0.3); });
+    if (cfgArm06) cfgArm06.addEventListener('click', () => { setSelectedConfigKey('arm_speed_sec'); applyConfig('arm_speed_sec', 0.6); });
+    if (cfgArm10) cfgArm10.addEventListener('click', () => { setSelectedConfigKey('arm_speed_sec'); applyConfig('arm_speed_sec', 1.0); });
+    if (cfgArm15) cfgArm15.addEventListener('click', () => { setSelectedConfigKey('arm_speed_sec'); applyConfig('arm_speed_sec', 1.5); });
 }
 
 // ==========================================

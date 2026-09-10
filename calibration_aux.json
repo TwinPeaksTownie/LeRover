@@ -14,5 +14,17 @@
     "center_y": 2048,
     "min_raw": 0,
     "max_raw": 4095
+  },
+  "clack_detector": {
+    "min_threshold": 1000,
+    "max_threshold": 10000
+  },
+  "rover_drive": {
+    "min_speed_pct": 10,
+    "max_speed_pct": 100
+  },
+  "system_audio": {
+    "min_volume_pct": 0,
+    "max_volume_pct": 150
   }
 }

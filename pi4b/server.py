@@ -147,6 +147,8 @@ def load_ui_config() -> Dict[str, Any]:
     _ = cfg["top_bar_height_px"]
     _ = cfg["launcher_mode"]
     _ = cfg["carousel_app_index"]
+    _ = cfg["config_step_pct"]
+    _ = cfg["selected_config_var"]
     return cfg
 
 def save_ui_config(cfg: Dict[str, Any]) -> None:
@@ -159,35 +161,97 @@ def save_ui_config(cfg: Dict[str, Any]) -> None:
     _ = cfg["top_bar_height_px"]
     _ = cfg["launcher_mode"]
     _ = cfg["carousel_app_index"]
+    _ = cfg["config_step_pct"]
+    _ = cfg["selected_config_var"]
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
 
+def load_config_limits() -> Dict[str, Any]:
+    calib_aux_path = os.path.join(DIRECTORY, "calibration_aux.json")
+    if not os.path.exists(calib_aux_path):
+        calib_aux_path = os.path.join(os.path.dirname(DIRECTORY), "calibration_aux.json")
+    if not os.path.exists(calib_aux_path):
+        raise FileNotFoundError(f"Missing required calibration file: {calib_aux_path}")
+
+    with open(calib_aux_path, "r", encoding="utf-8") as f:
+        calib_aux = json.load(f)
+
+    follower_path = os.path.join(DIRECTORY, "follower.json")
+    if not os.path.exists(follower_path):
+        follower_path = os.path.join(os.path.dirname(DIRECTORY), "follower.json")
+    if not os.path.exists(follower_path):
+        raise FileNotFoundError(f"Missing required follower calibration: {follower_path}")
+
+    with open(follower_path, "r", encoding="utf-8") as f:
+        follower = json.load(f)
+
+    # Dynamic arm move speed limits derived from maximum follower joint span and calibrated velocity limits
+    max_joint_span = max(
+        follower[joint]["range_max"] - follower[joint]["range_min"]
+        for joint in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+    )
+    vel_max = float(follower["velocity_limits"]["ticks_per_sec_max"])
+    vel_min = float(follower["velocity_limits"]["ticks_per_sec_min"])
+    arm_min_sec = round(max_joint_span / vel_max, 2)
+    arm_max_sec = round(max_joint_span / vel_min, 2)
+
+    return {
+        "volume_pct": {
+            "min": int(calib_aux["system_audio"]["min_volume_pct"]),
+            "max": int(calib_aux["system_audio"]["max_volume_pct"]),
+            "is_percentage": True,
+            "span": int(calib_aux["system_audio"]["max_volume_pct"]) - int(calib_aux["system_audio"]["min_volume_pct"])
+        },
+        "rover_max_speed_pct": {
+            "min": int(calib_aux["rover_drive"]["min_speed_pct"]),
+            "max": int(calib_aux["rover_drive"]["max_speed_pct"]),
+            "is_percentage": True,
+            "span": int(calib_aux["rover_drive"]["max_speed_pct"]) - int(calib_aux["rover_drive"]["min_speed_pct"])
+        },
+        "arm_speed_sec": {
+            "min": arm_min_sec,
+            "max": arm_max_sec,
+            "is_percentage": False,
+            "span": round(arm_max_sec - arm_min_sec, 2)
+        },
+        "clack_threshold": {
+            "min": int(calib_aux["clack_detector"]["min_threshold"]),
+            "max": int(calib_aux["clack_detector"]["max_threshold"]),
+            "is_percentage": False,
+            "span": int(calib_aux["clack_detector"]["max_threshold"]) - int(calib_aux["clack_detector"]["min_threshold"])
+        }
+    }
+
+CONFIG_LIMITS = load_config_limits()
+STATUS_CACHE["config_limits"] = CONFIG_LIMITS
 UI_CONFIG = load_ui_config()
 STATUS_CACHE["config"] = UI_CONFIG
 
 def set_system_volume(pct: int):
     try:
-        val = max(0, min(150, int(pct)))
+        val = max(CONFIG_LIMITS["volume_pct"]["min"], min(CONFIG_LIMITS["volume_pct"]["max"], int(pct)))
         subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{val}%"], env=PULSE_ENV, check=False)
         subprocess.run(["amixer", "set", "Master", f"{val}%"], env=PULSE_ENV, check=False)
         UI_CONFIG["volume_pct"] = val
         STATUS_CACHE["config"] = UI_CONFIG
         save_ui_config(UI_CONFIG)
     except Exception as e:
-        print(f"Error setting volume: {e}", flush=True)
+        logging.exception(f"Failed setting system volume to {pct}%: {e}")
+        raise RuntimeError(f"Failed setting system volume to {pct}%: {e}") from e
 
 def sync_rover_speed_config(pct: int):
-    val = max(10, min(100, int(pct)))
-    max_offset = int(500 * (val / 100.0))
-    UI_CONFIG["rover_max_speed_pct"] = val
-    STATUS_CACHE["config"] = UI_CONFIG
-    save_ui_config(UI_CONFIG)
     try:
+        val = max(CONFIG_LIMITS["rover_max_speed_pct"]["min"], min(CONFIG_LIMITS["rover_max_speed_pct"]["max"], int(pct)))
+        max_offset = int(500 * (val / 100.0))
+        UI_CONFIG["rover_max_speed_pct"] = val
+        STATUS_CACHE["config"] = UI_CONFIG
+        save_ui_config(UI_CONFIG)
         cfg_dict = {"max_speed_pct": val, "max_pulse_offset": max_offset}
         with open("/tmp/rover_config.json", "w") as f:
             json.dump(cfg_dict, f, indent=2)
     except Exception as e:
-        print(f"Error syncing rover speed locally: {e}", flush=True)
+        logging.exception(f"Failed syncing rover speed to {pct}%: {e}")
+        raise RuntimeError(f"Failed syncing rover speed to {pct}%: {e}") from e
 
 CURRENT_PAPLAY_PROC: Optional[subprocess.Popen] = None
 
@@ -753,7 +817,7 @@ class UnifiedHandler(MasterApiHandler):
             if "volume_pct" in req_data:
                 set_system_volume(req_data["volume_pct"])
             if "clack_threshold" in req_data:
-                thresh = int(req_data["clack_threshold"])
+                thresh = max(CONFIG_LIMITS["clack_threshold"]["min"], min(CONFIG_LIMITS["clack_threshold"]["max"], int(req_data["clack_threshold"])))
                 UI_CONFIG["clack_threshold"] = thresh
                 STATUS_CACHE["config"] = UI_CONFIG
                 save_ui_config(UI_CONFIG)
@@ -763,7 +827,16 @@ class UnifiedHandler(MasterApiHandler):
             if "rover_max_speed_pct" in req_data:
                 sync_rover_speed_config(req_data["rover_max_speed_pct"])
             if "arm_speed_sec" in req_data:
-                UI_CONFIG["arm_speed_sec"] = float(req_data["arm_speed_sec"])
+                arm_val = max(CONFIG_LIMITS["arm_speed_sec"]["min"], min(CONFIG_LIMITS["arm_speed_sec"]["max"], float(req_data["arm_speed_sec"])))
+                UI_CONFIG["arm_speed_sec"] = round(arm_val, 2)
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "selected_config_var" in req_data:
+                UI_CONFIG["selected_config_var"] = str(req_data["selected_config_var"])
+                STATUS_CACHE["config"] = UI_CONFIG
+                save_ui_config(UI_CONFIG)
+            if "config_step_pct" in req_data:
+                UI_CONFIG["config_step_pct"] = int(req_data["config_step_pct"])
                 STATUS_CACHE["config"] = UI_CONFIG
                 save_ui_config(UI_CONFIG)
             if "default_tab" in req_data:
@@ -786,7 +859,7 @@ class UnifiedHandler(MasterApiHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "ok", "config": UI_CONFIG, "config_limits": CONFIG_LIMITS}).encode('utf-8'))
             return
 
         if path in ["/api/wifi_disable", "/api/wifi_restore"]:

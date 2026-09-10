@@ -73,8 +73,16 @@ export let currentConfig = {
     clack_threshold: 5200,
     volume_pct: 100,
     rover_max_speed_pct: 35,
-    arm_speed_sec: 1.0
+    arm_speed_sec: 1.0,
+    config_step_pct: 5,
+    selected_config_var: 'volume_pct'
 };
+
+export let selectedConfigKey = 'volume_pct';
+export let configLimits = {};
+
+export function setSelectedConfigKey(val) { selectedConfigKey = val; }
+export function setConfigLimits(val) { configLimits = val; }
 
 // State-diffing cache keys
 export let lastRenderedButtonsKey = '';

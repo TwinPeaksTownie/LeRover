@@ -7,5 +7,7 @@
   "drawer_default_open": false,
   "top_bar_height_px": 156,
   "launcher_mode": "carousel",
-  "carousel_app_index": 0
+  "carousel_app_index": 0,
+  "config_step_pct": 5,
+  "selected_config_var": "volume_pct"
 }

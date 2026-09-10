@@ -40,5 +40,9 @@
     "homing_offset": 63,
     "range_min": 1456,
     "range_max": 2901
+  },
+  "velocity_limits": {
+    "ticks_per_sec_min": 1200,
+    "ticks_per_sec_max": 16000
   }
 }
