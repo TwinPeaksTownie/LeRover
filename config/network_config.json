@@ -61,7 +61,8 @@
     "vosk_server_port": 8059,
     "vosk_websocket_port": 2700,
     "teleop_zmq": 5555,
-    "teleop_zmq_heartbeat": 5556
+    "teleop_zmq_heartbeat": 5556,
+    "servo_studio_http": 8086
   },
   "wifi_modes": {
     "priority_list": [

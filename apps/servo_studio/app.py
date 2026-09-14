@@ -31,7 +31,18 @@ def load_servo_studio_config() -> dict:
 _CONFIG = load_servo_studio_config()
 PORT_WEB = _CONFIG["port_web"]
 
-CALIB_PATH = str(Path.home() / ".cache/huggingface/lerobot/calibration/robots/so_follower/follower.json")
+def get_canonical_follower_path() -> Path:
+    candidates = [
+        APP_DIR.parent.parent / "follower.json",
+        Path("/home/carson/touch_ui/follower.json"),
+        Path("/home/carson/aux_servo_interface/follower.json"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.resolve()
+    return (APP_DIR.parent.parent / "follower.json").resolve()
+
+CALIB_PATH = str(get_canonical_follower_path())
 
 MOTORS = {
     1: "shoulder_pan",
@@ -55,7 +66,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SO-101 Native Pi 500 Servo Studio</title>
+    <title>SO-101 Servo Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -757,6 +768,7 @@ class ServoStudioApp(BaseApp):
 
     def __init__(self, port: int = PORT_WEB) -> None:
         super().__init__()
+        self.config = _CONFIG
         self.port = port
         self.calib: Dict[str, Any] = {}
         self.server: Optional[ThreadedHTTPServer] = None
@@ -764,22 +776,22 @@ class ServoStudioApp(BaseApp):
         self.load_calibration()
 
     def load_calibration(self) -> None:
-        if os.path.exists(CALIB_PATH):
-            try:
-                with open(CALIB_PATH, "r") as f:
-                    self.calib = json.load(f)
-                self.logger.info(f"Loaded studio calibration from {CALIB_PATH}")
-            except Exception as e:
-                self.logger.error(f"Failed to load calibration JSON: {e}")
+        calib_file = Path(CALIB_PATH)
+        if not calib_file.exists():
+            raise FileNotFoundError(f"Missing required follower calibration: {calib_file}")
+        with open(calib_file, "r", encoding="utf-8") as f:
+            self.calib = json.load(f)
+        for sid, name in MOTORS.items():
+            if name not in self.calib:
+                raise KeyError(f"Missing motor '{name}' (sid {sid}) in calibration: {calib_file}")
+        self.logger.info(f"Loaded studio calibration from {calib_file}")
 
     def save_calibration(self) -> None:
-        try:
-            os.makedirs(os.path.dirname(CALIB_PATH), exist_ok=True)
-            with open(CALIB_PATH, "w") as f:
-                json.dump(self.calib, f, indent=2)
-            self.logger.info(f"Saved studio calibration to {CALIB_PATH}")
-        except Exception as e:
-            self.logger.error(f"Failed to save calibration JSON to {CALIB_PATH}: {e}")
+        calib_file = Path(CALIB_PATH)
+        os.makedirs(calib_file.parent, exist_ok=True)
+        with open(calib_file, "w", encoding="utf-8") as f:
+            json.dump(self.calib, f, indent=2)
+        self.logger.info(f"Saved studio calibration to {calib_file}")
 
     def get_home_targets(self) -> Dict[int, int]:
         home_targets = {}

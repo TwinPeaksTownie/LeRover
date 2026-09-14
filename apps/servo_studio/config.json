@@ -1,7 +1,7 @@
 {
   "name": "servo_studio_app",
   "title": "Servo Studio",
-  "description": "Interactive Pi 500 servo calibration and ROM studio",
+  "description": "Interactive servo calibration and ROM studio",
   "version": "1.0.0",
   "icon": "🔧",
   "tags": ["calibration", "servos", "so101"],

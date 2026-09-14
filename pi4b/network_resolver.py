@@ -124,7 +124,7 @@ def validate_network_config(cfg: Dict[str, Any]) -> None:
         if k not in cfg["wifi_defaults"]:
             raise KeyError(f"Missing required key 'wifi_defaults.{k}' in network configuration")
 
-    for k in ["pi4b_http", "pi4b_video", "pi4b_audio_udp", "pi500_http", "mac_http", "voice_bridge_http", "teleop_zmq", "teleop_zmq_heartbeat"]:
+    for k in ["pi4b_http", "pi4b_video", "pi4b_audio_udp", "pi500_http", "mac_http", "voice_bridge_http", "teleop_zmq", "teleop_zmq_heartbeat", "servo_studio_http"]:
         if k not in cfg["ports"]:
             raise KeyError(f"Missing required key 'ports.{k}' in network configuration")
 

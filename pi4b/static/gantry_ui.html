@@ -294,8 +294,13 @@
                             <span style="font-size:16px; font-weight:900; color:#fff;">STUDIO WEB SERVICE:</span>
                             <span id="studioBadge" style="font-size:14px; font-weight:900; padding:4px 12px; border-radius:6px; background:#222; color:#888;">STOPPED</span>
                         </div>
-                        <div style="font-family: monospace; font-size: 15px; color: #00e5ff; font-weight: 700;">
-                            URL: http://&lt;PI500_IP&gt;:8086 (Port 8086)
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <div style="font-family: monospace; font-size: 15px; color: #00e5ff; font-weight: 700;">
+                                URL: <a id="studioUrlLink" href="#" target="_blank" style="color: #00e5ff; text-decoration: underline;"></a> (Port 8086)
+                            </div>
+                            <a id="studioOpenBtn" href="#" target="_blank" class="btn-action" style="padding: 6px 14px; font-size: 14px; font-weight: 900; text-decoration: none; border-radius: 6px; background: #0284c7; color: #fff; display: none; align-items: center; gap: 4px;">
+                                ↗ OPEN
+                            </a>
                         </div>
                         <div style="font-size: 13px; color: #ccc; line-height: 1.4;">
                             * Provides isolated single-servo testing, torque toggles, and EEPROM calibration registers without conflicting with teleop loops.

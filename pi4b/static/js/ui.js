@@ -151,6 +151,23 @@ export function renderButtonStates() {
         studioBadge.style.color = isStudioRunning ? '#00ff66' : '#888888';
         studioBadge.style.background = isStudioRunning ? '#113311' : '#222222';
     }
+    const studioUrlLink = document.getElementById('studioUrlLink');
+    const studioOpenBtn = document.getElementById('studioOpenBtn');
+    if (studioUrlLink || studioOpenBtn) {
+        const host = window.location.hostname;
+        if (!host) {
+            throw new Error("window.location.hostname unavailable for studio URL resolution");
+        }
+        const studioUrl = `http://${host}:8086`;
+        if (studioUrlLink) {
+            studioUrlLink.href = studioUrl;
+            studioUrlLink.innerText = studioUrl;
+        }
+        if (studioOpenBtn) {
+            studioOpenBtn.href = studioUrl;
+            studioOpenBtn.style.display = isStudioRunning ? 'inline-flex' : 'none';
+        }
+    }
 
     // Clack Pose (Piranha Pose) button & badge
     const clackPoseBtn = document.getElementById('clackPoseBtn');
