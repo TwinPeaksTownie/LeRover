@@ -373,14 +373,14 @@ def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deploy
     # 4. Target Path & Bifurcation Verification
     if check_deployments:
         try:
-            bifurcated_check = tools_hardware.verify_remote_directory_exists("pi500", "/home/user/so101/beat_bandit/library")
+            bifurcated_check = tools_hardware.verify_remote_directory_exists("pi4b", "/home/carson/so101/beat_bandit/library")
             if bifurcated_check.get("exists"):
                 violations.append({
                     "rule": "TARGET_PATH_EXISTS",
                     "file": "apps/beat_bandit/config.json",
                     "line": 1,
-                    "snippet": "/home/user/so101/beat_bandit/library",
-                    "reason": "Bifurcated legacy library directory '/home/user/so101/beat_bandit/library' exists on Pi 500. Canonical path is '/home/user/so101/library/beat_bandit'."
+                    "snippet": "/home/carson/so101/beat_bandit/library",
+                    "reason": "Bifurcated legacy library directory '/home/carson/so101/beat_bandit/library' exists on Pi 4B. Canonical path is '/home/carson/so101/library/beat_bandit'."
                 })
         except Exception as e:
             _log_debug(f"Target path check exception: {e}")
@@ -543,7 +543,7 @@ Your job is to strictly enforce the following rules:
 3. DYNAMIC CALIBRATION: No hardcoded 2048 or 0x800 neutral ticks. Offsets and bounds must load dynamically from follower.json (servos 1-6), calibration_aux.json (servos 7-8), or manifest.json.
 4. NO SWALLOWED EXCEPTIONS: No 'except: pass', 'except: ...', or unhandled generic catches. Raise descriptive errors or log explicit tracebacks.
 5. NO SAFETY SLOP / OVER-DAMPING: No hardcoded neutering multipliers (* 0.5, * 0.8), no artificial sub-range cages (e.g. caging head roll to 35-65%), and no low-pass filters that crush dynamic beat frequencies. Joint ranges and modifier intensities must be controlled strictly via loaded JSON probabilities and calibrated ROM.
-6. TARGET DEPLOYMENT PARITY: Modified code under pi500/ or pi4b/ must be deployed and MD5-verified on physical targets.
+6. TARGET DEPLOYMENT PARITY: Modified code under pi4b/ or apps/ must be deployed and MD5-verified on physical targets.
 7. MANDATORY 4-STATE VERIFICATION: (1) Sync MD5, (2) Bi-directional cycle, (3) Telemetry audit, (4) Human confirmation.
 8. MUSICAL UNITS: Choreography divisions must use measures, beats, 4bars, 8bars.
 9. CONFIG PARITY & SINGLE SOURCE OF TRUTH: Modular apps under apps/ must consume their loaded _CONFIG values (name, title, icon, library_subdir) directly in AppMetadata and paths.

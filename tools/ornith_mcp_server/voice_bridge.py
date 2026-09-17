@@ -5,7 +5,7 @@ Bridges:
 - CoHere ASR (port 8001) for Speech-to-Text
 - LM Studio (port 1234) for Intent Classification & Executive Denoising
 - Pocket TTS (port 8057) & Pi 4B (:8082/api/play_sound) for Multi-Destination Speech
-- Pi 500 Master Daemon & Pokéball Controller Button B for Tactile Push-to-Talk
+- Pi 4B Master Daemon & Pokéball Controller Button B for Tactile Push-to-Talk
 """
 
 import io
@@ -40,7 +40,6 @@ import ornith_config_loader
 
 _CONFIG = ornith_config_loader.get_ornith_config()
 DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
-DEFAULT_PI500_HOST = os.environ.get("PI500_HOST", "192.168.0.130")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -214,15 +213,15 @@ class ConversationMemory:
 CONVERSATION_MEMORY = ConversationMemory()
 
 def is_ornith_voice_active() -> bool:
-    """Queries Pi 500 master API to check if ornith_voice is currently the active application."""
-    url = f"http://{DEFAULT_PI500_HOST}:8085/api/apps/status"
+    """Queries Pi 4B master API to check if ornith_voice is currently the active application."""
+    url = f"http://{DEFAULT_PI4B_HOST}:8082/api/apps/status"
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=1.5) as resp:
         if resp.status != 200:
-            raise RuntimeError(f"Pi 500 master API returned HTTP {resp.status}")
+            raise RuntimeError(f"Pi 4B master API returned HTTP {resp.status}")
         data = json.loads(resp.read().decode("utf-8"))
         if "app_manager" not in data or "current_app" not in data["app_manager"]:
-            raise KeyError("Missing required 'app_manager' or 'current_app' in Pi 500 status payload")
+            raise KeyError("Missing required 'app_manager' or 'current_app' in Pi 4B status payload")
         return data["app_manager"]["current_app"] == "ornith_voice"
 
 def deliver_audio_response(text: str, audio_target: str = "both") -> Dict[str, Any]:
@@ -396,8 +395,7 @@ def health_check():
             "lm_studio_1234": _check(f"{LM_STUDIO_URL}/models"),
             "cohere_asr_8001": _check("http://127.0.0.1:8001/openapi.json"),
             "pocket_tts_8057": _check("http://127.0.0.1:8057/"),
-            "pi4b_kiosk_8082": _check("http://192.168.0.86:8082/api/status"),
-            "pi500_master_8085": _check("http://192.168.0.130:8085/api/status")
+            "pi4b_kiosk_8082": _check("http://192.168.0.86:8082/api/status")
         }
     }
 

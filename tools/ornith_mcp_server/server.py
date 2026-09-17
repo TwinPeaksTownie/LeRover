@@ -1,7 +1,7 @@
 """
 server.py - Ornith MCP Server for Antigravity & LM Studio
 Exposes tools for Antigravity to invoke the Ornith 1.0 35B model in LM Studio for adversarial review,
-run code contract scans, verify hardware state on the Pi 500, and speak via Laura Pocket TTS (port 8057).
+run code contract scans, verify hardware state on the Pi 4B, and speak via Laura Pocket TTS (port 8057).
 """
 
 import asyncio
@@ -154,14 +154,14 @@ def search_workspace_code(query: str, repo_path: str = r"i:\aux_servo_interface"
 @app.tool()
 def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> str:
     """
-    Executes a non-interactive shell command over SSH on a system node (pi500, pi4b, mac_mini).
+    Executes a non-interactive shell command over SSH on a system node (pi4b, mac_mini).
     """
     _reload_modules()
     res = tools_hardware.ssh_run_command(node=node, command=command, timeout_sec=timeout_sec)
     return json.dumps(res, indent=2)
 
 @app.tool()
-def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi500") -> str:
+def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi4b") -> str:
     """
     Verifies State 1 of the Verification State Machine: compares local and remote MD5 checksums.
     """
@@ -171,8 +171,8 @@ def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi500
 
 @app.tool()
 def sample_motor_telemetry(
-    node: str = "pi500",
-    endpoint_url: str = "http://192.168.0.130:8082/api/telemetry"
+    node: str = "pi4b",
+    endpoint_url: str = "http://192.168.0.86:8082/api/telemetry"
 ) -> str:
     """
     Queries live motor encoder telemetry via HTTP REST without colliding on /dev/ttyACM0 (States 2 & 3).
@@ -182,7 +182,7 @@ def sample_motor_telemetry(
     return json.dumps(res, indent=2)
 
 @app.tool()
-def query_daemon_logs(node: str = "pi500", service_name: str = "backend.service", lines: int = 50) -> str:
+def query_daemon_logs(node: str = "pi4b", service_name: str = "backend.service", lines: int = 50) -> str:
     """
     Verifies State 4: Scans systemd daemon logs on the target node for serial timeouts or exceptions.
     """

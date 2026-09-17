@@ -17,9 +17,6 @@ import urllib.request
 from typing import Optional, List, Dict, Any
 
 NODE_MAP = {
-    "pi500": "user@192.168.0.130",
-    "pi_500": "user@192.168.0.130",
-    "192.168.0.130": "user@192.168.0.130",
     "pi4b": "carson@192.168.0.86",
     "pi_4b": "carson@192.168.0.86",
     "192.168.0.86": "carson@192.168.0.86",
@@ -34,32 +31,12 @@ def _log_debug(msg: str):
     sys.stderr.write(f"[HARDWARE] {msg}\n")
     sys.stderr.flush()
 
-def _ssh_via_proxy(command: str, timeout_sec: int = 15) -> subprocess.CompletedProcess:
-    """Executes an SSH command to Pi 500 via Pi 4B ProxyJump."""
-    proxy_cmd = [
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=5",
-        "-o", "StrictHostKeyChecking=no",
-        "-J", "carson@192.168.0.86",
-        "user@10.0.0.1",
-        command
-    ]
-    return subprocess.run(
-        proxy_cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout_sec
-    )
-
 def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
     """
     Executes a non-interactive command over SSH on a target system node.
     
     Args:
-        node: Target node alias ('pi500', 'pi4b', 'mac_mini') or IP address.
+        node: Target node alias ('pi4b', 'mac_mini') or IP address.
         command: Shell command string to execute.
         timeout_sec: Timeout in seconds before terminating.
         
@@ -88,11 +65,6 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
             errors="replace",
             timeout=timeout_sec
         )
-        if proc.returncode != 0 and node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
-            _log_debug(f"Direct SSH to {target} failed (code {proc.returncode}). Trying ProxyJump via Pi 4B (10.0.0.1)...")
-            proc = _ssh_via_proxy(command, timeout_sec=timeout_sec)
-            target = "user@10.0.0.1 (via Pi 4B)"
-
         return {
             "status": "success",
             "node": target,
@@ -102,25 +74,11 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
             "command": command
         }
     except subprocess.TimeoutExpired:
-        if node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
-            _log_debug(f"Direct SSH timed out. Trying ProxyJump via Pi 4B...")
-            try:
-                proc = _ssh_via_proxy(command, timeout_sec=timeout_sec)
-                return {
-                    "status": "success",
-                    "node": "user@10.0.0.1 (via Pi 4B)",
-                    "exit_code": proc.returncode,
-                    "stdout": proc.stdout.strip(),
-                    "stderr": proc.stderr.strip(),
-                    "command": command
-                }
-            except Exception as e2:
-                return {"status": "error", "error": f"SSH command timed out on direct and ProxyJump failed: {e2}"}
         return {"status": "error", "error": f"SSH command timed out after {timeout_sec}s on {target}"}
     except Exception as e:
         return {"status": "error", "error": f"SSH execution failed on {target}: {str(e)}"}
 
-def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi500") -> dict:
+def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi4b") -> dict:
     """
     Verifies that a local file matches the deployed remote file by comparing MD5 checksums (State 1).
     
@@ -182,8 +140,8 @@ def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi500
     }
 
 def sample_motor_telemetry(
-    node: str = "pi500",
-    endpoint_url: str = "http://192.168.0.130:8082/api/telemetry",
+    node: str = "pi4b",
+    endpoint_url: str = "http://192.168.0.86:8082/api/telemetry",
     timeout_sec: int = 4
 ) -> dict:
     """
@@ -191,7 +149,7 @@ def sample_motor_telemetry(
     Also checks process bus locks if endpoint is unavailable.
     
     Args:
-        node: Target node for fallback process check.
+        node: Target node for fallback process check (defaults to 'pi4b').
         endpoint_url: HTTP telemetry endpoint URL.
         timeout_sec: Request timeout.
         
@@ -237,7 +195,7 @@ def query_daemon_logs(
     Uses a time window query (--since) by default to prevent access log spam from flushing crash traces.
     
     Args:
-        node: Remote node alias (defaults to 'pi500').
+        node: Remote node alias (defaults to 'pi4b').
         service_name: Systemd service name to query.
         lines: Optional line count limit. If None, queries entire --since window.
         since: Time window for log query (defaults to '10 minutes ago').
@@ -245,8 +203,6 @@ def query_daemon_logs(
     Returns:
         Dict with clean flag, detected errors, and log output.
     """
-    if service_name == "backend.service" and node.lower().strip() in ("pi500", "pi_500", "192.168.0.130"):
-        service_name = "sewer-daemon.service"
 
     if lines is not None and since is None:
         cmd = f"journalctl -u {service_name} -n {lines} --no-pager"
@@ -298,7 +254,7 @@ def query_daemon_logs(
         "log_snippet": "\n".join(log_text.splitlines()[-20:])
     }
 
-def verify_remote_directory_exists(node: str = "pi500", remote_path: str = "/home/user/so101/library/beat_bandit") -> dict:
+def verify_remote_directory_exists(node: str = "pi4b", remote_path: str = "/home/carson/so101/library/beat_bandit") -> dict:
     """Verifies that a directory exists on the remote node and returns file count."""
     cmd = f"test -d '{remote_path}' && ls -1 '{remote_path}' | wc -l || echo 'NOT_FOUND'"
     res = ssh_run_command(node, cmd)
@@ -328,7 +284,7 @@ def verify_remote_directory_exists(node: str = "pi500", remote_path: str = "/hom
 def check_target_deployments(files: list, repo_path: str = None) -> dict:
     """
     Given a list of modified files, verifies that hardware-target files
-    (under pi500/, pi4b/, or apps/) match their remote deployed MD5 checksums.
+    (under pi4b/ or apps/) match their remote deployed MD5 checksums.
     """
     if repo_path is None:
         repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
@@ -336,57 +292,24 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
     deployments = []
     has_mismatch = False
 
-    # Load topology mode if network_config.json exists
-    topology_mode = "DUAL_NODE"
-    net_cfg_path = os.path.join(repo_path, "config", "network_config.json")
-    if os.path.exists(net_cfg_path):
-        try:
-            with open(net_cfg_path, "r", encoding="utf-8") as f:
-                cfg_data = json.load(f)
-            if "topology_mode" in cfg_data:
-                topology_mode = cfg_data["topology_mode"]
-        except Exception as ex:
-            _log_debug(f"Failed to read topology_mode from {net_cfg_path}: {ex}")
-
     for rel_path in files:
         norm_path = rel_path.replace("\\", "/").strip()
         target_node = None
         remote_path = None
 
-        if topology_mode == "STANDALONE_PI4B":
-            if norm_path.startswith("pi500/"):
-                target_node = "pi4b"
-                remote_path = f"/home/carson/aux_servo_interface/{norm_path}"
-            elif norm_path.startswith("apps/"):
-                target_node = "pi4b"
-                remote_path = f"/home/carson/aux_servo_interface/{norm_path}"
-            elif norm_path.startswith("pi4b/"):
-                target_node = "pi4b"
-                remote_rel = norm_path[5:]
-                remote_path = f"/home/carson/touch_ui/{remote_rel}"
-            elif norm_path.startswith("config/"):
-                target_node = "pi4b"
-                remote_path = f"/home/carson/touch_ui/{norm_path}"
-            elif norm_path.startswith("library/"):
-                target_node = "pi4b"
-                remote_path = f"/home/carson/so101/{norm_path}"
-        else:
-            if norm_path.startswith("pi500/"):
-                target_node = "pi500"
-                remote_path = f"/home/user/so101/{norm_path}"
-            elif norm_path.startswith("apps/"):
-                target_node = "pi500"
-                remote_path = f"/home/user/so101/{norm_path}"
-            elif norm_path.startswith("pi4b/"):
-                target_node = "pi4b"
-                remote_rel = norm_path[5:]
-                remote_path = f"/home/carson/touch_ui/{remote_rel}"
-            elif norm_path.startswith("config/"):
-                target_node = "pi4b"
-                remote_path = f"/home/carson/touch_ui/{norm_path}"
-            elif norm_path.startswith("library/"):
-                target_node = "pi500"
-                remote_path = f"/home/user/so101/{norm_path}"
+        if norm_path.startswith("apps/"):
+            target_node = "pi4b"
+            remote_path = f"/home/carson/aux_servo_interface/{norm_path}"
+        elif norm_path.startswith("pi4b/"):
+            target_node = "pi4b"
+            remote_rel = norm_path[5:]
+            remote_path = f"/home/carson/touch_ui/{remote_rel}"
+        elif norm_path.startswith("config/"):
+            target_node = "pi4b"
+            remote_path = f"/home/carson/touch_ui/{norm_path}"
+        elif norm_path.startswith("library/"):
+            target_node = "pi4b"
+            remote_path = f"/home/carson/so101/{norm_path}"
 
         if target_node and remote_path:
             local_file = os.path.join(repo_path, norm_path)
