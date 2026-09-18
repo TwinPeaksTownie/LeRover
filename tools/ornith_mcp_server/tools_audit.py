@@ -23,7 +23,11 @@ import ornith_config_loader
 
 _CONFIG = ornith_config_loader.get_ornith_config()
 
-DEFAULT_LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", _CONFIG["audit"]["lm_studio_url"])
+if "LM_STUDIO_URL" in os.environ:
+    DEFAULT_LM_STUDIO_URL = os.environ["LM_STUDIO_URL"]
+else:
+    DEFAULT_LM_STUDIO_URL = _CONFIG["audit"]["lm_studio_url"]
+
 DEFAULT_MODEL = _CONFIG["audit"]["model"]
 DEFAULT_MAX_TOKENS = int(_CONFIG["audit"]["max_tokens"])
 DEFAULT_TEMPERATURE = float(_CONFIG["audit"]["temperature"])
@@ -36,6 +40,20 @@ IGNORE_EXTENSIONS = {
     ".pyc", ".pyd", ".log", ".bin", ".zip", ".tar", ".gz", ".exe", ".dll", ".so", ".db"
 }
 
+def _get_repo_path(repo_path: str = None) -> str:
+    if repo_path is not None:
+        return repo_path
+    if "REPO_PATH" in os.environ:
+        return os.environ["REPO_PATH"]
+    return _CONFIG["repo_paths"][os.name]
+
+def _get_brain_dir(brain_dir: str = None) -> str:
+    if brain_dir is not None:
+        return brain_dir
+    if "BRAIN_DIR" in os.environ:
+        return os.environ["BRAIN_DIR"]
+    return _CONFIG["brain_paths"][os.name]
+
 def _log_debug(msg: str):
     sys.stderr.write(f"[AUDIT] {msg}\n")
     sys.stderr.flush()
@@ -47,8 +65,7 @@ def get_active_conversation_transcript(
     """
     Reads the active Antigravity conversation transcript directly from disk.
     """
-    if brain_dir is None:
-        brain_dir = os.environ.get("BRAIN_DIR", r"C:\Users\carso\.gemini\antigravity\brain" if os.name == "nt" else "/brain")
+    brain_dir = _get_brain_dir(brain_dir)
 
     if not os.path.exists(brain_dir):
         return {"status": "error", "error": f"Brain directory not found: {brain_dir}"}
@@ -166,8 +183,7 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
     """
     Captures complete git diff including untracked and modified text source files.
     """
-    if repo_path is None:
-        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+    repo_path = _get_repo_path(repo_path)
 
     if not os.path.exists(repo_path):
         return {"status": "error", "error": f"Repository path not found: {repo_path}"}
@@ -265,8 +281,7 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
         return {"status": "error", "error": f"Failed to get git diff: {str(e)}"}
 
 def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deployments: bool = True) -> dict:
-    if repo_path is None:
-        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+    repo_path = _get_repo_path(repo_path)
 
     diff_res = get_git_diff(repo_path)
     if not diff_text and diff_res.get("status") == "success":
@@ -447,12 +462,12 @@ def query_ornith_for_review(
     lm_studio_url: str = None,
     active_backend: str = None
 ) -> dict:
-    if repo_path is None:
-        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+    repo_path = _get_repo_path(repo_path)
 
     if active_backend is None:
-        active_backend = os.environ.get("ORNITH_AUDIT_BACKEND")
-        if not active_backend:
+        if "ORNITH_AUDIT_BACKEND" in os.environ:
+            active_backend = os.environ["ORNITH_AUDIT_BACKEND"]
+        else:
             active_backend = _CONFIG["audit"]["active_backend"]
 
     backends = _CONFIG["audit"]["backends"]
@@ -728,7 +743,7 @@ Provide your adversarial audit:"""
 
 def read_workspace_file(file_path: str, start_line: int = 1, max_lines: int = 500) -> dict:
     if not os.path.isabs(file_path):
-        base = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+        base = _get_repo_path()
         file_path = os.path.join(base, file_path)
 
     if not os.path.exists(file_path):
@@ -764,8 +779,7 @@ def search_workspace_code(
     Fast, read-only search across workspace files.
     Skips .git, __pycache__, .gemini, and binary files.
     """
-    if repo_path is None:
-        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+    repo_path = _get_repo_path(repo_path)
 
     if not os.path.exists(repo_path):
         return {"status": "error", "error": f"Repo path not found: {repo_path}"}

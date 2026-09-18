@@ -39,7 +39,10 @@ import tools_computer_use
 import ornith_config_loader
 
 _CONFIG = ornith_config_loader.get_ornith_config()
-DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
+if "PI4B_HOST" in os.environ:
+    DEFAULT_PI4B_HOST = os.environ["PI4B_HOST"]
+else:
+    DEFAULT_PI4B_HOST = _CONFIG["network"]["pi4b_host"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,9 +115,20 @@ RECORDER = AudioRecorder()
 
 app = FastAPI(title="Ornith Voice Bridge", version="1.0.0")
 
-COHERE_ASR_URL = os.environ.get("COHERE_ASR_URL", "http://127.0.0.1:8001/transcribe")
-LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", "http://127.0.0.1:1234/v1")
-PORT = int(os.environ.get("VOICE_BRIDGE_PORT", 8058))
+if "COHERE_ASR_URL" in os.environ:
+    COHERE_ASR_URL = os.environ["COHERE_ASR_URL"]
+else:
+    COHERE_ASR_URL = _CONFIG["voice_bridge"]["cohere_asr_url"]
+
+if "LM_STUDIO_URL" in os.environ:
+    LM_STUDIO_URL = os.environ["LM_STUDIO_URL"]
+else:
+    LM_STUDIO_URL = _CONFIG["voice_bridge"]["lm_studio_url"]
+
+if "VOICE_BRIDGE_PORT" in os.environ:
+    PORT = int(os.environ["VOICE_BRIDGE_PORT"])
+else:
+    PORT = int(_CONFIG["voice_bridge"]["port"])
 
 def transcribe_audio_bytes(wav_bytes: bytes, timeout_sec: int = 15) -> str:
     """Sends WAV audio bytes to CoHere ASR server on port 8001 and returns transcript."""

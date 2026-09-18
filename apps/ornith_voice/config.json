@@ -13,6 +13,18 @@
     "max_words": 100,
     "enforce_word_limit_error": true
   },
+  "network": {
+    "pi4b_host": "192.168.0.86",
+    "pi4b_port": 8082
+  },
+  "repo_paths": {
+    "nt": "i:\\aux_servo_interface",
+    "posix": "/workspace"
+  },
+  "brain_paths": {
+    "nt": "C:\\Users\\carso\\.gemini\\antigravity\\brain",
+    "posix": "/brain"
+  },
   "audit": {
     "active_backend": "nim",
     "model": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -46,6 +58,7 @@
     "host": "0.0.0.0",
     "port": 8058,
     "cohere_asr_url": "http://127.0.0.1:8001/transcribe",
+    "lm_studio_url": "http://127.0.0.1:1234/v1",
     "conversation_memory_max_messages": 10,
     "conversation_memory_timeout_sec": 900.0,
     "chimes": {

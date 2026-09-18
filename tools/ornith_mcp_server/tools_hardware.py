@@ -16,6 +16,13 @@ import sys
 import urllib.request
 from typing import Optional, List, Dict, Any
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+import ornith_config_loader
+_CONFIG = ornith_config_loader.get_ornith_config()
+
 NODE_MAP = {
     "pi4b": "carson@192.168.0.86",
     "pi_4b": "carson@192.168.0.86",
@@ -287,7 +294,10 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
     (under pi4b/ or apps/) match their remote deployed MD5 checksums.
     """
     if repo_path is None:
-        repo_path = os.environ.get("REPO_PATH", r"i:\aux_servo_interface" if os.name == "nt" else "/workspace")
+        if "REPO_PATH" in os.environ:
+            repo_path = os.environ["REPO_PATH"]
+        else:
+            repo_path = _CONFIG["repo_paths"][os.name]
 
     deployments = []
     has_mismatch = False

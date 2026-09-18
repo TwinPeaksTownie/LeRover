@@ -20,8 +20,15 @@ import ornith_config_loader
 
 _CONFIG = ornith_config_loader.get_ornith_config()
 
-DEFAULT_TTS_HOST = os.environ.get("POCKET_TTS_HOST", _CONFIG["speech"]["pocket_tts_host"])
-DEFAULT_TTS_PORT = int(os.environ.get("POCKET_TTS_PORT", _CONFIG["speech"]["pocket_tts_port"]))
+if "POCKET_TTS_HOST" in os.environ:
+    DEFAULT_TTS_HOST = os.environ["POCKET_TTS_HOST"]
+else:
+    DEFAULT_TTS_HOST = _CONFIG["speech"]["pocket_tts_host"]
+
+if "POCKET_TTS_PORT" in os.environ:
+    DEFAULT_TTS_PORT = int(os.environ["POCKET_TTS_PORT"])
+else:
+    DEFAULT_TTS_PORT = int(_CONFIG["speech"]["pocket_tts_port"])
 DEFAULT_TARGET = _CONFIG["speech"]["target"]
 DEFAULT_VOICE_URL = _CONFIG["speech"]["voice_url"]
 MAX_WORDS = int(_CONFIG["speech"]["max_words"])
@@ -59,8 +66,15 @@ def _play_wav_bytes(wav_bytes: bytes) -> bool:
     _log_debug("Audio playback failed on local device.")
     return False
 
-DEFAULT_PI4B_HOST = os.environ.get("PI4B_HOST", "192.168.0.86")
-DEFAULT_PI4B_PORT = int(os.environ.get("PI4B_PORT", 8082))
+if "PI4B_HOST" in os.environ:
+    DEFAULT_PI4B_HOST = os.environ["PI4B_HOST"]
+else:
+    DEFAULT_PI4B_HOST = _CONFIG["network"]["pi4b_host"]
+
+if "PI4B_PORT" in os.environ:
+    DEFAULT_PI4B_PORT = int(os.environ["PI4B_PORT"])
+else:
+    DEFAULT_PI4B_PORT = int(_CONFIG["network"]["pi4b_port"])
 
 def _send_wav_to_pi4b(wav_bytes: bytes, host: str = DEFAULT_PI4B_HOST, port: int = DEFAULT_PI4B_PORT) -> bool:
     """Streams raw WAV binary payload to Pi 4B kiosk /api/play_sound endpoint."""
