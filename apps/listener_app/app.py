@@ -73,6 +73,8 @@ def load_listener_config() -> Dict[str, Any]:
     _ = cfg["version"]
     _ = cfg["icon"]
     _ = cfg["tags"]
+    _ = float(cfg["watchdog"]["retry_backoff_sec"])
+    _ = int(cfg["watchdog"]["max_consecutive_resets"])
     _ = bool(cfg["execution"]["single_turn"])
     max_retries = int(cfg["execution"]["max_retries"])
     if max_retries < 0:
@@ -452,8 +454,8 @@ class ListenerApp(BaseApp):
             self.logger.debug("Stream flush read note: %s", e)
 
     def _watchdog_cleanup(self) -> None:
-        """Restarts the Vosk recognition service and terminates any orphaned microphone processes."""
-        self.logger.warning("Executing watchdog cleanup: killing mic processes and restarting vosk-server.service...")
+        """Cleans up audio stream and re-verifies Vosk service connection with configured backoff."""
+        self.logger.warning("Executing watchdog cleanup: closing stream and backing off before reconnect...")
         with self._stream_lock:
             if self._stream_resp is not None:
                 try:
@@ -462,19 +464,9 @@ class ListenerApp(BaseApp):
                     self.logger.warning("Failed to close stream response during watchdog cleanup: %s", e)
                 self._stream_resp = None
 
-        import subprocess
-        try:
-            subprocess.run(["pkill", "-9", "-f", "parecord"], check=False)
-        except Exception as pe:
-            self.logger.warning("pkill parecord warning: %s", pe)
-
-        try:
-            subprocess.run(["sudo", "-n", "systemctl", "restart", "vosk-server.service"], check=False, timeout=10)
-            self.logger.info("Successfully signaled systemd to restart vosk-server.service.")
-        except Exception as se:
-            self.logger.error("Failed to restart vosk-server.service: %s", se)
-
-        time.sleep(1.0)
+        backoff_sec = float(self.config["watchdog"]["retry_backoff_sec"])
+        time.sleep(backoff_sec)
+        self._vosk_ready = False
         self._verify_vosk_standby_server()
 
     def _connect_daemon_audio_stream(self) -> Any:

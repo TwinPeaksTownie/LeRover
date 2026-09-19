@@ -13,6 +13,9 @@
   },
   "clack_detector": {
     "enabled": true,
+    "allow_acoustic_locomotion": false,
+    "acoustic_attack_enabled": true,
+    "startup_discard_chunks": 3,
     "peak_threshold": 3500,
     "tap_window_sec": 0.85,
     "refractory_ms": 300,

@@ -63,9 +63,12 @@ class AudioTapDetector:
         self.play_sound_cb = play_sound_cb
         self.is_active_cb = is_active_cb
 
+        # Load preset config for clack detector settings fail-fast
+        self.config = self._load_detector_config()
+        self.startup_discard_chunks = int(self.config["clack_detector"]["startup_discard_chunks"])
+
         self._running = False
         self._thread: Optional[threading.Thread] = None
-        self._proc: Optional[subprocess.Popen] = None
         self._lock = threading.Lock()
 
         # Sequence & Audio Inhibit Muting
@@ -124,21 +127,41 @@ class AudioTapDetector:
             logging.info("Started AudioTapDetector worker thread (threshold=%d, window=%.2fs, refractory=%.2fs, min_ratio=%.1f).",
                          self.peak_threshold, self.tap_window, self.refractory_sec, self.min_spectral_ratio)
 
+    def _load_detector_config(self) -> Dict[str, Any]:
+        candidates = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "apps", "preset_app", "config.json"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "apps", "preset_app", "config.json"),
+            "/home/carson/touch_ui/apps/preset_app/config.json",
+            "i:/aux_servo_interface/apps/preset_app/config.json",
+        ]
+        for p in candidates:
+            if p and os.path.exists(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                _ = cfg["clack_detector"]["startup_discard_chunks"]
+                _ = cfg["clack_detector"]["allow_acoustic_locomotion"]
+                _ = cfg["clack_detector"]["acoustic_attack_enabled"]
+                return cfg
+        raise FileNotFoundError(f"Missing required preset_app config.json for AudioTapDetector. Checked: {candidates}")
+
+    def get_daemon_stream_url(self) -> str:
+        try:
+            from network_resolver import get_pi4b_ip
+        except ImportError:
+            try:
+                from pi4b.network_resolver import get_pi4b_ip
+            except ImportError:
+                get_pi4b_ip = lambda prefer_port=8082: "127.0.0.1"
+        ip = get_pi4b_ip(prefer_port=8082)
+        return f"http://{ip}:8082/api/microphone/stream"
+
     def stop(self) -> None:
-        """Stops the microphone listener and cleans up subprocesses."""
+        """Stops the microphone listener and cleans up resources."""
         with self._lock:
             self._running = False
             if self._window_timer:
                 self._window_timer.cancel()
                 self._window_timer = None
-            if self._proc:
-                try:
-                    self._proc.terminate()
-                    self._proc.kill()
-                    self._proc.wait(timeout=0.5)
-                except Exception as proc_err:
-                    logging.warning("Error terminating parecord process: %s", proc_err)
-                self._proc = None
         if self._thread and self._thread.is_alive() and self._thread != threading.current_thread():
             self._thread.join(timeout=1.0)
         logging.info("Stopped AudioTapDetector.")
@@ -177,20 +200,10 @@ class AudioTapDetector:
             }
 
     def _play_sound(self, kind: str) -> None:
-        """Plays sound via callback or local paplay fallback."""
-        if self.play_sound_cb:
-            try:
-                self.play_sound_cb(kind)
-                return
-            except Exception as e:
-                logging.warning("play_sound_cb error: %s", e)
-
-        wav_file = os.path.join(MARIO_SOUNDS_DIR, f"{kind}.wav")
-        if os.path.exists(wav_file):
-            try:
-                subprocess.Popen(["paplay", wav_file], env=PULSE_ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception as ex:
-                logging.warning("Direct paplay error for %s: %s", kind, ex)
+        """Dispatches sound via registered daemon callback. Fails loudly if unconfigured."""
+        if not self.play_sound_cb:
+            raise RuntimeError(f"Cannot dispatch sound '{kind}': play_sound_cb is not configured on AudioTapDetector")
+        self.play_sound_cb(kind)
 
     def _get_api_url(self) -> str:
         try:
@@ -269,9 +282,10 @@ class AudioTapDetector:
             label = f"4 Snaps ({gaps_str}ms): ☠️ ATTACK SEQUENCE TRIGGERED"
             self.mute(12.0)
             try:
+                payload = json.dumps({"source": "acoustic_tap"}).encode("utf-8")
                 req = urllib.request.Request(
                     f"{api_url}/api/arm/attack_sequence",
-                    data=b"{}",
+                    data=payload,
                     headers={"Content-Type": "application/json"},
                 )
                 with urllib.request.urlopen(req, timeout=3.5) as resp:
@@ -365,91 +379,81 @@ class AudioTapDetector:
         win = np.hanning(chunk_samples) if NUMPY_AVAILABLE else []
 
         rolling_noise: List[int] = []
+        discard_count = self.startup_discard_chunks
+        stream_url = self.get_daemon_stream_url()
 
         while self._running:
             try:
-                cmd = ["parecord", "--raw", "--rate=16000", "--channels=1"]
-                proc = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    env=PULSE_ENV,
-                )
-                with self._lock:
-                    self._proc = proc
+                req = urllib.request.Request(stream_url, headers={"User-Agent": "AudioTapDetector"})
+                with urllib.request.urlopen(req, timeout=5.0) as stream_resp:
+                    # Flush startup transient chunks (reject DC step on stream open)
+                    for _ in range(discard_count):
+                        _ = stream_resp.read(chunk_bytes)
 
-                while self._running:
-                    if self.is_active_cb is not None and not self.is_active_cb():
-                        logging.info("[AudioTapDetector] Active app is no longer piranha_pose_app, auto-stopping listener loop.")
-                        self._running = False
-                        break
+                    while self._running:
+                        if self.is_active_cb is not None and not self.is_active_cb():
+                            logging.info("[AudioTapDetector] Active app is no longer piranha_pose_app, auto-stopping listener loop.")
+                            self._running = False
+                            break
 
-                    raw = proc.stdout.read(chunk_bytes)
-                    if not raw or len(raw) < chunk_bytes:
-                        break
+                        raw = stream_resp.read(chunk_bytes)
+                        if not raw or len(raw) < chunk_bytes:
+                            break
 
-                    now = time.time()
-                    if now < self._mute_until:
-                        # Muted: ignore audio frame completely
-                        continue
+                        now = time.time()
+                        if now < self._mute_until:
+                            # Muted: ignore audio frame completely
+                            continue
 
-                    if NUMPY_AVAILABLE:
-                        data = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
-                        peak = int(np.max(np.abs(data)))
-                        rms = int(np.sqrt(np.mean(data ** 2)))
-                    else:
-                        import struct
-                        shorts = struct.unpack(f"{chunk_samples}h", raw)
-                        peak = max(abs(s) for s in shorts)
-                        rms = int((sum(s * s for s in shorts) / chunk_samples) ** 0.5)
-
-                    rolling_noise.append(rms)
-                    if len(rolling_noise) > 30:
-                        rolling_noise.pop(0)
-                    avg_noise = max(1, sum(rolling_noise) // len(rolling_noise))
-
-                    with self._lock:
-                        self._current_peak = peak
-                        self._noise_floor = avg_noise
-
-                    if peak >= self.peak_threshold:
                         if NUMPY_AVAILABLE:
-                            # 1. FFT Spectral Analysis
-                            fft_mag = np.abs(np.fft.rfft(data * win))
-                            e_low = float(np.sum(fft_mag[low_mask] ** 2))
-                            e_clack = float(np.sum(fft_mag[clack_mask] ** 2))
-                            e_total = float(np.sum(fft_mag ** 2)) + 1e-9
-
-                            ratio = e_clack / max(1.0, e_low)
-                            high_pct = (e_clack / e_total) * 100.0
-                            sharpness = peak / float(avg_noise)
-
-                            with self._lock:
-                                self._last_spectral_ratio = round(ratio, 2)
-                                self._last_high_energy_pct = round(high_pct, 1)
-
-                            # Discrimination Filter:
-                            # Must satisfy high/low ratio, high frequency energy percentage, and transient sharpness
-                            if ratio >= self.min_spectral_ratio and high_pct >= self.min_high_energy_pct and sharpness >= 4.0:
-                                self._on_tap_detected(peak)
-                            else:
-                                logging.debug("[REJECTED AMBIENT] peak=%d, ratio=%.1f, high_pct=%.1f%%, sharpness=%.1f",
-                                              peak, ratio, high_pct, sharpness)
+                            data = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+                            peak = int(np.max(np.abs(data)))
+                            rms = int(np.sqrt(np.mean(data ** 2)))
                         else:
-                            # Fallback if numpy missing
-                            self._on_tap_detected(peak)
+                            import struct
+                            shorts = struct.unpack(f"{chunk_samples}h", raw)
+                            peak = max(abs(s) for s in shorts)
+                            rms = int((sum(s * s for s in shorts) / chunk_samples) ** 0.5)
+
+                        rolling_noise.append(rms)
+                        if len(rolling_noise) > 30:
+                            rolling_noise.pop(0)
+                        avg_noise = max(1, sum(rolling_noise) // len(rolling_noise))
+
+                        with self._lock:
+                            self._current_peak = peak
+                            self._noise_floor = avg_noise
+
+                        if peak >= self.peak_threshold:
+                            if NUMPY_AVAILABLE:
+                                # 1. FFT Spectral Analysis
+                                fft_mag = np.abs(np.fft.rfft(data * win))
+                                e_low = float(np.sum(fft_mag[low_mask] ** 2))
+                                e_clack = float(np.sum(fft_mag[clack_mask] ** 2))
+                                e_total = float(np.sum(fft_mag ** 2)) + 1e-9
+
+                                ratio = e_clack / max(1.0, e_low)
+                                high_pct = (e_clack / e_total) * 100.0
+                                sharpness = peak / float(avg_noise)
+
+                                with self._lock:
+                                    self._last_spectral_ratio = round(ratio, 2)
+                                    self._last_high_energy_pct = round(high_pct, 1)
+
+                                # Discrimination Filter:
+                                # Must satisfy high/low ratio, high frequency energy percentage, and transient sharpness
+                                if ratio >= self.min_spectral_ratio and high_pct >= self.min_high_energy_pct and sharpness >= 4.0:
+                                    self._on_tap_detected(peak)
+                                else:
+                                    logging.debug("[REJECTED AMBIENT] peak=%d, ratio=%.1f, high_pct=%.1f%%, sharpness=%.1f",
+                                                  peak, ratio, high_pct, sharpness)
+                            else:
+                                # Fallback if numpy missing
+                                self._on_tap_detected(peak)
 
             except Exception as e:
                 logging.warning("AudioTapDetector loop exception: %s", e)
-                time.sleep(0.5)
-            finally:
-                if self._proc:
-                    try:
-                        self._proc.terminate()
-                        self._proc.kill()
-                    except Exception as loop_proc_err:
-                        logging.warning("Error terminating parecord process in finally: %s", loop_proc_err)
-                    self._proc = None
+                time.sleep(1.0)
 
 
 if __name__ == "__main__":

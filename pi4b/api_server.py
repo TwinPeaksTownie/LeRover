@@ -1203,7 +1203,8 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                         "status": "error",
                         "message": "Piranha Pose app is not running. Tap START PIRANHA POSE before commanding motion."
                     }, 409)
-            threading.Thread(target=preset_app.execute_attack_sequence, args=(self.backend,), daemon=True).start()
+            source = str(body["source"]) if (isinstance(body, dict) and "source" in body) else "ui"
+            threading.Thread(target=preset_app.execute_attack_sequence, args=(self.backend,), kwargs={"source": source}, daemon=True).start()
             self._send_json({"status": "ok", "action": "attack_sequence_started"})
 
         elif parsed.path == "/api/arm/stop_sequence":

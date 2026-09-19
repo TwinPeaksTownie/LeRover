@@ -506,14 +506,14 @@ class TestListenerPipeline(unittest.TestCase):
         mock_backend = MagicMock()
         stop_event = threading.Event()
 
-        with patch.object(app, "_play_chime"), \
+        with patch.object(app, "_play_chime", return_value=0.01), \
              patch.object(app, "_execute_posture", side_effect=lambda b, a: setattr(app, "action_taken", f"Moved to {a}")), \
              patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
              patch.object(app, "_get_vosk_urls", return_value=("http://127.0.0.1:8059/health", "ws://127.0.0.1:2700", "http://127.0.0.1:8059/recognize")):
 
             mock_stream = MagicMock()
             loud_pcm = b"\xff\x7f" * 1280
-            mock_stream.read.side_effect = [loud_pcm, b"", b"", b""]
+            mock_stream.read.side_effect = [b"\x00" * 3200, loud_pcm, b"", b"", b""]
             mock_stream_conn.return_value = mock_stream
 
             app.config["vad"]["settle_delay_sec"] = 0.01
@@ -583,6 +583,7 @@ class TestListenerPipeline(unittest.TestCase):
 
         def record_chime(chime_name):
             played_chimes.append(chime_name)
+            return 0.01
 
         with patch.object(app, "_play_chime", side_effect=record_chime), \
              patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
@@ -590,7 +591,7 @@ class TestListenerPipeline(unittest.TestCase):
 
             mock_stream = MagicMock()
             loud_pcm = b"\xff\x7f" * 1280
-            mock_stream.read.side_effect = [loud_pcm, b"", b"", b""]
+            mock_stream.read.side_effect = [b"\x00" * 3200, loud_pcm, b"", b"", b""]
             mock_stream_conn.return_value = mock_stream
 
             app.config["vad"]["settle_delay_sec"] = 0.01

@@ -761,8 +761,21 @@ class PiranhaPoseApp(BaseApp):
         finally:
             self._sequence_running = False
 
-    def execute_attack_sequence(self, backend: RobotBackend) -> Tuple[bool, str]:
+    def execute_attack_sequence(self, backend: RobotBackend, source: str = "ui") -> Tuple[bool, str]:
         """Executes the full 8-step Piranha Plant Attack choreography."""
+        if source == "acoustic_tap":
+            attack_enabled = bool(self.config["clack_detector"]["acoustic_attack_enabled"])
+            if not attack_enabled:
+                self.logger.info("[ATTACK SEQ] Acoustic attack disabled in config; playing warning chime.")
+                dispatch_audio_event(kind="incorrect", stop_previous=True)
+                return True, "Acoustic attack sequence disabled by config"
+
+        allow_locomotion = bool(self.config["clack_detector"]["allow_acoustic_locomotion"])
+        if source == "acoustic_tap" and not allow_locomotion:
+            should_drive = False
+        else:
+            should_drive = True
+
         self.stop_sequence()
         self._sequence_stop_event.clear()
         self._sequence_running = True
@@ -790,8 +803,11 @@ class PiranhaPoseApp(BaseApp):
             if not ok:
                 return False, f"Lunge interpolation failed: {msg}"
             dispatch_audio_event(kind="connect", stop_previous=True)
-            t_drive = threading.Thread(target=self._drive_burst_helper, kwargs={"throttle": 0.85, "duration_sec": 1.0}, daemon=True)
-            t_drive.start()
+            if should_drive:
+                t_drive = threading.Thread(target=self._drive_burst_helper, kwargs={"throttle": 0.85, "duration_sec": 1.0}, daemon=True)
+                t_drive.start()
+            else:
+                self.logger.info("[ATTACK SEQ] Locomotion interlock engaged: skipping chassis drive burst for acoustic tap.")
 
             # Step 2: Pedestal right (100.0%)
             if self._sequence_stop_event.is_set():

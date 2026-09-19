@@ -263,7 +263,7 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
     else:
         duration_sec = audio_resolver.get_audio_duration_sec(wav_path if wav_path else active_event)
 
-    def _work():
+    def _work(total_duration: float = duration_sec):
         global CURRENT_PAPLAY_PROC
         try:
             active_event = event if event else kind
@@ -280,7 +280,6 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
                             logging.debug("Error killing previous paplay process: %s", kill_err)
                     CURRENT_PAPLAY_PROC = None
                 if active_event == "stop_audio":
-                    subprocess.run(["pkill", "-9", "-f", "mpg123|paplay|aplay"], check=False)
                     return
 
             if delay_sec > 0:
@@ -288,7 +287,10 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
 
             global TAP_DETECTOR
             if TAP_DETECTOR and hasattr(TAP_DETECTOR, "mute"):
-                mute_dur = 5.0 if active_event in ("trex_roar", "trex_roar_isolated", "mario_kart_start", "rover_arm_drivetrain") else 2.0
+                if total_duration > 0.0:
+                    mute_dur = total_duration + 0.5
+                else:
+                    mute_dur = 2.0
                 TAP_DETECTOR.mute(mute_dur)
 
             if wav_path:

@@ -5,6 +5,10 @@
   "version": "1.0.0",
   "icon": "👂",
   "tags": ["voice", "hotword", "kws", "listener", "offline"],
+  "watchdog": {
+    "retry_backoff_sec": 1.0,
+    "max_consecutive_resets": 2
+  },
   "execution": {
     "single_turn": false,
     "max_retries": 2

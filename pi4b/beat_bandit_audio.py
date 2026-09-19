@@ -155,72 +155,77 @@ class BeatBanditAudioClient:
         self.library_dir.mkdir(parents=True, exist_ok=True)
         self.current_start_sec: float = 0.0
         self.current_end_sec: Optional[float] = None
-        self._active_buf: Optional[io.BytesIO] = None
-        self._audio_initialized: bool = False
+        self.active_wav_path: str = ""
+        self.playback_start_time: float = 0.0
+        self._is_playing: bool = False
 
     def init_audio_engine(self, driver: str = "pulse") -> None:
-        """Initializes in-process Pygame mixer engine safely over PulseAudio."""
+        """Configures audio client to dispatch playback through Pi 4B daemon."""
+        logger.info("BeatBanditAudioClient initialized to dispatch playback through Pi 4B daemon (driver=%s).", driver)
+
+    def _get_daemon_sound_url(self) -> str:
         try:
-            import pygame
-            if pygame.mixer.get_init() is None:
-                if os.name != "nt":
-                    os.environ["SDL_AUDIODRIVER"] = driver
-                pygame.mixer.init()
-                logger.info("In-process Pygame audio mixer initialized successfully (driver=%s).", driver)
-            self._audio_initialized = True
-        except Exception as e:
-            logger.error("Failed to initialize in-process Pygame audio mixer: %s", e)
-            raise
+            from network_resolver import get_pi4b_ip
+        except ImportError:
+            try:
+                from pi4b.network_resolver import get_pi4b_ip
+            except ImportError:
+                get_pi4b_ip = lambda prefer_port=8082: "127.0.0.1"
+        ip = get_pi4b_ip(prefer_port=8082)
+        return f"http://{ip}:8082/api/play_sound"
 
     def prepare_track(self, wav_path: str, start_sec: float = 0.0, end_sec: Optional[float] = None) -> bool:
-        """Pre-loads audio track or in-memory slice into Pygame mixer before playback begins (<1ms dispatch)."""
-        self.init_audio_engine()
+        """Validates track existence and pre-calculates start/end bounds before playback."""
         if not os.path.exists(wav_path):
             raise FileNotFoundError(f"Fail-Fast Error: Audio file not found for playback: {wav_path}")
 
+        self.active_wav_path = str(wav_path)
         self.current_start_sec = max(0.0, float(start_sec))
         self.current_end_sec = None
         if end_sec is not None and float(end_sec) > 0.0:
             self.current_end_sec = float(end_sec)
 
-        import pygame
-        if self.current_start_sec > 0.0 or self.current_end_sec is not None:
-            logger.info("Pre-slicing WAV audio into memory: %.2fs -> %s...", self.current_start_sec, self.current_end_sec or "END")
-            raw_wav = slice_wav_in_memory(wav_path, start_sec=self.current_start_sec, end_sec=self.current_end_sec)
-            if not raw_wav:
-                raise RuntimeError(f"Failed to slice audio track: {wav_path}")
-            self._active_buf = io.BytesIO(raw_wav)
-            pygame.mixer.music.load(self._active_buf)
-        else:
-            self._active_buf = None
-            pygame.mixer.music.load(wav_path)
-
-        logger.info("Audio track '%s' pre-loaded into memory successfully.", wav_path)
+        self.playback_start_time = 0.0
+        self._is_playing = False
+        logger.info("Audio track '%s' prepared for daemon playback.", wav_path)
         return True
 
     def start_playback(self) -> bool:
-        """Starts in-process Pygame music playback immediately."""
-        import pygame
-        if pygame.mixer.get_init() is None:
-            self.init_audio_engine()
-        pygame.mixer.music.play()
-        logger.info("In-process audio playback started.")
+        """Dispatches track playback to Pi 4B daemon /api/play_sound endpoint."""
+        url = self._get_daemon_sound_url()
+        payload = json.dumps({
+            "event": "beat_bandit_track",
+            "wav_path": self.active_wav_path,
+            "stop_previous": True,
+            "delay_sec": 0.0
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            pass
+        self.playback_start_time = time.time()
+        self._is_playing = True
+        logger.info("Track playback dispatched to Pi 4B daemon /api/play_sound: %s", self.active_wav_path)
         return True
 
-    def get_audio_playback_time(self) -> float:
-        """Returns current playback timestamp in seconds derived from hardware audio buffer, or -1.0 if not playing."""
+    def stop_playback(self) -> None:
+        """Stops active audio playback on Pi 4B daemon."""
+        url = self._get_daemon_sound_url()
+        payload = json.dumps({"action": "stop"}).encode("utf-8")
         try:
-            import pygame
-            if pygame.mixer.get_init() is None:
-                return -1.0
-            if not pygame.mixer.music.get_busy():
-                return -1.0
-            pos_ms = pygame.mixer.music.get_pos()
-            if pos_ms < 0:
-                return -1.0
-            return self.current_start_sec + (pos_ms / 1000.0)
-        except Exception:
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                pass
+        except Exception as e:
+            logger.warning("Error stopping daemon audio: %s", e)
+        self._is_playing = False
+        self.playback_start_time = 0.0
+
+    def get_audio_playback_time(self) -> float:
+        """Returns current playback timestamp in seconds derived from start timestamp, or -1.0 if not playing."""
+        if not self._is_playing or self.playback_start_time <= 0.0:
             return -1.0
+        elapsed = time.time() - self.playback_start_time
+        return self.current_start_sec + elapsed
 
     def fetch_analysis(self, url_or_id: str, track_id: str, mac_ip: Optional[str] = None) -> Dict[str, Any]:
         """Calls Mac Deep Audio Analysis Microservice (Port 8086)."""
