@@ -878,7 +878,10 @@ class RobotBackend:
                 if ser and hasattr(ser, "reset_input_buffer"):
                     ser.reset_input_buffer()
 
-                start_norm = self.bus.sync_read("Present_Position")
+                try:
+                    start_norm = self.bus.sync_read("Present_Position")
+                except Exception as e:
+                    return False, f"Failed to sync read present position from arm bus: {e}"
                 if not start_norm:
                     return False, "Failed to read current arm start positions"
 
