@@ -1,0 +1,24 @@
+{
+  "system_name": "b_g431b_esc1_simplefoc",
+  "version": "1.0.0",
+  "motor": {
+    "model": "MAD 5010 110KV",
+    "pole_pairs": 14,
+    "voltage_power_supply": 16.0,
+    "voltage_limit": 6.0,
+    "velocity_limit": 50.0,
+    "voltage_sensor_align": 1.5
+  },
+  "encoder": {
+    "chip": "AS5600",
+    "i2c_scl_pin": "PB8",
+    "i2c_sda_pin": "PB7",
+    "i2c_clock_hz": 400000
+  },
+  "communication": {
+    "baud_rate": 115200,
+    "uart_rx_pin": "PB4",
+    "uart_tx_pin": "PB3",
+    "command_char": "T"
+  }
+}
