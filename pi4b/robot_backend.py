@@ -784,7 +784,7 @@ class RobotBackend:
                         if hasattr(self.bus, "disable_torque"):
                             self.bus.disable_torque(num_retry=num_retry)
                     except Exception as err2:
-                        logging.error("disable_torque recovery attempt failed: %s", err2)
+                        logging.warning("disable_torque recovery attempt note (bus unpowered/disconnected): %s", err2)
                 with self.lock:
                     for sid in range(1, 7):
                         self.servos[sid]["torque"] = False
@@ -1209,7 +1209,7 @@ class RobotBackend:
                 with SERIAL_LOCK:
                     self.bus.disconnect()
         except Exception as e:
-            logging.error(f"Error disconnecting motor bus: {e}")
+            logging.warning(f"Note disconnecting unpowered motor bus: {e}")
 
         self.hardware_active = False
         logging.info("RobotBackend shutdown complete.")

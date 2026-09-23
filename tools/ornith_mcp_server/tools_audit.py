@@ -612,7 +612,7 @@ Provide your adversarial audit:"""
         api_key = ornith_config_loader.get_secret("NVIDIA_API_KEY")
         headers["Authorization"] = f"Bearer {api_key}"
 
-    use_stream = bool(active_backend == "nim")
+    use_stream = False
     payload = {
         "model": model_name,
         "messages": [
@@ -1000,7 +1000,7 @@ Evaluate this implementation plan against the operator directives and strict rul
         api_key = ornith_config_loader.get_secret("NVIDIA_API_KEY")
         headers["Authorization"] = f"Bearer {api_key}"
 
-    use_stream = True
+    use_stream = False
     payload = {
         "model": model_name,
         "messages": [
