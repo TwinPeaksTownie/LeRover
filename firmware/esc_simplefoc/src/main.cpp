@@ -28,7 +28,30 @@ MagneticSensorI2C sensor = MagneticSensorI2C(AS5600_I2C);
 Commander command = Commander(Serial);
 
 void doTarget(char* cmd) {
+    if (!motor.enabled) {
+        motor.enable();
+    }
     command.scalar(&motor.target, cmd);
+}
+
+void doEnable(char* cmd) {
+    if (cmd[0] == '0') {
+        motor.target = 0.0f;
+        motor.disable();
+        Serial.println("[FOC] Motor DISABLED");
+    } else if (cmd[0] == '1') {
+        motor.enable();
+        Serial.println("[FOC] Motor ENABLED");
+    } else {
+        Serial.printf("[FOC] Motor State: %s\n", motor.enabled ? "ENABLED" : "DISABLED");
+    }
+}
+
+void doStop(char* cmd) {
+    (void)cmd;
+    motor.target = 0.0f;
+    motor.disable();
+    Serial.println("[FOC] Emergency STOP: Motor DISABLED");
 }
 
 void doMotor(char* cmd) {
@@ -36,6 +59,7 @@ void doMotor(char* cmd) {
 }
 
 void doVelocity(char* cmd) {
+    (void)cmd;
     Serial.println(motor.shaft_velocity, 3);
 }
 
@@ -99,8 +123,15 @@ void setup() {
     Serial.println("[FOC] Aligning sensor and motor phases...");
     motor.initFOC();
 
-    // 6. Register Serial Commander commands ('T' = Target, 'M' = Motor control, 'V' = Velocity)
+    // 6. Safe Idle on Boot: Disable gate drivers to ensure zero current & freewheel
+    motor.target = 0.0f;
+    motor.disable();
+    Serial.println("[FOC] Safe Idle: Gate driver de-energized. Coils freewheeling.");
+
+    // 7. Register Serial Commander commands
     command.add('T', doTarget, "target velocity");
+    command.add('E', doEnable, "enable/disable motor");
+    command.add('S', doStop, "emergency stop");
     command.add('M', doMotor, "motor config");
     command.add('V', doVelocity, "velocity");
 
@@ -108,9 +139,7 @@ void setup() {
     command.verbose = VerboseMode::nothing;
 
     Serial.println("[FOC] SimpleFOC Controller Ready.");
-    Serial.println("[FOC] Send 'T<value>' to set velocity (e.g. 'T5.0')");
-    Serial.println("[FOC] Send 'V' for velocity query");
-    Serial.println("[FOC] Send 'M' for motor diagnostics\n");
+    Serial.println("[FOC] Commands: 'E1' (enable), 'E0'/'S' (disable), 'T<val>' (target), 'V' (velocity)\n");
 }
 
 void loop() {
@@ -123,8 +152,10 @@ void loop() {
     // Process incoming serial commands from Host / ESP32 Gateway
     command.run();
 
-    // 2 Hz visual heartbeat on LED_BUILTIN
-    if (millis() - last_blink_ms >= 500) {
+    // Visual heartbeat on LED_BUILTIN:
+    // Fast 2Hz blink when motor is active; slow 1Hz pulse when safely idle/disabled
+    unsigned long blink_interval = motor.enabled ? 250 : 1000;
+    if (millis() - last_blink_ms >= blink_interval) {
         last_blink_ms = millis();
         digitalToggle(LED_BUILTIN);
     }
