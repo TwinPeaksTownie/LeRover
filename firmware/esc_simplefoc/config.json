@@ -20,5 +20,16 @@
     "uart_rx_pin": "PB4",
     "uart_tx_pin": "PB3",
     "command_char": "T"
+  },
+  "safety": {
+    "boot_mode": "disabled",
+    "auto_enable_on_target": false
+  },
+  "pid_velocity": {
+    "p": 0.2,
+    "i": 2.0,
+    "d": 0.0,
+    "output_ramp": 1000.0,
+    "lpf_tf": 0.01
   }
 }

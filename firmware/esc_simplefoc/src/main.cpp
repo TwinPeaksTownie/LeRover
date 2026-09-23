@@ -28,9 +28,8 @@ MagneticSensorI2C sensor = MagneticSensorI2C(AS5600_I2C);
 Commander command = Commander(Serial);
 
 void doTarget(char* cmd) {
-    if (!motor.enabled) {
-        motor.enable();
-    }
+    // When motor is disabled, setting target updates target value but NEVER auto-enables gate drivers.
+    // Explicit 'E1' command is strictly required to energize the motor.
     command.scalar(&motor.target, cmd);
 }
 
