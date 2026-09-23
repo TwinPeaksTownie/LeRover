@@ -523,7 +523,7 @@ class RobotBackend:
         with self.lock:
             self.servos[7]["connected"] = False
             self.servos[7]["error"] = "Hardware read timeout after 5 retries"
-        logging.error("Failed to read Servo 7 position from hardware after retries.")
+        logging.warning("Failed to read Servo 7 position from hardware after retries (bus unpowered/disconnected).")
         return None
 
     def get_s7_center_ticks(self) -> int:
