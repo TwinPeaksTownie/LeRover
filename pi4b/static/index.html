@@ -130,8 +130,11 @@
             <!-- LIVE POKEBALL TELEMETRY DISPLAY -->
             <div id="pbTelemetryBox" style="background: #111; border: 2px solid #333; border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 15px; font-weight: 900; color: #ff3344;">🎮 POKÉBALL BLE TELEMETRY</span>
-                    <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
+                    <span style="font-size: 15px; font-weight: 900; color: #ff3344;">🎮 JOY-CON (R) TELEMETRY</span>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button id="drawerPairJoyconBtn" class="btn-action" style="padding: 3px 8px; font-size: 12px; font-weight: 900; border-radius: 6px; border: 1px solid #0099ff; background: #002244; color: #00e5ff; cursor: pointer;">PAIR</button>
+                        <span id="pbConnectBadge" style="font-size: 13px; font-weight: 900; padding: 4px 10px; border-radius: 6px; background: #222; color: #888;">DISCONNECTED</span>
+                    </div>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 14px;">
                     <div>Direction: <span id="pbDirReadout" style="color: #ffaa00; font-weight: 900;">CENTER</span></div>
@@ -892,9 +895,13 @@
                         🚫 TEST OFFLINE
                         <span style="font-size: 14px; font-weight: 700; color: #ffeebb; margin-top: 6px;">(DISABLE WI-FI 10M)</span>
                     </button>
-                    <button id="emergencyKillBtn" class="btn-action btn-red" style="grid-column: span 2; font-size: 26px; font-weight: 900; line-height: 1.25; min-height: unset; background: #330005; border-color: #ff0033; padding: 12px 16px;">
-                        🛑 STOP ALL PROCESSES
-                        <span style="font-size: 15px; font-weight: 700; color: #ffaaaa; margin-top: 6px;">(EMERGENCY PROCESS KILL)</span>
+                    <button id="pairJoyconBtn" class="btn-action" style="font-size: 20px; font-weight: 900; line-height: 1.25; min-height: unset; padding: 10px 14px; background: #001a33; border-color: #0099ff; color: #00e5ff;">
+                        <span id="pairJoyconBtnText">🎮 RE-PAIR JOY-CON</span>
+                        <span id="pairJoyconBtnSub" style="font-size: 13px; font-weight: 700; color: #88ccff; margin-top: 6px;">(HOLD RAIL SYNC)</span>
+                    </button>
+                    <button id="emergencyKillBtn" class="btn-action btn-red" style="font-size: 20px; font-weight: 900; line-height: 1.25; min-height: unset; background: #330005; border-color: #ff0033; padding: 10px 14px;">
+                        <span id="emergencyKillBtnText">🛑 STOP ALL PROCESSES</span>
+                        <span id="emergencyKillBtnSub" style="font-size: 13px; font-weight: 700; color: #ffaaaa; margin-top: 6px;">(EMERGENCY KILL)</span>
                     </button>
                 </div>
             </div>

@@ -299,6 +299,14 @@ export function sendMasterDaemonRestart(action) {
     return sendBackendRestart(action);
 }
 
+export function sendJoyconRepair(timeoutSec = 45) {
+    return safeFetch('/api/joycon/repair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeout_sec: timeoutSec })
+    }, 50000);
+}
+
 export function sendEmergencyKillAll() {
     return safeFetch('/api/kill_all', {
         method: 'POST',

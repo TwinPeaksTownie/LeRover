@@ -916,6 +916,48 @@ export function triggerEmergencyKillAll() {
     api.sendEmergencyKillAll().catch(() => {});
 }
 
+export function triggerJoyconRepair() {
+    const btn = document.getElementById('pairJoyconBtn');
+    const txt = document.getElementById('pairJoyconBtnText');
+    const sub = document.getElementById('pairJoyconBtnSub');
+    const dBtn = document.getElementById('drawerPairJoyconBtn');
+
+    if (btn) btn.style.opacity = '0.5';
+    if (txt) txt.innerText = '⌛ PAIRING...';
+    if (sub) sub.innerText = '(HOLD RAIL SYNC BUTTON)';
+    if (dBtn) {
+        dBtn.style.opacity = '0.5';
+        dBtn.innerText = 'PAIRING...';
+    }
+
+    ui.setHeaderAlert('PAIRING JOY-CON: HOLD RAIL SYNC BUTTON...');
+
+    api.sendJoyconRepair(45)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
+        .then(() => {
+            if (btn) btn.style.opacity = '1.0';
+            if (dBtn) dBtn.style.opacity = '1.0';
+        })
+        .catch(err => {
+            if (btn) {
+                btn.style.opacity = '1.0';
+                if (txt) txt.innerText = '❌ PAIRING FAILED';
+                setTimeout(() => {
+                    if (txt) txt.innerText = '🎮 RE-PAIR JOY-CON';
+                    if (sub) sub.innerText = '(HOLD RAIL SYNC)';
+                }, 3000);
+            }
+            if (dBtn) {
+                dBtn.style.opacity = '1.0';
+                dBtn.innerText = 'PAIR';
+            }
+            console.error('Joy-Con repair error:', err);
+        });
+}
+
 export function triggerWifiRestore() {
     ui.setHeaderAlert('RESTORING WI-FI...');
     api.sendWifiRestore().catch(() => {});
@@ -2288,12 +2330,17 @@ function bindEventListeners() {
     const wifiDisableBtn = document.getElementById('wifiDisableBtn');
     const emergencyKillBtn = document.getElementById('emergencyKillBtn');
 
+    const pairJoyconBtn = document.getElementById('pairJoyconBtn');
+    const drawerPairJoyconBtn = document.getElementById('drawerPairJoyconBtn');
+
     if (powerBackBtn) powerBackBtn.addEventListener('click', () => ui.openBackendSubView('main'));
     if (masterDaemonBtn) masterDaemonBtn.addEventListener('click', () => triggerBackendRestart());
     if (wifiRestoreBtn) wifiRestoreBtn.addEventListener('click', () => triggerWifiRestore());
     if (connectHotspotBtn) connectHotspotBtn.addEventListener('click', () => triggerConnectHotspot());
     if (wifiDisableBtn) wifiDisableBtn.addEventListener('click', () => triggerWifiDisable());
     if (emergencyKillBtn) emergencyKillBtn.addEventListener('click', () => triggerEmergencyKillAll());
+    if (pairJoyconBtn) pairJoyconBtn.addEventListener('click', () => triggerJoyconRepair());
+    if (drawerPairJoyconBtn) drawerPairJoyconBtn.addEventListener('click', () => triggerJoyconRepair());
 
     // View 3: Config Management
     const configBackBtn = document.getElementById('configBackBtn');

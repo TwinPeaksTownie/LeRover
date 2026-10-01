@@ -1335,6 +1335,34 @@ export function updateTelemetryUI(data) {
                 badge.innerText = '⚪ DISCONNECTED';
                 badge.style.background = '#222';
                 badge.style.color = '#888';
+        }
+
+        const pairBtn = document.getElementById('pairJoyconBtn');
+        const pairTxt = document.getElementById('pairJoyconBtnText');
+        const pairSub = document.getElementById('pairJoyconBtnSub');
+        const drawerPairBtn = document.getElementById('drawerPairJoyconBtn');
+        const pairingInfo = pkData.pairing;
+
+        if (pairingInfo && pairingInfo.in_progress) {
+            if (pairTxt) pairTxt.innerText = '⌛ PAIRING...';
+            if (pairSub) pairSub.innerText = pairingInfo.status;
+            if (drawerPairBtn) drawerPairBtn.innerText = 'PAIRING...';
+            if (badge) {
+                badge.innerText = `⌛ ${pairingInfo.status}`;
+                badge.style.background = 'rgba(0,153,255,0.2)';
+                badge.style.color = '#00e5ff';
+            }
+        } else {
+            if (pairTxt && pairTxt.innerText !== '⌛ PAIRING...') {
+                if (isPokeballConnected) {
+                    pairTxt.innerText = '🎮 RE-PAIR JOY-CON';
+                    if (pairSub) pairSub.innerText = '(CONNECTED)';
+                    if (drawerPairBtn) drawerPairBtn.innerText = 'RE-PAIR';
+                } else {
+                    pairTxt.innerText = '🎮 PAIR JOY-CON';
+                    if (pairSub) pairSub.innerText = '(HOLD RAIL SYNC)';
+                    if (drawerPairBtn) drawerPairBtn.innerText = 'PAIR';
+                }
             }
         }
 
