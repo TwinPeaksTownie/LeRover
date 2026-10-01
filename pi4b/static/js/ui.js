@@ -1335,6 +1335,7 @@ export function updateTelemetryUI(data) {
                 badge.innerText = '⚪ DISCONNECTED';
                 badge.style.background = '#222';
                 badge.style.color = '#888';
+            }
         }
 
         const pairBtn = document.getElementById('pairJoyconBtn');
