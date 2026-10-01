@@ -6,11 +6,19 @@ Strict Fail-Fast schema compliance: Zero .get(k, default) fallbacks.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 import re
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("so101.listener_app.intent_parser")
+
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+if not CONFIG_PATH.exists():
+    raise FileNotFoundError(f"Missing required ListenerApp config: {CONFIG_PATH}")
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    _CONFIG = json.load(f)
 
 APP_ALIAS_MAP = {
     "teleop": "teleop_app",
@@ -30,20 +38,15 @@ APP_ALIAS_MAP = {
     "voice": "ornith_voice",
 }
 
-POSTURE_COMMANDS = {
-    "stand up": "stand",
-    "stand": "stand",
-    "sit down": "sit",
-    "sit": "sit",
-    "tiptoes": "tiptoes",
-    "tiptoe": "tiptoes",
-    "play dead": "play_dead",
-}
+POSTURE_COMMANDS: Dict[str, str] = _CONFIG["posture_aliases"]
 
 POSTURE_PATTERNS = [
     (re.compile(r"\bstand\s+up\b"), "stand"),
+    (re.compile(r"\bget\s+up\b"), "stand"),
     (re.compile(r"\bsit\s+down\b"), "sit"),
     (re.compile(r"\bplay\s+dead\b"), "play_dead"),
+    (re.compile(r"\bbang\s+(?:(?:youre|your|you\s+are|you)\s+)?dead\b"), "play_dead"),
+    (re.compile(r"\btippy\s+toes?\b"), "tiptoes"),
     (re.compile(r"\btiptoes\b"), "tiptoes"),
     (re.compile(r"\btiptoe\b"), "tiptoes"),
     (re.compile(r"\bstand\b"), "stand"),
@@ -101,7 +104,7 @@ def parse_intent(text: str) -> Dict[str, Any]:
             if alias in target:
                 return {"intent": "SWITCH_APP", "app": canonical, "raw": raw_clean}
 
-    # 3. Exact and Phrase-Contained Physical Posture Commands ('stand up', 'stand', 'sit down', 'sit', 'tiptoes', 'tiptoe', 'play dead')
+    # 3. Exact and Phrase-Contained Physical Posture Commands ('stand up', 'get up', 'stand', 'sit down', 'sit', 'tiptoes', 'tiptoe', 'tippy toes', 'play dead', 'bang youre dead')
     if raw_clean in POSTURE_COMMANDS:
         return {"intent": "POSTURE", "action": POSTURE_COMMANDS[raw_clean], "raw": raw_clean}
 

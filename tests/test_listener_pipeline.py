@@ -121,6 +121,53 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(res_ling4b["intent"], "POSTURE")
         self.assertEqual(res_ling4b["action"], "play_dead")
 
+        # Test "get up" posture mapping (correlates to stand)
+        res_getup = parse_intent("get up")
+        self.assertEqual(res_getup["intent"], "POSTURE")
+        self.assertEqual(res_getup["action"], "stand")
+
+        res_getup_ling = parse_intent("can you get up please")
+        self.assertEqual(res_getup_ling["intent"], "POSTURE")
+        self.assertEqual(res_getup_ling["action"], "stand")
+
+        res_getup_the = parse_intent("the get up the")
+        self.assertEqual(res_getup_the["intent"], "POSTURE")
+        self.assertEqual(res_getup_the["action"], "stand")
+
+        # Test "tippy toes" posture mapping (correlates to tiptoe / tiptoes)
+        res_tippy = parse_intent("tippy toes")
+        self.assertEqual(res_tippy["intent"], "POSTURE")
+        self.assertEqual(res_tippy["action"], "tiptoes")
+
+        res_tippy_sing = parse_intent("tippy toe")
+        self.assertEqual(res_tippy_sing["intent"], "POSTURE")
+        self.assertEqual(res_tippy_sing["action"], "tiptoes")
+
+        res_tippy_ling = parse_intent("please go on tippy toes")
+        self.assertEqual(res_tippy_ling["intent"], "POSTURE")
+        self.assertEqual(res_tippy_ling["action"], "tiptoes")
+
+        # Test "bang you're dead" posture mapping (correlates to play dead)
+        res_bang = parse_intent("bang you're dead")
+        self.assertEqual(res_bang["intent"], "POSTURE")
+        self.assertEqual(res_bang["action"], "play_dead")
+
+        res_bang_noapos = parse_intent("bang youre dead")
+        self.assertEqual(res_bang_noapos["intent"], "POSTURE")
+        self.assertEqual(res_bang_noapos["action"], "play_dead")
+
+        res_bang_your = parse_intent("bang your dead")
+        self.assertEqual(res_bang_your["intent"], "POSTURE")
+        self.assertEqual(res_bang_your["action"], "play_dead")
+
+        res_bang_are = parse_intent("bang you are dead")
+        self.assertEqual(res_bang_are["intent"], "POSTURE")
+        self.assertEqual(res_bang_are["action"], "play_dead")
+
+        res_bang_ling = parse_intent("bang you're dead now")
+        self.assertEqual(res_bang_ling["intent"], "POSTURE")
+        self.assertEqual(res_bang_ling["action"], "play_dead")
+
         # Explicitly verify removed synthetic slop primitives return UNKNOWN
         self.assertEqual(parse_intent("home")["intent"], "UNKNOWN")
         self.assertEqual(parse_intent("center")["intent"], "UNKNOWN")

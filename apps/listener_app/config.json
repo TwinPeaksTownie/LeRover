@@ -57,6 +57,21 @@
     "interpolation_steps": 35,
     "dead_posture": "arch"
   },
+  "posture_aliases": {
+    "stand up": "stand",
+    "get up": "stand",
+    "stand": "stand",
+    "sit down": "sit",
+    "sit": "sit",
+    "tiptoes": "tiptoes",
+    "tiptoe": "tiptoes",
+    "tippy toes": "tiptoes",
+    "tippy toe": "tiptoes",
+    "play dead": "play_dead",
+    "bang youre dead": "play_dead",
+    "bang your dead": "play_dead",
+    "bang you are dead": "play_dead"
+  },
   "network": {
     "pi4b_port": 8082,
     "mac_port": 8086,

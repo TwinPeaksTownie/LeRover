@@ -127,6 +127,9 @@ def load_listener_config() -> Dict[str, Any]:
     _ = float(cfg["motion"]["interpolation_duration_sec"])
     _ = int(cfg["motion"]["interpolation_steps"])
     _ = str(cfg["motion"]["dead_posture"])
+    for alias_k, alias_v in cfg["posture_aliases"].items():
+        _ = str(alias_k)
+        _ = str(alias_v)
     return cfg
 
 
@@ -485,10 +488,15 @@ class ListenerApp(BaseApp):
     def _extract_dynamic_grammar(self) -> List[str]:
         """Extracts dynamic grammar phrases from Beat Bandit manifest and command list."""
         phrases: List[str] = [
-            "stand up", "stand", "sit down", "sit", "tiptoes", "tiptoe", "play dead",
+            "stand up", "get up", "stand", "sit down", "sit",
+            "tiptoes", "tiptoe", "tippy toes", "tippy toe",
+            "play dead", "bang youre dead", "bang your dead", "bang you are dead",
             "down town", "downtown", "macklemore", "sing downtown", "play downtown",
             "dance", "beat bandit", "teleop", "piranha", "exit", "quit"
         ]
+        for alias in self.config["posture_aliases"].keys():
+            if alias not in phrases:
+                phrases.append(alias)
         manifest_path = get_beat_bandit_manifest_path()
         if manifest_path.exists():
             try:
