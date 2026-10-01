@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""tests/test_pokeball_reconnection.py - Unit tests for Poké Ball Plus reconnection engine.
+"""tests/test_pokeball_reconnection.py - Unit tests for Joy-Con HID reconnection and watchdog engine.
 
 Validates:
-1. Fail-fast configuration schema (packet_timeout_sec, scan_timeout_sec, reconnect_delay_sec)
-2. 50 Hz packet inactivity watchdog detection (<1.25s)
-3. Non-destructive BlueZ cleanup (no `bluetoothctl remove`)
-4. Asynchronous scanner and client lifecycle
+1. Fail-fast configuration schema (packet_timeout_sec, reconnect_delay_sec, poll_rate_hz).
+2. Packet arrival tracking and last_seen updates.
+3. HID raw node discovery logic.
 """
 
-import asyncio
 import json
 import os
 import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -24,119 +22,76 @@ sys.path.insert(0, str(REPO_ROOT / "pi4b"))
 sys.path.insert(0, str(REPO_ROOT / "apps"))
 
 import apps.pokeball_app.app as pokeball_module
-from apps.pokeball_app.app import PokeballService, load_pokeball_config
+from apps.pokeball_app.app import PokeballService, load_pokeball_config, load_joycon_calibration
 
 
 class TestPokeballConfigSchema(unittest.TestCase):
-    """Verifies fail-fast schema enforcement for Poké Ball BLE configuration."""
+    """Verifies fail-fast schema enforcement for Joy-Con HID configuration under pokeball_app."""
 
     def test_config_contains_watchdog_keys(self):
         cfg = load_pokeball_config()
-        self.assertIn("packet_timeout_sec", cfg["ble"])
-        self.assertIn("scan_timeout_sec", cfg["ble"])
-        self.assertIn("reconnect_delay_sec", cfg["ble"])
-        self.assertIn("client_connect_timeout_sec", cfg["ble"])
-        self.assertAlmostEqual(cfg["ble"]["packet_timeout_sec"], 5.0)
-        self.assertAlmostEqual(cfg["ble"]["scan_timeout_sec"], 4.0)
-        self.assertAlmostEqual(cfg["ble"]["reconnect_delay_sec"], 0.5)
-        self.assertAlmostEqual(cfg["ble"]["client_connect_timeout_sec"], 10.0)
-        self.assertFalse(cfg["ble"]["remove_device_on_failure"])
+        self.assertIn("packet_timeout_sec", cfg["hardware"])
+        self.assertIn("reconnect_delay_sec", cfg["hardware"])
+        self.assertIn("poll_rate_hz", cfg["hardware"])
+        self.assertAlmostEqual(cfg["hardware"]["packet_timeout_sec"], 4.0)
+        self.assertAlmostEqual(cfg["hardware"]["reconnect_delay_sec"], 1.0)
+        self.assertAlmostEqual(cfg["hardware"]["poll_rate_hz"], 60.0)
 
     def test_fail_fast_on_missing_key(self):
-        with patch.dict(pokeball_module._CONFIG["ble"], {}, clear=False):
+        with patch.dict(pokeball_module._CONFIG["hardware"], {}, clear=False):
             original_cfg = dict(pokeball_module._CONFIG)
             bad_cfg = json.loads(json.dumps(original_cfg))
-            del bad_cfg["ble"]["packet_timeout_sec"]
+            del bad_cfg["hardware"]["packet_timeout_sec"]
 
             with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_cfg))):
                 with self.assertRaises(KeyError):
                     load_pokeball_config()
 
-            bad_cfg_zero = json.loads(json.dumps(original_cfg))
-            bad_cfg_zero["ble"]["client_connect_timeout_sec"] = 0.0
-            with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_cfg_zero))):
-                with self.assertRaises(ValueError):
-                    load_pokeball_config()
-
 
 class TestPokeballWatchdog(unittest.TestCase):
-    """Tests packet arrival tracking and inactivity watchdog timeout."""
+    """Tests packet arrival tracking and telemetry updates."""
 
     def setUp(self):
         self.service = PokeballService(api_url="http://127.0.0.1:8085")
         self.service.logger = MagicMock()
 
-    def test_notification_updates_last_packet_time(self):
-        self.assertEqual(self.service.last_packet_time, 0.0)
+    def test_report_updates_last_seen_and_counter(self):
+        self.assertEqual(self.service.telemetry["packet_count"], 0)
 
-        dummy_packet = bytearray([0x00, 0x00, 0x00, 0x08, 0x80])
-
+        # Create synthetic report 0x30
+        raw = bytearray(49)
+        raw[0] = 0x30
+        raw[2] = 0x80
         t0 = time.time()
-        self.service.notification_handler(None, dummy_packet)
-        self.assertGreaterEqual(self.service.last_packet_time, t0)
-        self.assertEqual(self.service.counter, 1)
+        self.service._process_report_30(bytes(raw))
+
+        self.assertGreaterEqual(self.service.telemetry["last_seen"], t0)
         self.assertEqual(self.service.telemetry["packet_count"], 1)
 
     def test_watchdog_detects_inactivity(self):
-        self.service.last_packet_time = time.time() - (self.service.packet_timeout_sec + 0.5)
-        elapsed = time.time() - self.service.last_packet_time
-        self.assertGreater(elapsed, self.service.packet_timeout_sec)
+        timeout = float(self.service.config["hardware"]["packet_timeout_sec"])
+        self.service.telemetry["last_seen"] = time.time() - (timeout + 0.5)
+        elapsed = time.time() - self.service.telemetry["last_seen"]
+        self.assertGreater(elapsed, timeout)
 
 
-class TestPokeballBlueTCleanup(unittest.TestCase):
-    """Verifies that BlueZ cleanup is non-destructive (no remove command)."""
+class TestPokeballDeviceDiscovery(unittest.TestCase):
+    """Verifies Joy-Con /dev/hidraw node discovery."""
 
     def setUp(self):
         self.service = PokeballService(api_url="http://127.0.0.1:8085")
         self.service.logger = MagicMock()
 
-    @patch("subprocess.run")
-    def test_cleanup_calls_disconnect_only(self, mock_run):
-        self.service._cleanup_bluez_device()
+    @patch("glob.glob")
+    @patch("os.path.exists")
+    @patch("builtins.open", new_callable=unittest.mock.mock_open, read_data="HID_NAME=Joy-Con (R)\nHID_ID=0003:0000057E:00002007:0001\n")
+    def test_device_discovery_identifies_matching_hidraw(self, mock_file, mock_exists, mock_glob):
+        with patch("sys.platform", "linux"):
+            mock_glob.return_value = ["/sys/class/hidraw/hidraw1"]
+            mock_exists.return_value = True
 
-        calls = mock_run.call_args_list
-        self.assertEqual(len(calls), 1)
-        cmd = calls[0][0][0]
-        self.assertEqual(cmd[0], "bluetoothctl")
-        self.assertEqual(cmd[1], "disconnect")
-        self.assertEqual(cmd[2], self.service.mac_address)
-
-        for call in calls:
-            self.assertNotIn("remove", call[0][0])
-
-    @patch("subprocess.run")
-    def test_trust_device_error_propagation(self, mock_run):
-        import subprocess
-        mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["bluetoothctl", "trust", self.service.mac_address])
-
-        with self.assertRaises(subprocess.CalledProcessError):
-            subprocess.run(
-                ["bluetoothctl", "trust", self.service.mac_address],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=True,
-                timeout=3.0,
-            )
-
-
-class TestPokeballReconnectionAsyncLoop(unittest.IsolatedAsyncioTestCase):
-    """Tests the asynchronous BleakScanner presence and connection logic."""
-
-    async def test_scanner_finds_device_and_connects(self):
-        service = PokeballService(api_url="http://127.0.0.1:8085")
-        service.logger = MagicMock()
-
-        mock_device = MagicMock()
-        mock_device.address = service.mac_address
-        mock_device.name = "Pokemon PBP"
-
-        with patch.object(pokeball_module, "BleakScanner") as mock_scanner_cls:
-            mock_scanner_cls.find_device_by_address = AsyncMock(return_value=mock_device)
-
-            found_dev = await pokeball_module.BleakScanner.find_device_by_address(
-                service.mac_address, timeout=service.scan_timeout_sec
-            )
-            self.assertEqual(found_dev, mock_device)
+            dev_path = self.service._find_device_path()
+            self.assertEqual(dev_path, "/dev/hidraw1")
 
 
 if __name__ == '__main__':

@@ -51,10 +51,6 @@ import audio_resolver
 from robot_backend import RobotBackend
 from app_manager import AppManager
 from apps.pokeball_app.app import PokeballService
-try:
-    from apps.joycon_app.app import JoyConService
-except ImportError:
-    JoyConService = None
 from api_server import MasterApiHandler, set_chime_callback, ensure_leader_poller_started
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -1135,13 +1131,9 @@ def main() -> None:
     GLOBAL_BACKEND = RobotBackend(port=serial_port, robot_id="follower")
     GLOBAL_BACKEND.connect()
 
-    # 2. Initialize Joy-Con / Pokeball controller service
-    if JoyConService is not None:
-        logging.info("Initializing JoyConService for Right Joy-Con...")
-        GLOBAL_POKEBALL = JoyConService(backend=GLOBAL_BACKEND)
-    else:
-        logging.info("Initializing PokeballService...")
-        GLOBAL_POKEBALL = PokeballService(backend=GLOBAL_BACKEND)
+    # 2. Initialize Joy-Con controller service (running under pokeball_app package)
+    logging.info("Initializing PokeballService (Right Joy-Con HID driver)...")
+    GLOBAL_POKEBALL = PokeballService(backend=GLOBAL_BACKEND)
     GLOBAL_POKEBALL.start()
 
     # 3. Initialize AppManager & register applications

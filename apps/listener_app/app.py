@@ -936,23 +936,16 @@ class ListenerApp(BaseApp):
                                 self.logger.info("Found Beat Bandit library track '%s' (ID: %s), transitioning to Beat Bandit...", track_title, track_id)
                                 self._play_chime("commit")
                                 if self.app_manager is not None:
-                                    def _launch_bb():
-                                        try:
-                                            self.logger.info("Engaging Beat Bandit app session...")
-                                            ok = self.app_manager.start_app_by_name("beat_bandit_app")
-                                            if not ok:
-                                                self.logger.error("Failed to start beat_bandit_app via AppManager")
-                                                return
-                                            bb_app = self.app_manager.active_app
-                                            if bb_app and hasattr(bb_app, "start_track_by_url_or_id"):
-                                                self.logger.info("Triggering Beat Bandit track playback for '%s'...", track_id)
-                                                robot_backend = self.app_manager.backend
-                                                bb_app.start_track_by_url_or_id(robot_backend, track_id)
-                                            else:
-                                                self.logger.error("Active app is not a valid BeatBanditApp instance")
-                                        except Exception as ex:
-                                            self.logger.error("Beat Bandit launch error: %s", ex, exc_info=True)
-                                    threading.Thread(target=_launch_bb, daemon=True).start()
+                                    def _on_bb_started(bb_app):
+                                        if hasattr(bb_app, "start_track_by_url_or_id"):
+                                            self.logger.info("Triggering Beat Bandit track playback for '%s'...", track_id)
+                                            robot_backend = self.app_manager.backend
+                                            bb_app.start_track_by_url_or_id(robot_backend, track_id)
+                                        else:
+                                            self.logger.error("Active app is not a valid BeatBanditApp instance")
+                                    self.logger.info("Engaging Beat Bandit app session via decoupled switch_app...")
+                                    self.app_manager.switch_app("beat_bandit_app", on_started=_on_bb_started)
+                                    return
                                 self.stop()
                                 return
                             else:

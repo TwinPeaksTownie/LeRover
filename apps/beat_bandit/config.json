@@ -8,9 +8,11 @@
   "dispatch_freq_hz": 50,
   "library_subdir": "library/beat_bandit",
   "double_click_window_sec": 0.45,
+  "lead_in_interpolation_sec": 0.75,
   "homing_speed": 500,
   "chimes": {
-    "app_start": "app_start"
+    "app_start": "app_start",
+    "abort": "ornith_abort_recording"
   },
   "audio_engine": "pygame",
   "audio_driver": "pulse",

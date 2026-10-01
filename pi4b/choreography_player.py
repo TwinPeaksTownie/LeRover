@@ -192,7 +192,7 @@ class ChoreographyPlayer:
             current_s7_rom = 50.0
             last_s8_block_id: Optional[str] = None
 
-            # Pre-roll: Enable torque on arm and pedestal, and center stage
+            # Pre-roll: Enable torque on arm and pedestal, and smoothly transition to canonical stand pose
             if hasattr(self.backend, "set_arm_torque"):
                 try:
                     self.backend.set_arm_torque(True)
@@ -210,8 +210,18 @@ class ChoreographyPlayer:
                 except Exception as ex:
                     logger.debug(f"Ctrl 7 torque enable warning: {ex}")
 
-            if hasattr(self.backend, "dispatch_dance_frame"):
+            # Smooth lead-in ramp: interpolate from physical current angles to canonical stand pose
+            lead_in_sec = 0.75
+            if "lead_in_interpolation_sec" in self.choreo["settings"]:
+                lead_in_sec = float(self.choreo["settings"]["lead_in_interpolation_sec"])
+            if hasattr(self.backend, "interpolate_arm_norm"):
+                try:
+                    self.backend.interpolate_arm_norm(base_home_rom, duration=lead_in_sec, steps=25)
+                except Exception as interp_ex:
+                    logger.debug(f"Lead-in interpolation warning: {interp_ex}")
+            elif hasattr(self.backend, "dispatch_dance_frame"):
                 self.backend.dispatch_dance_frame(base_home_rom, s7_rom=50.0, s8_goal=50.0, s8_is_rom=True)
+
             if self.on_start_audio_callback:
                 self.on_start_audio_callback()
             start_clock = time.time()

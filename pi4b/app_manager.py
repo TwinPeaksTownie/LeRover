@@ -339,6 +339,20 @@ class AppManager:
         if self.current_app_name:
             self.stop_app(self.current_app_name)
 
+    def switch_app(self, target_app_name: str, on_started: Optional[Callable[[BaseApp], None]] = None, **kwargs) -> bool:
+        """Safely stops active app, releases all locks/resources, and starts target app in a decoupled worker thread."""
+        def _transition():
+            try:
+                self.logger.info(f"Decoupled transition from '{self.current_app_name}' to '{target_app_name}'...")
+                self.stop_current_app()
+                ok = self.start_app_by_name(target_app_name, **kwargs)
+                if ok and on_started and self.active_app:
+                    on_started(self.active_app)
+            except Exception as e:
+                self.logger.error(f"switch_app transition error: {e}", exc_info=True)
+        threading.Thread(target=_transition, daemon=True, name=f"AppSwitchWorker-{target_app_name}").start()
+        return True
+
     def stop_all(self) -> None:
         """Stops whatever app is currently active with full thread joining and mutex release."""
         if self.current_app_name:
