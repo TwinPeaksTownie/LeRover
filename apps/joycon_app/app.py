@@ -427,11 +427,13 @@ class JoyConService:
                 time.sleep(reconnect_delay)
                 continue
 
+            was_connected = False
             self.logger.info("Connecting to Joy-Con (R) at %s...", dev_path)
             try:
                 fd = os.open(dev_path, os.O_RDWR)
                 self._init_joycon(fd)
                 self.is_connected = True
+                was_connected = True
                 self.telemetry["connected"] = True
                 self.telemetry["status"] = "CONNECTED"
                 self.write_telemetry()
@@ -457,7 +459,8 @@ class JoyConService:
             self.telemetry["connected"] = False
             self.telemetry["status"] = "DISCONNECTED"
             self.write_telemetry()
-            play_chime(self.config["chimes"]["disconnect"])
+            if was_connected:
+                play_chime(self.config["chimes"]["disconnect"])
             time.sleep(reconnect_delay)
 
     def start(self) -> None:
