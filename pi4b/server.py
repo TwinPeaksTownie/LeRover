@@ -1081,6 +1081,37 @@ class UnifiedHandler(MasterApiHandler):
             play_sound_helper(kind="stop_audio", stop_previous=True)
             stop_tap_detector()
 
+        if path == "/api/joycon/repair":
+            service = None
+            if hasattr(self, "joycon_service") and self.joycon_service:
+                service = self.joycon_service
+            elif hasattr(self, "pokeball_service") and self.pokeball_service:
+                service = self.pokeball_service
+            elif GLOBAL_POKEBALL:
+                service = GLOBAL_POKEBALL
+
+            if service and hasattr(service, "trigger_repair"):
+                timeout_sec = None
+                if "timeout_sec" in req_data:
+                    timeout_sec = int(req_data["timeout_sec"])
+                ok, msg = service.trigger_repair(timeout_sec=timeout_sec)
+                status_code = 200
+                status_text = "ok"
+                if not ok:
+                    status_code = 400
+                    status_text = "error"
+                self.send_response(status_code)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": status_text, "message": msg}).encode('utf-8'))
+                return
+            else:
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": "Joy-Con service unavailable"}).encode('utf-8'))
+                return
+
         # 4. Delegate all standard robot control POST endpoints to MasterApiHandler
         import io
         self.rfile = io.BytesIO(body_bytes)

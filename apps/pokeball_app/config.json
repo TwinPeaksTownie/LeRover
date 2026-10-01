@@ -16,6 +16,11 @@
     "reconnect_delay_sec": 1.0,
     "init_step_delay_sec": 0.05
   },
+  "pairing": {
+    "timeout_sec": 45,
+    "scan_timeout_sec": 10,
+    "auto_remove_stale": true
+  },
   "control": {
     "deadzone": 0.12,
     "speed_step_pct": 5,

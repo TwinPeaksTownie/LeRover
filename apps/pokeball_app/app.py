@@ -102,6 +102,10 @@ def load_pokeball_config() -> dict:
     _ = cfg["chimes"]["speed_down"]
     _ = cfg["chimes"]["chord_abort"]
 
+    _ = int(cfg["pairing"]["timeout_sec"])
+    _ = int(cfg["pairing"]["scan_timeout_sec"])
+    _ = bool(cfg["pairing"]["auto_remove_stale"])
+
     return cfg
 
 
@@ -264,8 +268,14 @@ class PokeballService:
                 "throttle": 0.0,
                 "steering": 0.0,
                 "gated_idle": True
+            },
+            "pairing": {
+                "in_progress": False,
+                "status": "IDLE",
+                "message": ""
             }
         }
+        self.pairing_in_progress = False
         self.write_telemetry()
 
     def write_telemetry(self) -> None:
@@ -336,7 +346,11 @@ class PokeballService:
             report_mode = bytes([0x01, 0x01, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0x03, 0x30])
             os.write(fd, report_mode)
             time.sleep(step_delay)
-            self.logger.info("Initialized Joy-Con (R) into 60Hz 0x30 report mode.")
+            # Subcommand 0x30 (Arg 0x01): Set Player 1 LED solid on rail to stop cycling sync lights
+            report_led = bytes([0x01, 0x02, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0x30, 0x01])
+            os.write(fd, report_led)
+            time.sleep(step_delay)
+            self.logger.info("Initialized Joy-Con (R) into 60Hz 0x30 report mode with Player 1 LED set.")
         except OSError as e:
             self.logger.error("Joy-Con initialization write failure on fd %d: %s", fd, e, exc_info=True)
             raise
@@ -664,6 +678,10 @@ class PokeballService:
                 was_connected = True
                 self.telemetry["connected"] = True
                 self.telemetry["status"] = "CONNECTED"
+                self.telemetry["last_seen"] = time.time()
+                self.zero_calibrated = False
+                self.calib_samples_x.clear()
+                self.calib_samples_y.clear()
                 self.write_telemetry()
                 play_chime(self.config["chimes"]["device_connect"])
 
@@ -684,6 +702,9 @@ class PokeballService:
                 self.logger.warning("Joy-Con communication exception: %s", e)
 
             self.is_connected = False
+            self.is_armed = False
+            if self.rover_ctrl:
+                self.rover_ctrl.set_drive(0.0, 0.0)
             self.telemetry["connected"] = False
             self.telemetry["status"] = "DISCONNECTED"
             self.write_telemetry()
@@ -701,6 +722,47 @@ class PokeballService:
     def stop(self) -> None:
         self.logger.info("Stopping PokeballService...")
         self.stop_event.set()
+
+    def trigger_repair(self, timeout_sec: Optional[int] = None) -> Tuple[bool, str]:
+        """Triggers asynchronous BlueZ pairing worker."""
+        if self.pairing_in_progress:
+            return False, "Pairing already in progress"
+        self.pairing_in_progress = True
+        self.telemetry["pairing"]["in_progress"] = True
+        self.telemetry["pairing"]["status"] = "Preparing pairing..."
+        self.telemetry["pairing"]["message"] = ""
+        self.write_telemetry()
+
+        def _worker():
+            try:
+                try:
+                    from .pair_bluez import pair_joycon
+                except ImportError:
+                    from apps.joycon_app.pair_bluez import pair_joycon
+
+                def _prog(msg: str):
+                    self.telemetry["pairing"]["status"] = msg
+                    self.write_telemetry()
+
+                ok, msg = pair_joycon(mac=self.mac_address, timeout_sec=timeout_sec, status_cb=_prog)
+                self.telemetry["pairing"]["in_progress"] = False
+                final_status = "Connected"
+                if not ok:
+                    final_status = "Failed"
+                self.telemetry["pairing"]["status"] = final_status
+                self.telemetry["pairing"]["message"] = msg
+                self.pairing_in_progress = False
+                self.write_telemetry()
+            except Exception as e:
+                self.logger.exception("Error during pairing worker: %s", e)
+                self.telemetry["pairing"]["in_progress"] = False
+                self.telemetry["pairing"]["status"] = "Error"
+                self.telemetry["pairing"]["message"] = str(e)
+                self.pairing_in_progress = False
+                self.write_telemetry()
+
+        threading.Thread(target=_worker, daemon=True, name="PokeballPairingWorker").start()
+        return True, "Pairing worker started"
 
 
 class PokeballApp(BaseApp):

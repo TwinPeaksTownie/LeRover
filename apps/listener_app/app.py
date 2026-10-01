@@ -627,6 +627,7 @@ class ListenerApp(BaseApp):
                     self.logger.info("Stop or abort signaled while in IDLE. Exiting ListenerApp...")
                     break
 
+                pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
                 attempt = 0
                 command_executed = False
                 turn_success = False

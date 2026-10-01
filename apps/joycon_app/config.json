@@ -21,6 +21,11 @@
     "sound_api_url": "http://127.0.0.1:8082/api/play_sound",
     "sound_api_timeout_sec": 1.5
   },
+  "pairing": {
+    "timeout_sec": 45,
+    "scan_timeout_sec": 10,
+    "auto_remove_stale": true
+  },
   "control": {
     "deadzone": 0.10,
     "speed_step_pct": 5,

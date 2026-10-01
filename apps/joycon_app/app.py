@@ -85,6 +85,9 @@ def load_joycon_config() -> Dict[str, Any]:
     _ = cfg["chimes"]["arm_rover"]
     _ = cfg["chimes"]["speed_up"]
     _ = cfg["chimes"]["speed_down"]
+    _ = int(cfg["pairing"]["timeout_sec"])
+    _ = int(cfg["pairing"]["scan_timeout_sec"])
+    _ = bool(cfg["pairing"]["auto_remove_stale"])
     return cfg
 
 
@@ -213,8 +216,14 @@ class JoyConService:
                 "throttle": 0.0,
                 "steering": 0.0,
                 "gated_idle": True
+            },
+            "pairing": {
+                "in_progress": False,
+                "status": "IDLE",
+                "message": ""
             }
         }
+        self.pairing_in_progress = False
         self.write_telemetry()
 
     def write_telemetry(self) -> None:
@@ -475,6 +484,47 @@ class JoyConService:
         if self.rover_ctrl:
             self.rover_ctrl.set_drive(0.0, 0.0)
         self.logger.info("JoyConService stopped.")
+
+    def trigger_repair(self, timeout_sec: Optional[int] = None) -> Tuple[bool, str]:
+        """Triggers asynchronous BlueZ pairing worker."""
+        if self.pairing_in_progress:
+            return False, "Pairing already in progress"
+        self.pairing_in_progress = True
+        self.telemetry["pairing"]["in_progress"] = True
+        self.telemetry["pairing"]["status"] = "Preparing pairing..."
+        self.telemetry["pairing"]["message"] = ""
+        self.write_telemetry()
+
+        def _worker():
+            try:
+                try:
+                    from .pair_bluez import pair_joycon
+                except ImportError:
+                    from pair_bluez import pair_joycon
+
+                def _prog(msg: str):
+                    self.telemetry["pairing"]["status"] = msg
+                    self.write_telemetry()
+
+                ok, msg = pair_joycon(mac=self.mac_address, timeout_sec=timeout_sec, status_cb=_prog)
+                self.telemetry["pairing"]["in_progress"] = False
+                final_status = "Connected"
+                if not ok:
+                    final_status = "Failed"
+                self.telemetry["pairing"]["status"] = final_status
+                self.telemetry["pairing"]["message"] = msg
+                self.pairing_in_progress = False
+                self.write_telemetry()
+            except Exception as e:
+                self.logger.exception("Error during pairing worker: %s", e)
+                self.telemetry["pairing"]["in_progress"] = False
+                self.telemetry["pairing"]["status"] = "Error"
+                self.telemetry["pairing"]["message"] = str(e)
+                self.pairing_in_progress = False
+                self.write_telemetry()
+
+        threading.Thread(target=_worker, daemon=True, name="JoyConPairingWorker").start()
+        return True, "Pairing worker started"
 
 
 class JoyConApp(BaseApp):
