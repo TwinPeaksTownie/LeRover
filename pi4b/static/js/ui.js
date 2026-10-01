@@ -1304,7 +1304,7 @@ export function updateTelemetryUI(data) {
     setIsPokeballConnected(!!pkData.connected);
     const pkTelem = pkData.telemetry || (ht.pokeball);
 
-    setIsMasterDaemonRunning(!!data.daemon_running);
+    setIsMasterDaemonRunning(!!data.backend_online);
 
     // Parse Pokeball Live Telemetry
     if (pkTelem || pkData) {
@@ -1560,16 +1560,19 @@ export function updateTelemetryUI(data) {
 
     if (pStatus) {
         let pStatusHtml = '';
-        const isBackendUp = !!(data.backend_online !== undefined ? data.backend_online : data.daemon_running);
+        const isDaemonUp = !!data.daemon_running;
+        const isRobotUp = !!data.backend_online;
+        const daemonBadge = isDaemonUp ? '<span style="color:#00ff66;">DAEMON: ACTIVE</span>' : '<span style="color:#ff3344;">DAEMON: OFFLINE</span>';
+        const robotBadge = isRobotUp ? '<span style="color:#00ff66;">ROBOT: ACTIVE</span>' : '<span style="color:#ff3344;">ROBOT: OFFLINE</span>';
         const volt = (ht.bus_voltage !== undefined) ? ht.bus_voltage.toFixed(1) + 'V' : '--V';
         const pogoState = (ht.pogo_connected) ? 'POGO: OK' : 'POGO: DISC';
 
-        if (isBackendUp) {
-            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | BACKEND: ACTIVE | 12V: ${volt} | ${pogoState}`;
+        if (isRobotUp) {
+            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | ${daemonBadge} | ${robotBadge} | 12V: ${volt} | ${pogoState}`;
             pStatus.style.color = ht.pogo_connected ? '#00ff66' : '#00e5ff';
         } else {
-            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | <span style="color:#ff3344;">BACKEND: OFFLINE</span>`;
-            pStatus.style.color = '#ffaa00';
+            pStatusHtml = `HOST: PI 4B [${hostIp}] | ${modeBadge} | ${daemonBadge} | ${robotBadge}`;
+            pStatus.style.color = isDaemonUp ? '#00e5ff' : '#ffaa00';
         }
         if (lastRenderedPowerText !== pStatusHtml) {
             setLastRenderedPowerText(pStatusHtml);

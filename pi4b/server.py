@@ -149,6 +149,7 @@ def load_ui_config() -> Dict[str, Any]:
     _ = cfg["carousel_app_index"]
     _ = cfg["config_step_pct"]
     _ = cfg["selected_config_var"]
+    _ = str(cfg["startup_chime"])
     return cfg
 
 def save_ui_config(cfg: Dict[str, Any]) -> None:
@@ -163,6 +164,7 @@ def save_ui_config(cfg: Dict[str, Any]) -> None:
     _ = cfg["carousel_app_index"]
     _ = cfg["config_step_pct"]
     _ = cfg["selected_config_var"]
+    _ = str(cfg["startup_chime"])
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
 
@@ -1208,6 +1210,11 @@ def main() -> None:
     # 7. Start Touch UI Server on Port 8082
     server_8082 = ReuseTCPServer(("", PORT_TOUCH_UI), UnifiedHandler)
     logging.info(f"Touch UI Server active on port {PORT_TOUCH_UI}")
+
+    # 8. Dispatch daemon startup announcement chime once servers are successfully bound
+    startup_event = str(UI_CONFIG["startup_chime"])
+    play_sound_helper(event=startup_event, stop_previous=True)
+    logging.info(f"Dispatched daemon startup announcement chime: {startup_event}")
 
     shutdown_event = threading.Event()
 

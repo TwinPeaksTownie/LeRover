@@ -9,5 +9,6 @@
   "launcher_mode": "carousel",
   "carousel_app_index": 0,
   "config_step_pct": 5,
-  "selected_config_var": "volume_pct"
+  "selected_config_var": "volume_pct",
+  "startup_chime": "smw_blargg"
 }
