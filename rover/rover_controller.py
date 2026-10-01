@@ -53,6 +53,9 @@ def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             _ = cfg["control"]["accel_ramp_rate"]
             _ = cfg["control"]["watchdog_timeout_sec"]
             _ = cfg["control"]["steering_trim"]
+            _ = cfg["control"]["speed_step_pct"]
+            _ = cfg["control"]["min_speed_pct"]
+            _ = cfg["control"]["max_speed_pct_limit"]
             _ = cfg["control"]["loop_rate_hz"]
             _ = bool(cfg["watchdog"]["auto_recover_stalls"])
             _ = float(cfg["watchdog"]["stall_timeout_sec"])
@@ -87,9 +90,13 @@ class RoverController:
         self.min_pulse_us = int(self.config["pwm"]["min_pulse_us"])
         self.max_pulse_us = int(self.config["pwm"]["max_pulse_us"])
         self.max_pulse_offset = int(self.config["pwm"]["max_pulse_offset"])
+        self.max_speed_pct = int(self.config["pwm"]["max_speed_pct"])
         self.accel_ramp_rate = float(self.config["control"]["accel_ramp_rate"])
         self.watchdog_timeout = float(self.config["control"]["watchdog_timeout_sec"])
         self.steering_trim = float(self.config["control"]["steering_trim"])
+        self.speed_step_pct = int(self.config["control"]["speed_step_pct"])
+        self.min_speed_pct = int(self.config["control"]["min_speed_pct"])
+        self.max_speed_pct_limit = int(self.config["control"]["max_speed_pct_limit"])
         self.loop_rate_hz = float(self.config["control"]["loop_rate_hz"])
         self.assert_dtr = bool(self.config["hardware_interface"]["assert_dtr"])
         self.assert_rts = bool(self.config["hardware_interface"]["assert_rts"])
@@ -130,6 +137,8 @@ class RoverController:
             "left_out": self.neutral_pulse_us,
             "right_out": self.neutral_pulse_us,
             "steering_trim": self.steering_trim,
+            "max_speed_pct": self.max_speed_pct,
+            "max_pulse_offset": self.max_pulse_offset,
             "sbus_active": 0,
             "web_active": 0,
             "ch1": 1000,
@@ -233,11 +242,28 @@ class RoverController:
             self._worker_thread.join(timeout=1.5)
         logger.info("RoverController shut down.")
 
-    def set_drive(self, x: float, y: float) -> None:
-        """Sets normalized joystick drive inputs (x=steering [-1.0..1.0], y=throttle [-1.0..1.0])."""
+    def adjust_speed_pct(self, delta_pct: int) -> int:
+        """Adjusts maximum speed cap by delta_pct in memory, clamping between min and max limits."""
+        with self._lock:
+            new_pct = max(self.min_speed_pct, min(self.max_speed_pct_limit, self.max_speed_pct + int(delta_pct)))
+            self.max_speed_pct = new_pct
+            self.max_pulse_offset = int(500 * (new_pct / 100.0))
+            self.telemetry["max_speed_pct"] = self.max_speed_pct
+            self.telemetry["max_pulse_offset"] = self.max_pulse_offset
+            logger.info("RoverController adjusted speed: %d%% (pulse offset %d us)", self.max_speed_pct, self.max_pulse_offset)
+            return self.max_speed_pct
+
+    def set_drive(self, x: float, y: float, enforce_throttle_gate: bool = False) -> None:
+        """Sets normalized joystick drive inputs (x=steering [-1.0..1.0], y=throttle [-1.0..1.0]).
+        If enforce_throttle_gate is True, steering is suppressed to 0.0 when throttle is idle (|y| < 0.01).
+        """
         # Clamp inputs
         x_clamped = max(-1.0, min(1.0, float(x)))
         y_clamped = max(-1.0, min(1.0, float(y)))
+
+        if enforce_throttle_gate and abs(y_clamped) < 0.01:
+            x_clamped = 0.0
+            y_clamped = 0.0
 
         with self._lock:
             self._target_x = x_clamped
@@ -343,8 +369,8 @@ class RoverController:
                     logger.warning("Serial read error on %s: %s", self.serial_port, e)
                     try:
                         ser.close()
-                    except Exception:
-                        pass
+                    except Exception as close_err:
+                        logger.debug("Error closing serial port after read failure: %s", close_err)
                     ser = None
 
             # 2. Kinematics & Arcade Drive Mixing
@@ -418,8 +444,8 @@ class RoverController:
             elif self.mock_mode and self._mock_packet_sink:
                 try:
                     self._mock_packet_sink(cmd_str, left_pulse, right_pulse)
-                except Exception:
-                    pass
+                except Exception as sink_err:
+                    logger.debug("Mock packet sink callback error: %s", sink_err)
 
             # Target loop rate from configuration
             elapsed = time.time() - loop_start
@@ -432,8 +458,8 @@ class RoverController:
                 neutral_cmd = f"CMD:{self.neutral_pulse_us},{self.neutral_pulse_us},{self.neutral_pulse_us},0\n"
                 ser.write(neutral_cmd.encode('utf-8'))
                 ser.close()
-            except Exception:
-                pass
+            except Exception as close_err:
+                logger.debug("Error during shutdown serial close: %s", close_err)
 
     def _parse_stat_line(self, line: str) -> None:
         """Parses telemetry feedback string from KB2040."""
@@ -455,5 +481,5 @@ class RoverController:
                     if len(parts) > 8:
                         self.telemetry["distance"] = int(parts[8])
                     self.telemetry["last_seen"] = time.time()
-        except Exception:
-            pass
+        except Exception as parse_err:
+            logger.debug("STAT line parse warning: %s", parse_err)

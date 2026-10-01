@@ -158,7 +158,9 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             "button_a": False,
             "button_b": False,
         }
-        if hasattr(cls.app_manager, "pokeball_service") and cls.app_manager.pokeball_service:
+        if hasattr(cls.app_manager, "joycon_service") and cls.app_manager.joycon_service:
+            pokeball_data = cls.app_manager.joycon_service.get_telemetry()
+        elif hasattr(cls.app_manager, "pokeball_service") and cls.app_manager.pokeball_service:
             pokeball_data = cls.app_manager.pokeball_service.get_telemetry()
 
         follower_pid = ""

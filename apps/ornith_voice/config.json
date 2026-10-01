@@ -32,7 +32,7 @@
     "nim_url": "https://integrate.api.nvidia.com/v1/chat/completions",
     "max_tokens": 16384,
     "temperature": 0.2,
-    "reasoning_effort": null,
+    "reasoning_effort": "low",
     "default_speak_verdict": true,
     "max_diff_chars": 12000,
     "uncommitted_fallback_commits": 4,
@@ -47,9 +47,9 @@
       "nim": {
         "url": "https://integrate.api.nvidia.com/v1/chat/completions",
         "model": "nvidia/nemotron-3-super-120b-a12b",
-        "max_tokens": 4096,
+        "max_tokens": 16384,
         "temperature": 0.2,
-        "reasoning_effort": null,
+        "reasoning_effort": "low",
         "seed": 0
       }
     }

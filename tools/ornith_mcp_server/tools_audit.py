@@ -941,6 +941,8 @@ def query_ornith_for_plan_review(
     directives = get_operator_directives(brain_dir=brain_dir)
     if directives:
         directives_formatted = "\n".join(f"Turn {d['step_index']}: {d['text']}" for d in directives)
+        if task_summary:
+            directives_formatted += f"\n\nContext & Extended Operator Directives:\n{task_summary}"
     elif task_summary:
         directives_formatted = task_summary
     else:
@@ -1063,6 +1065,8 @@ Evaluate this implementation plan against the operator directives and strict rul
         reasoning = str(data["choices"][0]["message"].get("reasoning_content", ""))
         if not content and reasoning:
             content = reasoning
+
+    _log_debug(f"=== PLAN AUDIT RAW OUTPUT ===\nContent: {content}\nReasoning preview: {reasoning[:200]}\n========================")
 
     verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', content, re.IGNORECASE)
     if verdict_match:

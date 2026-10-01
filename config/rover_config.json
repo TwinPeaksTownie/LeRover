@@ -9,7 +9,10 @@
   "control": {
     "accel_ramp_rate": 0.20,
     "watchdog_timeout_sec": 1.0,
-    "steering_trim": 0.0,
+    "steering_trim": 0.05,
+    "speed_step_pct": 5,
+    "min_speed_pct": 0,
+    "max_speed_pct_limit": 100,
     "loop_rate_hz": 25
   },
   "hardware_interface": {

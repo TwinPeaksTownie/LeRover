@@ -1,0 +1,45 @@
+{
+  "name": "joycon_teleop_app",
+  "title": "Joy-Con Teleop",
+  "description": "Nintendo Switch Right Joy-Con teleoperation for Overlander-4 rover and aux actuators",
+  "version": "1.0.0",
+  "icon": "🎮",
+  "tags": ["teleop", "joycon", "rover", "aux"],
+  "hardware": {
+    "vendor_id": 1406,
+    "product_ids": {
+      "joycon_r": 8199
+    },
+    "mac_address": "5C:52:1E:1C:53:82",
+    "poll_rate_hz": 60,
+    "packet_timeout_sec": 4.0,
+    "reconnect_delay_sec": 1.0,
+    "init_step_delay_sec": 0.02,
+    "telemetry_file": "/tmp/joycon_telemetry.json"
+  },
+  "network": {
+    "sound_api_url": "http://127.0.0.1:8082/api/play_sound",
+    "sound_api_timeout_sec": 1.5
+  },
+  "control": {
+    "deadzone": 0.10,
+    "speed_step_pct": 5,
+    "auto_zero_samples": 30,
+    "gantry_step_ticks": 500,
+    "aux_lock_duration_sec": 0.6
+  },
+  "gestures": {
+    "chord_abort_sec": 1.0,
+    "b_hold_sec": 3.0,
+    "b_double_tap_sec": 0.40,
+    "a_hold_sec": 1.5
+  },
+  "chimes": {
+    "app_start": "app_start",
+    "device_connect": "device_connect",
+    "disconnect": "disconnect",
+    "arm_rover": "rover_arm_drivetrain",
+    "speed_up": "mode_switch_rover",
+    "speed_down": "mode_switch_aux"
+  }
+}

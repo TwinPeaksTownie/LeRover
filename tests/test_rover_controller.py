@@ -20,6 +20,7 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.config_path = str(REPO_ROOT / "config" / "rover_config.json")
         self.controller = RoverController(config_path=self.config_path, mock_mode=True)
         self.controller.accel_ramp_rate = 1.0  # Instant response for deterministic unit testing
+        self.controller.steering_trim = 0.0    # Baseline kinematics testing without trim bias
         self.controller.start()
 
     def tearDown(self):
@@ -73,6 +74,29 @@ class TestRoverControllerKinematics(unittest.TestCase):
         telem = self.controller.get_telemetry()
         self.assertLess(telem["left_pulse"], 1500, "Left motor must drive reverse (<1500) on left turn")
         self.assertLess(telem["right_pulse"], 1500, "Right motor must drive forward (<1500) on left turn")
+
+    def test_steering_trim_compensation(self):
+        """Positive steering trim must bias right motor slower to counter left drift."""
+        self.controller.set_steering_trim(0.05)
+        self.controller.set_drive(0.0, 1.0)
+        time.sleep(0.1)
+        telem = self.controller.get_telemetry()
+        self.assertEqual(telem["left_pulse"], 1675)
+        self.assertEqual(telem["right_pulse"], 1334)
+
+    def test_speed_step_adjustment(self):
+        """adjust_speed_pct must step max_speed_pct and update max_pulse_offset atomically."""
+        new_speed = self.controller.adjust_speed_pct(5)
+        self.assertEqual(new_speed, 40)
+        self.assertEqual(self.controller.max_pulse_offset, 200)
+
+    def test_throttle_gated_steering(self):
+        """When enforce_throttle_gate is True and throttle is 0, steering must not move wheels."""
+        self.controller.set_drive(1.0, 0.0, enforce_throttle_gate=True)
+        time.sleep(0.1)
+        telem = self.controller.get_telemetry()
+        self.assertEqual(telem["left_pulse"], 1500)
+        self.assertEqual(telem["right_pulse"], 1500)
 
 
 if __name__ == "__main__":

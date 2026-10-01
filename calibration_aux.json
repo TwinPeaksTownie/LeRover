@@ -15,6 +15,14 @@
     "min_raw": 0,
     "max_raw": 4095
   },
+  "joycon_joystick": {
+    "center_x": 2048,
+    "center_y": 2048,
+    "span_x": 1400,
+    "span_y": 1400,
+    "min_calib_raw": 1200,
+    "max_calib_raw": 2800
+  },
   "clack_detector": {
     "min_threshold": 1000,
     "max_threshold": 10000
