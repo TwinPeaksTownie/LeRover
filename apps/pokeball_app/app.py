@@ -229,6 +229,7 @@ class PokeballService:
         self.chord_suppress_until = 0.0
 
         self.last_btn_b = False
+        self.last_btn_y = False
         self.last_btn_sr = False
         self.last_btn_sl = False
         self.last_x_direction = "center"
@@ -498,6 +499,27 @@ class PokeballService:
             self.last_btn_a_listener = btn_a
         else:
             self.last_btn_a_listener = False
+
+        # ---------------------------------------------------------------------
+        # 0. BUTTON Y GESTURE: UNIVERSAL EMERGENCY STOP_APP
+        # ---------------------------------------------------------------------
+        if btn_y and not self.last_btn_y:
+            self.logger.info("🛑 [BUTTON Y CLICK] Universal STOP_APP triggered!")
+            if self.app_manager:
+                curr_app = self.app_manager.current_app_name
+                if curr_app:
+                    self.logger.info("Stopping active app '%s' via Button Y...", curr_app)
+                    try:
+                        self.app_manager.stop_app(curr_app)
+                    except Exception as ex:
+                        self.logger.error("Error stopping app '%s' on Button Y: %s", curr_app, ex)
+            self.control_mode = "ROVER"
+            self.teleop_enabled = False
+            self.is_armed = False
+            if self.rover_ctrl:
+                self.rover_ctrl.set_drive(0.0, 0.0)
+            play_chime(self.config["chimes"]["app_exit_idle"])
+        self.last_btn_y = btn_y
 
         a_hold_sec = float(self.config["gestures"]["a_hold_sec"])
         b_hold_sec = float(self.config["gestures"]["b_hold_sec"])

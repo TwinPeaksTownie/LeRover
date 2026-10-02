@@ -235,9 +235,9 @@ class AudioTapDetector:
                     headers={"Content-Type": "application/json"},
                 )
                 with urllib.request.urlopen(req, timeout=1.5) as resp:
-                    logging.info("Dispatched 1-snap torque disarm to Pi 500: status=%s", resp.status)
+                    logging.info("Dispatched 1-snap torque disarm to master backend: status=%s", resp.status)
             except Exception as e:
-                logging.error("Failed to dispatch 1-snap torque disarm to Pi 500: %s", e)
+                logging.error("Failed to dispatch 1-snap torque disarm to master backend: %s", e)
 
         elif count == 2:
             # 2 Snaps: Capture live pose to runtime memory variable & re-engage torque
@@ -255,7 +255,7 @@ class AudioTapDetector:
                     res_data = json.loads(resp.read().decode("utf-8"))
                     logging.info("Dispatched 2-snap temporary pose capture: result=%s", res_data)
             except Exception as e:
-                logging.error("Failed to dispatch 2-snap pose capture to Pi 500: %s", e)
+                logging.error("Failed to dispatch 2-snap pose capture to master backend: %s", e)
 
         elif count == 3:
             # 3 Snaps: Fast resume (1.0s) to last_saved_position
@@ -272,9 +272,9 @@ class AudioTapDetector:
                 )
                 with urllib.request.urlopen(req, timeout=3.5) as resp:
                     res_data = json.loads(resp.read().decode("utf-8"))
-                    logging.info("Dispatched 3-snap fast resume to Pi 500: result=%s", res_data)
+                    logging.info("Dispatched 3-snap fast resume to master backend: result=%s", res_data)
             except Exception as e:
-                logging.error("Failed to dispatch 3-snap resume to Pi 500: %s", e)
+                logging.error("Failed to dispatch 3-snap resume to master backend: %s", e)
 
         else:
             # 4+ Snaps: Piranha Plant Attack Sequence (Mute for 12.0s to cover the full choreography + roar)
@@ -290,9 +290,9 @@ class AudioTapDetector:
                 )
                 with urllib.request.urlopen(req, timeout=3.5) as resp:
                     res_data = json.loads(resp.read().decode("utf-8"))
-                    logging.info("Dispatched 4-snap attack sequence to Pi 500: result=%s", res_data)
+                    logging.info("Dispatched 4-snap attack sequence to master backend: result=%s", res_data)
             except Exception as e:
-                logging.error("Failed to dispatch 4-snap attack sequence to Pi 500: %s", e)
+                logging.error("Failed to dispatch 4-snap attack sequence to master backend: %s", e)
 
         with self._lock:
             self._last_action = f"{count}_taps_dispatched"

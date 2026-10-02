@@ -28,7 +28,7 @@
 ### 5. Mandatory Verification State Machine & Two-Gate Review
 Every task must transition sequentially through two audit gates and four verification states:
 - **Gate 1 (Build Plan Audit - Pre-Execution)**: Ornith audits `implementation_plan.md` against chronological operator directives for Rule 13 (Anti-Slop / False Tri-States), Rule 1 (Fail-Fast), and Rule 3 (Dynamic Calibration). Physical deployment checks are disabled (`check_deployments=False`).
-- **State 1 (Pipeline Continuity & Target Deployment)**: Trace pipeline continuity, sync modified files to physical target directory (`/home/user/so101/pi500/` or `/home/carson/touch_ui/`), and restart host processes.
+- **State 1 (Pipeline Continuity & Target Deployment)**: Trace pipeline continuity, sync modified files to physical target directory (`/home/carson/touch_ui/` on Pi 4B), and restart host processes.
 - **State 2 (Dynamic Variance & Motion Cycle)**: Execute a complete bidirectional motion/workload cycle ($Origin \rightarrow Target\,A \rightarrow Target\,B \rightarrow Origin$) under live application conditions, verifying target coordinates dynamically vary across timestamps.
 - **State 3 (Live Telemetry & Physical Sampling)**: Sample live encoder telemetry and socket streams across checkpoints (e.g. 5s, 25s, 50s) to prove physical servos reached commanded coordinates without serial timeouts.
 - **State 4 (Log Audit & Hardware Parity)**: Query daemon logs (`journalctl`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
@@ -50,7 +50,7 @@ Every task must transition sequentially through two audit gates and four verific
 - When serial timeouts occur on `/dev/ttyACM0`, check process locks and query downstream devices to verify electrical pass-through continuity.
 
 ### 4. Target Deployment Protocol
-- Sync modified files to the target devices (`/home/user/so101/pi500/` on Pi 500 or `/home/carson/touch_ui/` on Pi 4B) immediately after local edits.
+- Sync modified files to the target device (`/home/carson/touch_ui/` on Pi 4B) immediately after local edits.
 - Restart target services (`backend.service`, `touchscreen.service`) and verify endpoint status before declaring a fix deployed.
 
 ### 5. Remote Process Management
@@ -81,10 +81,10 @@ Every task must transition sequentially through two audit gates and four verific
 ### Entity Mapping
 - **I**: The AI assistant taking actions.
 - **You**: The human operator and architect.
-- **Pi 500 (`192.168.0.130`)**: Follower arm driver & teleop host on `/dev/ttyACM0` (external 12V power).
-- **Pi 4B (`192.168.0.86`)**: Touchscreen UI backend (`backend.service` on port `8082` at `/home/carson/touch_ui/server.py`) and physical display client (`touchscreen.service`).
+- **Pi 4B (`192.168.0.86`)**: Standalone master robot controller (`STANDALONE_PI4B`) hosting `backend.service` on port `8082` (`/home/carson/touch_ui/server.py`), direct serial bus board `/dev/ttyACM0` (external 12V power for servos 1–8), onboard audio/speech pipeline, and physical display client (`touchscreen.service`).
 - **Mac Mini (`192.168.0.149` / `mac-mini.local`)**: Leader arm telemetry API host (`8086`) and neural audio analysis server.
-- **Follower Arm / Servos 1–8**: Physical 6-DOF arm and auxiliary actuators.
+- **Nintendo Switch Right Joy-Con (R)**: Handheld wireless teleoperation and app trigger controller (replaces decommissioned Pokéball Plus).
+- **Follower Arm / Servos 1–8**: Physical 6-DOF arm and auxiliary actuators (Pedestal 7 and Gantry 8).
 
 ### Active Goal
 - **Synchronized Range-Normalized Teleoperation & Choreography**: Calibrate and align leader and follower arms using normalized percentage mapping derived from empirical joint calibration bounds and midpoints.

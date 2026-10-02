@@ -93,5 +93,32 @@
     "pi500_user": "user",
     "pi4b_user": "carson",
     "mac_user": "twinpeakstownie"
+  },
+  "deployment": {
+    "default_node": "pi4b",
+    "target_nodes": {
+      "pi4b": {
+        "host": "192.168.0.86",
+        "port": 22,
+        "username": "carson",
+        "key_path": "C:\\Users\\carso\\.ssh\\id_ed25519",
+        "connect_timeout_sec": 10,
+        "banner_timeout_sec": 15,
+        "max_retries": 3,
+        "retry_backoff_sec": 2,
+        "remote_base_dir": "/home/carson",
+        "path_mappings": {
+          "pi4b": "/home/carson/touch_ui",
+          "apps": "/home/carson/aux_servo_interface/apps",
+          "config": "/home/carson/touch_ui/config",
+          "library": "/home/carson/so101/library"
+        },
+        "services": {
+          "backend": "backend.service",
+          "touchscreen": "touchscreen.service",
+          "touch_ui": "touch-ui.service"
+        }
+      }
+    }
   }
 }

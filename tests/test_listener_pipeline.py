@@ -541,6 +541,101 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertIn(str(app.config["network"]["vosk_websocket_port"]), ws_url)
         self.assertIn(str(app.config["network"]["vosk_server_port"]), recognize_url)
 
+    def test_vad_rms_energy_calculation(self):
+        from apps.listener_app.audio_client import VoiceActivityDetector
+        import struct
+
+        # 1. Zero PCM -> 0 RMS
+        zero_pcm = b"\x00" * 2560
+        self.assertEqual(VoiceActivityDetector.calculate_frame_energy(zero_pcm), 0)
+
+        # 2. Low noise (amplitude 60) -> RMS ~ 60 (< 450 threshold)
+        low_pcm = struct.pack("1280h", *([60] * 1280))
+        self.assertLess(VoiceActivityDetector.calculate_frame_energy(low_pcm), 200)
+
+        # 3. High speech energy (amplitude 4000) -> RMS ~ 4000 (> 450 threshold)
+        loud_pcm = struct.pack("1280h", *([4000] * 1280))
+        self.assertGreater(VoiceActivityDetector.calculate_frame_energy(loud_pcm), 450)
+
+    def test_vad_speech_onset_and_subsecond_endpointing(self):
+        """Verifies VAD triggers onset on loud frames and endpoints immediately upon silence without waiting 10s."""
+        import struct
+        import time
+        from unittest.mock import MagicMock
+        from apps.listener_app.audio_client import VoiceActivityDetector
+
+        cfg = load_listener_config()
+        cfg["vad"]["post_speech_silence_sec"] = 0.05
+        cfg["vad"]["min_record_sec"] = 0.02
+        cfg["vad"]["max_record_sec"] = 5.0
+        cfg["vad"]["silence_timeout_sec"] = 1.0
+        vad = VoiceActivityDetector(cfg)
+
+        silence_chunk = b"\x00" * 2560
+        loud_chunk = struct.pack("1280h", *([3000] * 1280))
+
+        # Stream sequence: 2 silence -> 3 loud -> continuous silence
+        stream_chunks = [silence_chunk, silence_chunk, loud_chunk, loud_chunk, loud_chunk] + [silence_chunk] * 20
+        mock_stream = MagicMock()
+        mock_stream.read.side_effect = stream_chunks
+
+        pushed_chunks = []
+        speech_started = []
+
+        t0 = time.time()
+        success = vad.capture_utterance(
+            stream_resp=mock_stream,
+            on_chunk=lambda c: pushed_chunks.append(c),
+            on_speech_start=lambda: speech_started.append(True),
+        )
+        elapsed = time.time() - t0
+
+        self.assertTrue(success)
+        self.assertEqual(len(speech_started), 1)
+        self.assertGreater(len(pushed_chunks), 0)
+        # Proves sub-second dynamic endpointing: elapsed is well below the 5.0s max_record_sec
+        self.assertLess(elapsed, 1.0)
+
+    def test_vad_silence_timeout_when_no_speech(self):
+        """Verifies VAD returns False when silence timeout expires without speech."""
+        from unittest.mock import MagicMock
+        from apps.listener_app.audio_client import VoiceActivityDetector
+
+        cfg = load_listener_config()
+        cfg["vad"]["silence_timeout_sec"] = 0.05
+        vad = VoiceActivityDetector(cfg)
+
+        mock_stream = MagicMock()
+        mock_stream.read.return_value = b"\x00" * 2560
+
+        success = vad.capture_utterance(
+            stream_resp=mock_stream,
+            on_chunk=lambda c: None,
+        )
+        self.assertFalse(success)
+
+    def test_vosk_streaming_session_lifecycle(self):
+        """Verifies VoskStreamingSession pushes chunks over WebSocket and retrieves cleaned transcript without grammar."""
+        from unittest.mock import patch, MagicMock
+        from apps.listener_app.vosk_client import VoskStreamingSession
+
+        session = VoskStreamingSession("ws://127.0.0.1:2700", timeout_sec=1.0)
+        with patch("apps.listener_app.vosk_client.ws_connect") as mock_connect:
+            mock_ws = MagicMock()
+            mock_connect.return_value = mock_ws
+            mock_ws.recv.side_effect = [
+                '{"type": "connected"}',
+                '{"partial": "sit"}',
+                '{"text": "sit down"}',
+            ]
+
+            session.start()
+            session.send_chunk(b"\x00" * 2560)
+            transcript = session.finish(drain_timeout_sec=0.2)
+
+            self.assertEqual(transcript, "sit down")
+            self.assertTrue(mock_ws.send.called)
+
     def test_listener_multiturn_persists_in_idle(self):
         """Verifies that ListenerApp returns to IDLE after posture execution and awaits Button B."""
         import time
@@ -554,54 +649,43 @@ class TestListenerPipeline(unittest.TestCase):
         stop_event = threading.Event()
 
         with patch.object(app, "_play_chime", return_value=0.01), \
-             patch.object(app, "_execute_posture", side_effect=lambda b, a: setattr(app, "action_taken", f"Moved to {a}")), \
-             patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
-             patch.object(app, "_get_vosk_urls", return_value=("http://127.0.0.1:8059/health", "ws://127.0.0.1:2700", "http://127.0.0.1:8059/recognize")):
+             patch.object(app.audio_client, "connect_stream", return_value=MagicMock()), \
+             patch.object(app.audio_client, "close_stream"), \
+             patch.object(app.vad, "capture_utterance", return_value=True), \
+             patch.object(app.vosk_client, "create_session") as mock_create_sess:
 
-            mock_stream = MagicMock()
-            loud_pcm = b"\xff\x7f" * 1280
-            mock_stream.read.side_effect = [b"\x00" * 3200, loud_pcm, b"", b"", b""]
-            mock_stream_conn.return_value = mock_stream
+            mock_session = MagicMock()
+            mock_session.finish.return_value = "sit down"
+            mock_create_sess.return_value = mock_session
 
-            app.config["vad"]["settle_delay_sec"] = 0.01
+            app.config["vad"]["acoustic_decay_pad_sec"] = 0.01
             app.config["vad"]["post_chime_settle_sec"] = 0.01
-            app.config["vad"]["max_record_sec"] = 0.05
-            app.config["vad"]["silence_timeout_sec"] = 0.02
 
-            with patch("apps.listener_app.app.ws_connect") as mock_ws:
-                mock_ws_client = MagicMock()
-                mock_ws.return_value = mock_ws_client
-                mock_ws_client.recv.side_effect = [
-                    '{"type": "connected"}',
-                    '{"type": "final_result", "text": "sit down"}',
-                    '{"type": "final_result", "text": "sit down"}'
-                ]
+            app.start_listen_event.set()
+            t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
+            t.start()
 
-                app.start_listen_event.set()
-                t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
-                t.start()
+            # 1. Wait for listener to wake up into LISTENING or PROCESSING
+            t_start = time.time()
+            while time.time() - t_start < 2.0:
+                if app.state in ("LISTENING", "CAPTURING", "PROCESSING"):
+                    break
+                time.sleep(0.01)
 
-                # 1. Wait for listener to wake up into LISTENING or CAPTURING
-                t_start = time.time()
-                while time.time() - t_start < 2.0:
-                    if app.state in ("LISTENING", "CAPTURING", "PROCESSING"):
-                        break
-                    time.sleep(0.01)
+            # 2. Wait for listener to finish the turn and return to IDLE
+            t_start = time.time()
+            while time.time() - t_start < 2.0:
+                if app.state == "IDLE" and "Moved to sit" in app.action_taken:
+                    break
+                time.sleep(0.01)
 
-                # 2. Wait for listener to finish the turn and return to IDLE
-                t_start = time.time()
-                while time.time() - t_start < 2.0:
-                    if app.state == "IDLE" and "Moved to sit" in app.action_taken:
-                        break
-                    time.sleep(0.01)
+            self.assertEqual(app.state, "IDLE")
+            self.assertIn("Moved to sit", app.action_taken)
+            self.assertIn("Press Button B to speak", app.action_taken)
+            self.assertFalse(stop_event.is_set())
 
-                self.assertEqual(app.state, "IDLE")
-                self.assertIn("Moved to sit", app.action_taken)
-                self.assertIn("Press Button B to speak", app.action_taken)
-                self.assertFalse(stop_event.is_set())
-
-                stop_event.set()
-                t.join(timeout=1.0)
+            stop_event.set()
+            t.join(timeout=1.0)
 
     def test_execute_posture_play_dead_chime(self):
         """Verifies _execute_posture disarms torque and plays play_dead chime."""
@@ -628,56 +712,47 @@ class TestListenerPipeline(unittest.TestCase):
 
         played_chimes = []
 
-        def record_chime(chime_name):
+        def record_chime(chime_name, blocking=False):
             played_chimes.append(chime_name)
             return 0.01
 
         with patch.object(app, "_play_chime", side_effect=record_chime), \
-             patch.object(app, "_connect_daemon_audio_stream") as mock_stream_conn, \
-             patch.object(app, "_get_vosk_urls", return_value=("http://127.0.0.1:8059/health", "ws://127.0.0.1:2700", "http://127.0.0.1:8059/recognize")):
+             patch.object(app.audio_client, "connect_stream", return_value=MagicMock()), \
+             patch.object(app.audio_client, "close_stream"), \
+             patch.object(app.vad, "capture_utterance", return_value=True), \
+             patch.object(app.vosk_client, "create_session") as mock_create_sess:
 
-            mock_stream = MagicMock()
-            loud_pcm = b"\xff\x7f" * 1280
-            mock_stream.read.side_effect = [b"\x00" * 3200, loud_pcm, b"", b"", b""]
-            mock_stream_conn.return_value = mock_stream
+            mock_session = MagicMock()
+            mock_session.finish.return_value = "play dead"
+            mock_create_sess.return_value = mock_session
 
-            app.config["vad"]["settle_delay_sec"] = 0.01
+            app.config["vad"]["acoustic_decay_pad_sec"] = 0.01
             app.config["vad"]["post_chime_settle_sec"] = 0.01
-            app.config["vad"]["max_record_sec"] = 0.05
-            app.config["vad"]["silence_timeout_sec"] = 0.02
 
-            with patch("apps.listener_app.app.ws_connect") as mock_ws:
-                mock_ws_client = MagicMock()
-                mock_ws.return_value = mock_ws_client
-                mock_ws_client.recv.side_effect = [
-                    '{"type": "connected"}',
-                    '{"type": "final_result", "text": "play dead"}',
-                    '{"type": "final_result", "text": "play dead"}'
-                ]
+            app.start_listen_event.set()
+            t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
+            t.start()
 
-                app.start_listen_event.set()
-                t = threading.Thread(target=app.run, args=(mock_backend, stop_event))
-                t.start()
+            # Wait for turn completion back to IDLE
+            t_start = time.time()
+            while time.time() - t_start < 2.0:
+                if app.state == "IDLE" and "Playing dead" in app.action_taken:
+                    break
+                time.sleep(0.01)
 
-                # Wait for turn completion back to IDLE
-                t_start = time.time()
-                while time.time() - t_start < 2.0:
-                    if app.state == "IDLE" and "Playing dead" in app.action_taken:
-                        break
-                    time.sleep(0.01)
+            self.assertEqual(app.state, "IDLE")
+            self.assertIn("Playing dead", app.action_taken)
+            self.assertIn("Press Button B to speak", app.action_taken)
+            self.assertIn("play_dead", played_chimes)
+            # Verify speech end played 1 commit chime, but posture execution did not play a 2nd commit chime
+            self.assertEqual(played_chimes.count("commit"), 1)
+            self.assertEqual(played_chimes[-1], "play_dead")
 
-                self.assertEqual(app.state, "IDLE")
-                self.assertIn("Playing dead", app.action_taken)
-                self.assertIn("Press Button B to speak", app.action_taken)
-                self.assertIn("play_dead", played_chimes)
-                # Verify speech end played 1 commit chime, but posture execution did not play a 2nd commit chime
-                self.assertEqual(played_chimes.count("commit"), 1)
-                self.assertEqual(played_chimes[-1], "play_dead")
-
-                stop_event.set()
-                t.join(timeout=1.0)
+            stop_event.set()
+            t.join(timeout=1.0)
 
 
 if __name__ == "__main__":
     unittest.main()
+
 

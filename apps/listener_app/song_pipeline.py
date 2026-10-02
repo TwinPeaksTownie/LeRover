@@ -454,3 +454,134 @@ def download_and_compile(title: str, artist: str = "", video_id: Optional[str] =
 
     logger.info("Successfully compiled choreography sequence: %s", out_json)
     return out_json
+
+
+DANCE_PRESETS_PATH_CANDIDATES = [
+    WORKSPACE_ROOT / "apps" / "preset_app" / "presets" / "presets_dance.json",
+    Path("/home/carson/touch_ui/apps/preset_app/presets/presets_dance.json"),
+    Path("/home/user/so101/apps/preset_app/presets/presets_dance.json"),
+]
+
+
+def load_dance_presets() -> Dict[str, Any]:
+    """Loads empirical dance presets fail-fast for physical voice posture execution."""
+    target_path: Optional[Path] = None
+    for p in DANCE_PRESETS_PATH_CANDIDATES:
+        if p.exists():
+            target_path = p
+            break
+    if target_path is None:
+        raise FileNotFoundError(f"Missing required presets_dance.json. Checked: {DANCE_PRESETS_PATH_CANDIDATES}")
+
+    with open(target_path, "r", encoding="utf-8") as f:
+        presets = json.load(f)
+
+    for req_key in ["stand", "arch"]:
+        if req_key not in presets:
+            raise KeyError(f"presets_dance.json missing required posture '{req_key}'")
+        if "normalized" not in presets[req_key]:
+            raise KeyError(f"presets_dance.json posture '{req_key}' missing 'normalized' coordinates")
+
+    if "sit" not in presets and "squat" not in presets:
+        raise KeyError("presets_dance.json missing required 'sit' or 'squat' posture")
+
+    if "tiptoe" not in presets and "tiptoes" not in presets:
+        raise KeyError("presets_dance.json missing required 'tiptoe' or 'tiptoes' posture")
+
+    return presets
+
+
+def load_calibration_limits(
+    backend: Optional[Any] = None,
+    calib_file: Optional[Path] = None,
+) -> Dict[int, Dict[str, int]]:
+    """Loads empirical follower calibration limits dynamically into memory. Zero hardcoded 2048."""
+    from telemetry_proxies import MOTOR_NAMES
+
+    if backend is not None and hasattr(backend, "arm_calibration") and bool(backend.arm_calibration):
+        limits = {}
+        for sid in range(1, 7):
+            name = MOTOR_NAMES[sid]
+            if name not in backend.arm_calibration:
+                raise KeyError(f"Follower calibration missing required servo '{name}' (ID {sid}) in backend")
+            calib = backend.arm_calibration[name]
+            rmin = int(calib.range_min)
+            rmax = int(calib.range_max)
+            limits[sid] = {
+                "min": rmin,
+                "max": rmax,
+                "center": (rmin + rmax) // 2,
+            }
+        return limits
+
+    target_path = calib_file or (Path.home() / ".cache/huggingface/lerobot/calibration/robots/so_follower/follower.json")
+    if not target_path.exists():
+        raise FileNotFoundError(f"Missing required follower calibration: {target_path}")
+
+    with open(target_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    limits = {}
+    for sid in range(1, 7):
+        name = MOTOR_NAMES[sid]
+        if name not in data:
+            raise KeyError(f"Follower calibration missing required servo '{name}' (ID {sid}) in {target_path}")
+        cdata = data[name]
+        rmin = int(cdata["range_min"])
+        rmax = int(cdata["range_max"])
+        limits[sid] = {
+            "min": rmin,
+            "max": rmax,
+            "center": (rmin + rmax) // 2,
+        }
+    return limits
+
+
+def execute_mac_analysis(target_track: Dict[str, Any]) -> Dict[str, Any]:
+    """Triggers neural rhythm analysis on Mac Mini, downloads WAV, and updates manifest."""
+    import time
+    from beat_bandit_audio import BeatBanditAudioClient, sanitize_title_and_artist
+
+    vid = str(target_track["video_id"])
+    raw_title = str(target_track["title"])
+    url = f"https://youtu.be/{vid}"
+
+    manifest_path = get_beat_bandit_manifest_path()
+    if manifest_path is not None:
+        lib_dir = manifest_path.parent
+    else:
+        if os.name == "nt":
+            lib_dir = WORKSPACE_ROOT / "library" / "beat_bandit"
+        else:
+            lib_dir = Path.home() / "so101" / "library" / "beat_bandit"
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    audio_client = BeatBanditAudioClient(lib_dir)
+
+    logger.info("Calling Mac Mini /api/analyze_track for '%s' (%s)...", raw_title, vid)
+    analysis = audio_client.fetch_analysis(url_or_id=url, track_id=vid)
+    logger.info("Downloading analyzed WAV for '%s' (%s) from Mac Mini...", raw_title, vid)
+    wav_path = audio_client.download_wav(track_id=vid)
+    song_title, artist = sanitize_title_and_artist(raw_title)
+
+    manifest_file = lib_dir / "manifest.json"
+    manifest_data: Dict[str, Any] = {}
+    if manifest_file.exists():
+        with open(manifest_file, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+
+    entry = {
+        "track_id": vid,
+        "title": song_title,
+        "artist": artist,
+        "duration": float(analysis["duration"]),
+        "bpm": float(analysis["bpm"]),
+        "wav_path": wav_path,
+        "analysis": analysis,
+        "created_at": time.time(),
+    }
+    manifest_data[vid] = entry
+    with open(manifest_file, "w", encoding="utf-8") as f:
+        json.dump(manifest_data, f, indent=2)
+
+    logger.info("Successfully analyzed and saved track '%s' (ID: %s) to %s", song_title, vid, wav_path)
+    return entry

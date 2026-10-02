@@ -190,6 +190,35 @@ def query_daemon_logs(node: str = "pi4b", service_name: str = "backend.service",
     res = tools_hardware.query_daemon_logs(node=node, service_name=service_name, lines=lines)
     return json.dumps(res, indent=2)
 
+@app.tool()
+def deploy_to_pi(
+    files: list,
+    node: str = "pi4b",
+    restart_service: str = "backend",
+    verify_md5: bool = True
+) -> str:
+    """
+    Deploys code files or directories to the Pi 4B over SFTP, verifies MD5 checksums,
+    and optionally restarts target systemd services.
+    """
+    _reload_modules()
+    res = tools_hardware.deploy_to_pi(
+        files=files,
+        node=node,
+        restart_service=restart_service,
+        verify_md5=verify_md5
+    )
+    return json.dumps(res, indent=2)
+
+@app.tool()
+def check_ssh_health(node: str = "pi4b") -> str:
+    """
+    Diagnoses SSH connectivity to the target node (Pi 4B).
+    """
+    _reload_modules()
+    res = tools_hardware.check_ssh_health(node=node)
+    return json.dumps(res, indent=2)
+
 # -----------------------------------------------------------------------------
 # 3. Speech & Voice Notification Tools
 # -----------------------------------------------------------------------------

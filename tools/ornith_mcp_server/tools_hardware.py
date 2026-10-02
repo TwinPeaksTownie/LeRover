@@ -358,3 +358,29 @@ def check_target_deployments(files: list, repo_path: str = None) -> dict:
         "deployments": deployments
     }
 
+def deploy_to_pi(files: list, node: str = "pi4b", restart_service: str = "backend", verify_md5: bool = True) -> dict:
+    """
+    Deploys code files to the Pi 4B over SFTP, verifies MD5 checksums,
+    and optionally restarts target systemd services.
+    """
+    tools_dir = os.path.dirname(BASE_DIR)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import deploy_to_pi as deployer
+    return deployer.deploy_files(
+        files_or_dirs=files,
+        node=node,
+        restart_service=restart_service,
+        verify_md5=verify_md5
+    )
+
+def check_ssh_health(node: str = "pi4b") -> dict:
+    """
+    Diagnoses SSH connectivity to the target node.
+    """
+    tools_dir = os.path.dirname(BASE_DIR)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import deploy_to_pi as deployer
+    return deployer.check_ssh_health(node=node)
+

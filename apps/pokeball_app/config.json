@@ -46,6 +46,7 @@
     "mode_switch_aux": "mode_switch_aux",
     "speed_up": "beep_high",
     "speed_down": "beep_low",
-    "chord_abort": "ornith_abort_recording"
+    "chord_abort": "ornith_abort_recording",
+    "app_exit_idle": "app_exit_idle"
   }
 }
