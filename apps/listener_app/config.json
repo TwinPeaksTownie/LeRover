@@ -32,13 +32,15 @@
   "vad": {
     "settle_delay_sec": 0.65,
     "post_chime_settle_sec": 1.5,
-    "silence_timeout_sec": 2.5,
+    "silence_timeout_sec": 10.0,
     "post_speech_silence_sec": 0.85,
     "acoustic_decay_pad_sec": 0.15,
     "stream_flush_bytes": 4800,
     "max_record_sec": 10.0,
-    "min_record_sec": 0.5,
-    "energy_threshold": 450,
+    "min_record_sec": 0.8,
+    "energy_threshold": 300,
+    "sustain_energy_threshold": 180,
+    "min_utterance_chunks": 3,
     "pre_roll_chunks": 15,
     "fuzzy_match_threshold": 0.55
   },

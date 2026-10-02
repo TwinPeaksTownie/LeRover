@@ -117,7 +117,21 @@
           "backend": "backend.service",
           "touchscreen": "touchscreen.service",
           "touch_ui": "touch-ui.service"
-        }
+        },
+        "user_services": [
+          "touchscreen.service",
+          "touchscreen"
+        ],
+        "ui_file_indicators": [
+          "static/",
+          ".html",
+          ".js",
+          ".css"
+        ],
+        "ui_auto_restart_services": [
+          "backend",
+          "touchscreen"
+        ]
       }
     }
   }

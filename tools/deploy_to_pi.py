@@ -342,40 +342,65 @@ def deploy_files(
     finally:
         sftp.close()
 
-    service_result = None
+    service_results: List[Dict[str, Any]] = []
     if restart_service and restart_service.lower() != "none":
         svc_map = node_cfg["services"]
-        svc_key = restart_service.lower()
-        if svc_key in svc_map:
-            svc_name = svc_map[svc_key]
+        user_services = node_cfg["user_services"]
+        ui_file_indicators = node_cfg["ui_file_indicators"]
+        ui_auto_restart_services = node_cfg["ui_auto_restart_services"]
+
+        has_ui_files = any(
+            any(ind in f["local_file"] for ind in ui_file_indicators)
+            for f in deployed
+        )
+
+        raw_svc = restart_service.strip().lower()
+        if raw_svc in ["backend_only", "backend-only"]:
+            targets = ["backend"]
+        elif raw_svc == "auto" or (raw_svc == "backend" and has_ui_files):
+            targets = list(ui_auto_restart_services)
+        elif raw_svc == "all":
+            targets = list(svc_map.keys())
         else:
-            svc_name = restart_service
-        if not svc_name.endswith(".service"):
-            svc_name = f"{svc_name}.service"
+            targets = [s.strip() for s in restart_service.split(",") if s.strip()]
 
-        _stdin, stdout, stderr = client.exec_command(f"sudo systemctl restart {svc_name}")
-        restart_code = stdout.channel.recv_exit_status()
-        restart_err = stderr.read().decode("utf-8").strip()
+        for tgt in targets:
+            tgt_lower = tgt.lower()
+            if tgt_lower in svc_map:
+                svc_name = str(svc_map[tgt_lower])
+            else:
+                svc_name = tgt
+            if not svc_name.endswith(".service"):
+                svc_name = f"{svc_name}.service"
 
-        _stdin, stdout, _stderr = client.exec_command(f"systemctl is-active {svc_name}")
-        is_active = (stdout.read().decode("utf-8").strip() == "active")
+            is_user = (svc_name in user_services or tgt_lower in user_services)
+            systemctl_cmd = "systemctl --user" if is_user else "sudo systemctl"
+            journal_cmd = "journalctl --user -u" if is_user else "journalctl -u"
 
-        _stdin, stdout, _stderr = client.exec_command(f"journalctl -u {svc_name} -n 15 --no-pager")
-        journal_snippet = stdout.read().decode("utf-8").strip()
+            _stdin, stdout, stderr = client.exec_command(f"{systemctl_cmd} restart {svc_name}")
+            restart_code = stdout.channel.recv_exit_status()
+            restart_err = stderr.read().decode("utf-8").strip()
 
-        service_result = {
-            "service": svc_name,
-            "restart_code": restart_code,
-            "restart_stderr": restart_err,
-            "is_active": is_active,
-            "journal_snippet": journal_snippet
-        }
+            _stdin, stdout, _stderr = client.exec_command(f"{systemctl_cmd} is-active {svc_name}")
+            is_active = (stdout.read().decode("utf-8").strip() == "active")
+
+            _stdin, stdout, _stderr = client.exec_command(f"{journal_cmd} {svc_name} -n 15 --no-pager")
+            journal_snippet = stdout.read().decode("utf-8").strip()
+
+            service_results.append({
+                "service": svc_name,
+                "scope": "user" if is_user else "system",
+                "restart_code": restart_code,
+                "restart_stderr": restart_err,
+                "is_active": is_active,
+                "journal_snippet": journal_snippet
+            })
 
     client.close()
 
     service_ok = True
-    if service_result is not None:
-        service_ok = bool(service_result["is_active"])
+    if service_results:
+        service_ok = all(r["is_active"] for r in service_results)
 
     overall_status = "success" if (not has_mismatch and service_ok) else "warning"
 
@@ -385,7 +410,8 @@ def deploy_files(
         "file_count": len(deployed),
         "has_mismatch": has_mismatch,
         "deployed_files": deployed,
-        "service_restart": service_result
+        "service_restart": service_results[0] if len(service_results) == 1 else service_results,
+        "service_restarts": service_results
     }
 
 def main():

@@ -87,6 +87,12 @@ def load_listener_config() -> Dict[str, Any]:
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
     _ = int(cfg["vad"]["energy_threshold"])
+    sustain_energy = int(cfg["vad"]["sustain_energy_threshold"])
+    if sustain_energy <= 0:
+        raise ValueError("sustain_energy_threshold must be positive")
+    min_chunks = int(cfg["vad"]["min_utterance_chunks"])
+    if min_chunks <= 0:
+        raise ValueError("min_utterance_chunks must be positive")
     pre_roll = int(cfg["vad"]["pre_roll_chunks"])
     if pre_roll <= 0:
         raise ValueError("pre_roll_chunks must be positive")
@@ -278,12 +284,12 @@ class ListenerApp(BaseApp):
 
             # 2. Managed Speech Capture Loop
             while attempt <= max_retries and not stop_event.is_set() and not self.abort_listen_event.is_set():
-                chime_kind = "wake" if attempt == 0 else "error"
+                chime_kind = "wake"
                 event_name = str(self.config["chimes"][chime_kind])
                 dur = audio_resolver.get_audio_duration_sec(event_name)
                 self._play_chime(chime_kind)
                 if attempt > 0:
-                    self.action_taken = f"Could not hear speech (retry {attempt}/{max_retries}). Speak now..."
+                    self.action_taken = f"Didn't catch that (retry {attempt}/{max_retries}). Speak now..."
 
                 delay_wait = dur + settle_delay
                 logger.info("Awaiting pre-calculated audio delay %.3fs (dur=%.3fs + settle=%.3fs) before mic capture (attempt %d/%d)...",

@@ -86,6 +86,8 @@ class VoiceActivityDetector:
         self.max_record_sec = float(self.config["vad"]["max_record_sec"])
         self.min_record_sec = float(self.config["vad"]["min_record_sec"])
         self.energy_threshold = int(self.config["vad"]["energy_threshold"])
+        self.sustain_energy_threshold = int(self.config["vad"]["sustain_energy_threshold"])
+        self.min_utterance_chunks = int(self.config["vad"]["min_utterance_chunks"])
         self.pre_roll_chunks = int(self.config["vad"]["pre_roll_chunks"])
         self.stream_flush_bytes = int(self.config["vad"]["stream_flush_bytes"])
 
@@ -108,7 +110,7 @@ class VoiceActivityDetector:
         stop_event: Optional[Any] = None,
         abort_event: Optional[Any] = None,
     ) -> bool:
-        """Executes streaming VAD: pre-roll buffering, onset trigger, and dynamic silence endpointing.
+        """Executes streaming VAD: pre-roll buffering, significant utterance qualification, and 0.85s silence endpointing.
         Returns True if a speech utterance was successfully captured, False if timed out or aborted.
         """
         # 1. Flush stale buffered bytes from the stream pipe
@@ -121,8 +123,9 @@ class VoiceActivityDetector:
         pre_roll_buffer: Deque[bytes] = collections.deque(maxlen=self.pre_roll_chunks)
         start_time = time.time()
         speech_detected = False
+        consecutive_voice_chunks = 0
 
-        # Phase 1: Await speech onset while maintaining pre-roll buffer
+        # Phase 1: Await significant speech utterance while maintaining pre-roll buffer
         while True:
             if stop_event is not None and stop_event.is_set():
                 return False
@@ -147,10 +150,14 @@ class VoiceActivityDetector:
             pre_roll_buffer.append(chunk)
 
             if energy > self.energy_threshold:
-                logger.info("Speech onset detected (RMS energy %d > %d threshold). Entering capture window...",
-                            energy, self.energy_threshold)
-                speech_detected = True
-                break
+                consecutive_voice_chunks += 1
+                if consecutive_voice_chunks >= self.min_utterance_chunks:
+                    logger.info("Significant speech utterance detected (RMS energy %d > %d threshold, %d consecutive chunks). Entering capture window...",
+                                energy, self.energy_threshold, consecutive_voice_chunks)
+                    speech_detected = True
+                    break
+            else:
+                consecutive_voice_chunks = 0
 
         if not speech_detected:
             return False
@@ -158,7 +165,7 @@ class VoiceActivityDetector:
         if on_speech_start is not None:
             on_speech_start()
 
-        # Phase 2: Flush pre-roll buffer into consumer, then stream live chunks until silence
+        # Phase 2: Flush pre-roll buffer into consumer, then stream live chunks until 0.85s post-utterance silence
         for prc in pre_roll_buffer:
             on_chunk(prc)
 
@@ -175,7 +182,7 @@ class VoiceActivityDetector:
             total_elapsed = now - record_start
             silence_elapsed = now - last_voice_time
 
-            # Dynamic silence endpointing
+            # Dynamic 0.85s silence endpointing strictly after significant utterance
             if silence_elapsed > self.post_speech_silence_sec and total_elapsed >= self.min_record_sec:
                 logger.info("Silence detected after speech (silence=%.2fs > %.2fs, total=%.2fs). Capture complete.",
                             silence_elapsed, self.post_speech_silence_sec, total_elapsed)
@@ -197,7 +204,7 @@ class VoiceActivityDetector:
 
             on_chunk(chunk)
             e = self.calculate_frame_energy(chunk)
-            if e > self.energy_threshold:
+            if e > self.sustain_energy_threshold:
                 last_voice_time = time.time()
 
         return True

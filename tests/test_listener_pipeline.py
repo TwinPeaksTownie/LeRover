@@ -258,7 +258,12 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertIn("play_dead", cfg["chimes"])
         self.assertEqual(cfg["vad"]["settle_delay_sec"], 0.65)
         self.assertEqual(cfg["vad"]["post_chime_settle_sec"], 1.5)
-        self.assertEqual(cfg["vad"]["energy_threshold"], 450)
+        self.assertEqual(cfg["vad"]["silence_timeout_sec"], 10.0)
+        self.assertEqual(cfg["vad"]["post_speech_silence_sec"], 0.85)
+        self.assertEqual(cfg["vad"]["min_record_sec"], 0.8)
+        self.assertEqual(cfg["vad"]["energy_threshold"], 300)
+        self.assertEqual(cfg["vad"]["sustain_energy_threshold"], 180)
+        self.assertEqual(cfg["vad"]["min_utterance_chunks"], 3)
         self.assertEqual(cfg["vad"]["pre_roll_chunks"], 15)
         self.assertEqual(cfg["vad"]["fuzzy_match_threshold"], 0.55)
         self.assertGreater(cfg["vad"]["settle_delay_sec"], 0)
@@ -613,6 +618,33 @@ class TestListenerPipeline(unittest.TestCase):
             on_chunk=lambda c: None,
         )
         self.assertFalse(success)
+
+    def test_vad_rejects_single_chunk_transient(self):
+        """Verifies that an isolated 1-chunk spike (<3 chunks) does not trigger significant utterance or start capture."""
+        import struct
+        from unittest.mock import MagicMock
+        from apps.listener_app.audio_client import VoiceActivityDetector
+
+        cfg = load_listener_config()
+        cfg["vad"]["silence_timeout_sec"] = 0.1
+        vad = VoiceActivityDetector(cfg)
+
+        silence_chunk = b"\x00" * 2560
+        loud_chunk = struct.pack("1280h", *([3000] * 1280))
+
+        # Stream sequence: 1 silence -> 1 loud transient -> continuous silence
+        stream_chunks = [silence_chunk, loud_chunk] + [silence_chunk] * 20
+        mock_stream = MagicMock()
+        mock_stream.read.side_effect = stream_chunks
+
+        speech_started = []
+        success = vad.capture_utterance(
+            stream_resp=mock_stream,
+            on_chunk=lambda c: None,
+            on_speech_start=lambda: speech_started.append(True),
+        )
+        self.assertFalse(success)
+        self.assertEqual(len(speech_started), 0)
 
     def test_vosk_streaming_session_lifecycle(self):
         """Verifies VoskStreamingSession pushes chunks over WebSocket and retrieves cleaned transcript without grammar."""
