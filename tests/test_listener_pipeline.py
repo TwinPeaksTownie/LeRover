@@ -646,6 +646,27 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertFalse(success)
         self.assertEqual(len(speech_started), 0)
 
+    def test_vad_streams_from_frame_zero(self):
+        """Verifies audio chunks are pushed to on_chunk immediately from frame 0 without burst delay."""
+        from unittest.mock import MagicMock
+        from apps.listener_app.audio_client import VoiceActivityDetector
+
+        cfg = load_listener_config()
+        cfg["vad"]["silence_timeout_sec"] = 0.05
+        vad = VoiceActivityDetector(cfg)
+
+        silence_chunk = b"\x00" * 2560
+        mock_stream = MagicMock()
+        mock_stream.read.return_value = silence_chunk
+
+        pushed_chunks = []
+        _ = vad.capture_utterance(
+            stream_resp=mock_stream,
+            on_chunk=lambda c: pushed_chunks.append(c),
+        )
+        # Even during silence before speech onset, chunks are streamed to keep Vosk in lockstep
+        self.assertGreater(len(pushed_chunks), 0)
+
     def test_vosk_streaming_session_lifecycle(self):
         """Verifies VoskStreamingSession pushes chunks over WebSocket and retrieves cleaned transcript from final_result."""
         from unittest.mock import patch, MagicMock

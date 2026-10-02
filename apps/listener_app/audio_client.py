@@ -120,12 +120,11 @@ class VoiceActivityDetector:
             except Exception as fe:
                 logger.debug("Stream flush read: %s", fe)
 
-        pre_roll_buffer: Deque[bytes] = collections.deque(maxlen=self.pre_roll_chunks)
         start_time = time.time()
         speech_detected = False
         consecutive_voice_chunks = 0
 
-        # Phase 1: Await significant speech utterance while maintaining pre-roll buffer
+        # Phase 1: Stream audio to consumer from frame 0 and detect significant speech utterance
         while True:
             if stop_event is not None and stop_event.is_set():
                 return False
@@ -146,8 +145,8 @@ class VoiceActivityDetector:
                 time.sleep(0.01)
                 continue
 
+            on_chunk(chunk)
             energy = self.calculate_frame_energy(chunk)
-            pre_roll_buffer.append(chunk)
 
             if energy > self.energy_threshold:
                 consecutive_voice_chunks += 1
@@ -165,10 +164,7 @@ class VoiceActivityDetector:
         if on_speech_start is not None:
             on_speech_start()
 
-        # Phase 2: Flush pre-roll buffer into consumer, then stream live chunks until 0.85s post-utterance silence
-        for prc in pre_roll_buffer:
-            on_chunk(prc)
-
+        # Phase 2: Continue streaming live chunks until 0.85s post-utterance silence
         record_start = time.time()
         last_voice_time = record_start
 
