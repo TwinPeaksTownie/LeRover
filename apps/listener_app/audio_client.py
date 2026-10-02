@@ -38,11 +38,8 @@ class AudioStreamClient:
         if self.pi4b_ip_override:
             ip = self.pi4b_ip_override
         else:
-            try:
-                import network_resolver
-                ip = network_resolver.get_pi4b_ip(prefer_port=self.pi4b_port)
-            except Exception:
-                ip = "127.0.0.1"
+            import network_resolver
+            ip = network_resolver.get_pi4b_ip(prefer_port=self.pi4b_port)
         return f"http://{ip}:{self.pi4b_port}"
 
     def get_stream_url(self) -> str:
@@ -205,31 +202,3 @@ class VoiceActivityDetector:
 
         return True
 
-
-class DaemonMicrophoneClient:
-    """Compatibility wrapper providing managed start/stop capture commands if needed."""
-
-    def __init__(self, config: Dict[str, Any], pi4b_ip_override: Optional[str] = None) -> None:
-        self.config = config
-        self.pi4b_port = int(self.config["network"]["pi4b_port"])
-        self.pi4b_ip_override = pi4b_ip_override
-
-    def _get_base_url(self) -> str:
-        if self.pi4b_ip_override:
-            ip = self.pi4b_ip_override
-        else:
-            try:
-                import network_resolver
-                ip = network_resolver.get_pi4b_ip(prefer_port=self.pi4b_port)
-            except Exception:
-                ip = "127.0.0.1"
-        return f"http://{ip}:{self.pi4b_port}"
-
-    def cancel_capture(self) -> bool:
-        url = f"{self._get_base_url()}/api/microphone/cancel"
-        try:
-            req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=1.0) as resp:
-                return resp.status == 200
-        except Exception:
-            return False

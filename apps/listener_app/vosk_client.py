@@ -155,6 +155,7 @@ class VoskClient:
         self.health_url = f"http://{self.host}:{self.http_port}/health"
         self.recognize_url = f"http://{self.host}:{self.http_port}/recognize"
         self.timeout_sec = float(self.config["asr"]["timeout_sec"])
+        self.use_dynamic_grammar = bool(self.config["asr"]["use_dynamic_grammar"])
 
     def verify_health(self) -> bool:
         """Verifies that the resident Vosk server is healthy and ready."""

@@ -68,6 +68,7 @@ STATUS_CACHE: Dict[str, Any] = {
     "leader": {"running": False, "pid": ""},
     "clack_pose": {"running": False},
     "ornith_state": "IDLE",
+    "speech_capture_active": False,
     "topology_mode": "STANDALONE_PI4B",
     "backend_online": False,
     "vosk_ready": False,
@@ -90,7 +91,10 @@ def start_tap_detector() -> bool:
                 TAP_DETECTOR = AudioTapDetector(
                     peak_threshold=int(UI_CONFIG["clack_threshold"]),
                     play_sound_cb=play_sound_helper,
-                    is_active_cb=lambda: bool(GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.current_app_name in ["piranha_pose_app", "clack_pose_app"])
+                    is_active_cb=lambda: (
+                        bool(GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.current_app_name in ["piranha_pose_app", "clack_pose_app"])
+                        and not STATUS_CACHE["speech_capture_active"]
+                    )
                 )
                 TAP_DETECTOR.start()
                 STATUS_CACHE["clack_pose"] = {"running": True}
@@ -568,6 +572,11 @@ class UnifiedHandler(MasterApiHandler):
             return self._send_json({"status": "ok", "exists": exists, "bytes": size})
 
         if parsed.path == "/api/microphone/stream":
+            if not ROBOT_MIC_LOCK.acquire(blocking=False):
+                logging.warning("[ROBOT MIC STREAM] Rejected connection: microphone is locked by another task")
+                return self._send_json({"error": "Microphone hardware locked by active task"}, 409)
+
+            STATUS_CACHE["speech_capture_active"] = True
             proc = None
             try:
                 cmd = ["parecord", "--format=s16le", "--rate=16000", "--channels=1", "--raw"]
@@ -606,7 +615,15 @@ class UnifiedHandler(MasterApiHandler):
                         proc.terminate()
                         proc.wait(timeout=1.0)
                     except Exception:
-                        proc.kill()
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                STATUS_CACHE["speech_capture_active"] = False
+                try:
+                    ROBOT_MIC_LOCK.release()
+                except RuntimeError:
+                    pass
             return
 
         # 4. Delegate all standard robot GET endpoints (/api/apps..., /api/arm/presets, etc.) to MasterApiHandler
@@ -757,32 +774,13 @@ class UnifiedHandler(MasterApiHandler):
                 except Exception as e:
                     print(f"[ROBOT MIC] Error reading /tmp/robot_recording.wav: {e}", flush=True)
 
-            pc_ip = get_current_pc_ip(port=8058)
-            voice_bridge_url = f"http://{pc_ip}:8058/api/voice/process_audio"
-            dispatched = False
-            if wav_data and voice_bridge_url:
-                def _post_audio():
-                    try:
-                        req = urllib.request.Request(
-                            voice_bridge_url,
-                            data=wav_data,
-                            headers={"Content-Type": "audio/wav"}
-                        )
-                        with urllib.request.urlopen(req, timeout=45) as resp:
-                            print(f"[ROBOT MIC] Dispatched {len(wav_data)} bytes to Voice Bridge: status {resp.status}", flush=True)
-                    except Exception as err:
-                        print(f"[ROBOT MIC] Failed to dispatch audio to Voice Bridge: {err}", flush=True)
-                threading.Thread(target=_post_audio, daemon=True).start()
-                dispatched = True
-
-            print(f"[ROBOT MIC] Stopped onboard recording: {len(wav_data)} bytes, dispatched={dispatched}", flush=True)
+            print(f"[ROBOT MIC] Stopped onboard recording: {len(wav_data)} bytes", flush=True)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({
                 "status": "recording_stopped",
-                "bytes": len(wav_data),
-                "dispatched": dispatched
+                "bytes": len(wav_data)
             }).encode())
             return
 
