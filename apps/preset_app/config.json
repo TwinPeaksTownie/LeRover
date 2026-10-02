@@ -22,5 +22,14 @@
     "min_spectral_ratio": 5.0,
     "min_high_energy_pct": 50.0,
     "auto_stop_on_app_exit": true
+  },
+  "shake_detector": {
+    "enabled": true,
+    "shake_threshold_g": 2.2,
+    "shake_cooldown_sec": 0.35,
+    "shake_window_sec": 1.2,
+    "baseline_alpha": 0.05,
+    "allow_shake_locomotion": false,
+    "shake_attack_enabled": true
   }
 }

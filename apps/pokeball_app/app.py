@@ -84,6 +84,11 @@ def load_pokeball_config() -> dict:
     _ = int(cfg["control"]["gantry_step_ticks"])
     _ = float(cfg["control"]["aux_lock_duration_sec"])
 
+    _ = float(cfg["imu"]["accel_scale_g"])
+    _ = float(cfg["imu"]["gyro_scale_dps"])
+    _ = float(cfg["imu"]["gyro_deadband_dps"])
+    _ = float(cfg["imu"]["stationary_motion_threshold_g"])
+
     _ = float(cfg["gestures"]["a_hold_sec"])
     _ = float(cfg["gestures"]["b_hold_sec"])
     _ = float(cfg["gestures"]["b_double_tap_sec"])
@@ -139,6 +144,28 @@ def load_joycon_calibration() -> Tuple[int, int, int, int, int, int]:
             max_calib_raw = int(sec["max_calib_raw"])
             return center_x, center_y, span_x, span_y, min_calib_raw, max_calib_raw
     raise FileNotFoundError(f"Missing required calibration file: calibration_aux.json (searched: {aux_candidates})")
+
+load_joystick_calibration = load_joycon_calibration
+
+
+def load_shake_detector_config() -> Dict[str, Any]:
+    """Loads fail-fast shake detector configuration from preset_app/config.json."""
+    candidates = [
+        Path(APP_DIR).resolve().parent / "preset_app" / "config.json",
+        Path("/home/carson/touch_ui/apps/preset_app/config.json"),
+        Path("/home/user/so101/apps/preset_app/config.json"),
+        Path(workspace_root) / "apps" / "preset_app" / "config.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            _ = float(cfg["shake_detector"]["shake_threshold_g"])
+            _ = float(cfg["shake_detector"]["shake_cooldown_sec"])
+            _ = float(cfg["shake_detector"]["shake_window_sec"])
+            _ = float(cfg["shake_detector"]["baseline_alpha"])
+            return cfg["shake_detector"]
+    raise FileNotFoundError(f"Missing required preset_app config.json for shake detector: {candidates}")
 
 
 def get_pi4b_sound_url() -> str:
@@ -242,6 +269,24 @@ class PokeballService:
         self.gantry_step_ticks = int(self.config["control"]["gantry_step_ticks"])
         self.aux_lock_duration_sec = float(self.config["control"]["aux_lock_duration_sec"])
 
+        # IMU Scaling & Shake Detection Engine (ported from i:/joycon/joycon_service.py)
+        self.accel_scale_g = float(self.config["imu"]["accel_scale_g"])
+        self.gyro_scale_dps = float(self.config["imu"]["gyro_scale_dps"])
+        self.gyro_deadband_dps = float(self.config["imu"]["gyro_deadband_dps"])
+        self.stationary_motion_threshold_g = float(self.config["imu"]["stationary_motion_threshold_g"])
+
+        shake_cfg = load_shake_detector_config()
+        self.shake_threshold = float(shake_cfg["shake_threshold_g"])
+        self.shake_cooldown = float(shake_cfg["shake_cooldown_sec"])
+        self.shake_window_sec = float(shake_cfg["shake_window_sec"])
+        self.shake_baseline_alpha = float(shake_cfg["baseline_alpha"])
+
+        self.baseline_accel_mag = 1.0
+        self.shake_detected = False
+        self.shake_count = 0
+        self.last_shake_time = 0.0
+        self.shake_callbacks: list = []
+
         self.telemetry = {
             "running": True,
             "connected": False,
@@ -267,6 +312,14 @@ class PokeballService:
                 "r_stick": False
             },
             "stick": {"norm_x": 0.0, "norm_y": 0.0},
+            "accel": {"x": 0.0, "y": 0.0, "z": 0.0, "mag": 1.0, "baseline": 1.0},
+            "gyro": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "shake": {
+                "detected": False,
+                "count": 0,
+                "threshold": self.shake_threshold,
+                "delta": 0.0
+            },
             "drivetrain": {
                 "throttle": 0.0,
                 "steering": 0.0,
@@ -524,6 +577,24 @@ class PokeballService:
         a_hold_sec = float(self.config["gestures"]["a_hold_sec"])
         b_hold_sec = float(self.config["gestures"]["b_hold_sec"])
         arm_lockout_sec = float(self.config["gestures"]["arm_lockout_sec"])
+        chord_abort_sec = float(self.config["gestures"]["chord_abort_sec"])
+
+        # ---------------------------------------------------------------------
+        # 0.5 CHORD ABORT GESTURE: SIMULTANEOUS A + B HOLD (1.0s)
+        # ---------------------------------------------------------------------
+        if btn_a and btn_b:
+            if self.both_ab_press_start_time is None:
+                self.both_ab_press_start_time = now
+            hold_duration_ab = now - self.both_ab_press_start_time
+            if hold_duration_ab >= chord_abort_sec and not self.ab_hold_triggered:
+                self.ab_hold_triggered = True
+                self.abort_audio_event.set()
+                self.chord_suppress_until = now + self.chord_click_suppress_sec
+                self.logger.info("🛑 [CHORD ABORT A+B 1.0s] Triggering immediate audio/action abort...")
+                play_chime(self.config["chimes"]["chord_abort"])
+        else:
+            self.both_ab_press_start_time = None
+            self.ab_hold_triggered = False
 
         # ---------------------------------------------------------------------
         # 1. BUTTON A GESTURES: HOLD 2.0s -> ROVER MODE / APP LAUNCH
@@ -715,6 +786,45 @@ class PokeballService:
         self.last_x_direction = x_direction
         self.last_y_direction = y_direction
 
+        # Decode 6-Axis IMU (Report 0x30 Bytes 13-24)
+        ax, ay, az = 0.0, 0.0, 0.0
+        gx, gy, gz = 0.0, 0.0, 0.0
+        accel_mag = 1.0
+        is_shake = False
+        shake_delta = 0.0
+
+        if len(raw) >= 25:
+            def _to_s16(b0: int, b1: int) -> int:
+                val = (b1 << 8) | b0
+                return val if val < 32768 else val - 65536
+
+            raw_ax = _to_s16(raw[13], raw[14])
+            raw_ay = _to_s16(raw[15], raw[16])
+            raw_az = _to_s16(raw[17], raw[18])
+
+            raw_gx = _to_s16(raw[19], raw[20])
+            raw_gy = _to_s16(raw[21], raw[22])
+            raw_gz = _to_s16(raw[23], raw[24])
+
+            # Right Joy-Con IMU: Y and Z axes inverted due to 180 deg enclosure mounting
+            ime_coeff = -1.0
+            ax = round(raw_ax / self.accel_scale_g, 3)
+            ay = round((raw_ay / self.accel_scale_g) * ime_coeff, 3)
+            az = round((raw_az / self.accel_scale_g) * ime_coeff, 3)
+            accel_mag = round(math.sqrt(ax * ax + ay * ay + az * az), 3)
+
+            gx = round(raw_gx / self.gyro_scale_dps, 2)
+            gy = round((raw_gy / self.gyro_scale_dps) * ime_coeff, 2)
+            gz = round((raw_gz / self.gyro_scale_dps) * ime_coeff, 2)
+            if abs(gx) < self.gyro_deadband_dps:
+                gx = 0.0
+            if abs(gy) < self.gyro_deadband_dps:
+                gy = 0.0
+            if abs(gz) < self.gyro_deadband_dps:
+                gz = 0.0
+
+            is_shake, shake_delta = self._detect_shake(accel_mag, now)
+
         # Update Telemetry Snapshot
         self.telemetry["packet_count"] += 1
         self.telemetry["last_seen"] = now
@@ -735,12 +845,52 @@ class PokeballService:
             "r_stick": btn_r_stick
         }
         self.telemetry["stick"] = {"norm_x": round(norm_x, 3), "norm_y": round(norm_y, 3)}
+        self.telemetry["accel"] = {
+            "x": ax, "y": ay, "z": az, "mag": accel_mag, "baseline": round(self.baseline_accel_mag, 3)
+        }
+        self.telemetry["gyro"] = {
+            "x": gx, "y": gy, "z": gz
+        }
+        self.telemetry["shake"] = {
+            "detected": is_shake,
+            "count": self.shake_count,
+            "threshold": self.shake_threshold,
+            "delta": shake_delta
+        }
         self.telemetry["drivetrain"] = {
             "throttle": throttle,
             "steering": round(steering, 3),
             "gated_idle": gated_idle
         }
         self.write_telemetry()
+
+    def _detect_shake(self, accel_mag: float, now: float) -> Tuple[bool, float]:
+        """Detects sharp acceleration spikes beyond dynamic baseline (ported from i:/joycon/joycon_service.py)."""
+        self.baseline_accel_mag = self.baseline_accel_mag * (1.0 - self.shake_baseline_alpha) + accel_mag * self.shake_baseline_alpha
+        delta = abs(accel_mag - self.baseline_accel_mag)
+
+        if delta > self.shake_threshold and (now - self.last_shake_time) > self.shake_cooldown:
+            self.shake_count += 1
+            self.last_shake_time = now
+            self.logger.info("👋 [JOYCON SHAKE] Detected shake #%d (mag=%.2fG, delta=%.2fG > thresh=%.2fG)",
+                             self.shake_count, accel_mag, delta, self.shake_threshold)
+            for cb in list(self.shake_callbacks):
+                try:
+                    cb(accel_mag, delta)
+                except Exception as ex:
+                    self.logger.error("Error executing shake callback: %s", ex, exc_info=True)
+            return True, round(delta, 3)
+        return False, round(delta, 3)
+
+    def register_shake_callback(self, cb: Any) -> None:
+        """Registers a callback hook invoked when a shake is detected."""
+        if cb not in self.shake_callbacks:
+            self.shake_callbacks.append(cb)
+
+    def unregister_shake_callback(self, cb: Any) -> None:
+        """Unregisters a previously registered shake callback hook."""
+        if cb in self.shake_callbacks:
+            self.shake_callbacks.remove(cb)
 
     def _run_loop(self) -> None:
         """Main Joy-Con connection and polling worker."""

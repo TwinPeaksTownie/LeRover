@@ -28,6 +28,12 @@
     "gantry_step_ticks": 500,
     "aux_lock_duration_sec": 0.6
   },
+  "imu": {
+    "accel_scale_g": 4096.0,
+    "gyro_scale_dps": 16.4,
+    "gyro_deadband_dps": 1.2,
+    "stationary_motion_threshold_g": 0.05
+  },
   "gestures": {
     "a_hold_sec": 2.0,
     "b_hold_sec": 2.0,

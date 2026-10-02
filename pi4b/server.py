@@ -78,44 +78,51 @@ STATUS_CACHE: Dict[str, Any] = {
     "pi4b_wlan_ip": None,
 }
 
+SHAKE_DETECTOR = None
+SHAKE_DETECTOR_LOCK = threading.RLock()
 TAP_DETECTOR = None
-TAP_DETECTOR_LOCK = threading.RLock()
+TAP_DETECTOR_LOCK = SHAKE_DETECTOR_LOCK
 
-def start_tap_detector() -> bool:
-    """Safely instantiates and starts AudioTapDetector with active app validation callback."""
-    global TAP_DETECTOR
-    with TAP_DETECTOR_LOCK:
-        if TAP_DETECTOR is None or not TAP_DETECTOR.is_alive():
+def start_shake_detector() -> bool:
+    """Safely instantiates and starts JoyConShakeDetector with active app validation callback."""
+    global SHAKE_DETECTOR, TAP_DETECTOR
+    with SHAKE_DETECTOR_LOCK:
+        if SHAKE_DETECTOR is None or not SHAKE_DETECTOR.is_alive():
             try:
-                from audio_tap_detector import AudioTapDetector
-                TAP_DETECTOR = AudioTapDetector(
-                    peak_threshold=int(UI_CONFIG["clack_threshold"]),
+                from joycon_shake_detector import JoyConShakeDetector
+                SHAKE_DETECTOR = JoyConShakeDetector(
+                    joycon_service=GLOBAL_POKEBALL,
                     play_sound_cb=play_sound_helper,
                     is_active_cb=lambda: (
                         bool(GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.current_app_name in ["piranha_pose_app", "clack_pose_app"])
                         and not STATUS_CACHE["speech_capture_active"]
                     )
                 )
-                TAP_DETECTOR.start()
-                STATUS_CACHE["clack_pose"] = {"running": True}
-                logging.info("[ClackPose] AudioTapDetector successfully started.")
+                SHAKE_DETECTOR.start()
+                TAP_DETECTOR = SHAKE_DETECTOR
+                STATUS_CACHE["clack_pose"] = {"running": True, "mode": "JOYCON_SHAKE_DETECTOR"}
+                logging.info("[PiranhaPose] JoyConShakeDetector successfully started.")
                 return True
             except Exception as e:
-                logging.error(f"[ClackPose] Failed to start AudioTapDetector: {e}")
+                logging.error(f"[PiranhaPose] Failed to start JoyConShakeDetector: {e}")
                 return False
         return True
 
-def stop_tap_detector() -> None:
-    """Safely terminates AudioTapDetector, kills child parecord process, and updates status."""
-    global TAP_DETECTOR
-    with TAP_DETECTOR_LOCK:
-        if TAP_DETECTOR is not None:
+def stop_shake_detector() -> None:
+    """Safely terminates JoyConShakeDetector and updates status."""
+    global SHAKE_DETECTOR, TAP_DETECTOR
+    with SHAKE_DETECTOR_LOCK:
+        if SHAKE_DETECTOR is not None:
             try:
-                TAP_DETECTOR.stop()
+                SHAKE_DETECTOR.stop()
             except Exception as st_err:
-                logging.warning(f"[ClackPose] TAP_DETECTOR stop warning: {st_err}")
+                logging.warning(f"[PiranhaPose] SHAKE_DETECTOR stop warning: {st_err}")
+            SHAKE_DETECTOR = None
             TAP_DETECTOR = None
-    STATUS_CACHE["clack_pose"] = {"running": False}
+    STATUS_CACHE["clack_pose"] = {"running": False, "mode": "JOYCON_SHAKE_DETECTOR"}
+
+start_tap_detector = start_shake_detector
+stop_tap_detector = stop_shake_detector
 
 ROBOT_MIC_PROC = None
 ROBOT_MIC_LOCK = threading.Lock()
@@ -478,13 +485,13 @@ def poll_status_loop() -> None:
             except Exception:
                 STATUS_CACHE["vosk_ready"] = False
 
-            # Update Clack Pose telemetry
-            global TAP_DETECTOR
-            with TAP_DETECTOR_LOCK:
-                if TAP_DETECTOR is not None:
-                    STATUS_CACHE["clack_pose"] = TAP_DETECTOR.get_state()
+            # Update Clack / Joy-Con Shake Pose telemetry
+            global SHAKE_DETECTOR
+            with SHAKE_DETECTOR_LOCK:
+                if SHAKE_DETECTOR is not None:
+                    STATUS_CACHE["clack_pose"] = SHAKE_DETECTOR.get_state()
                 else:
-                    STATUS_CACHE["clack_pose"] = {"running": False, "mode": "CALIBRATION_DETECTION_ONLY"}
+                    STATUS_CACHE["clack_pose"] = {"running": False, "mode": "JOYCON_SHAKE_DETECTOR"}
 
         except Exception as loop_err:
             logging.error(f"[PollLoop] Error during status polling: {loop_err}")
@@ -1003,27 +1010,35 @@ class UnifiedHandler(MasterApiHandler):
                     self.wfile.write(json.dumps({"status": "ok", "action": "stopped", "running": False}).encode())
                     return
 
-        if path == "/api/clack_pose_threshold":
-            thresh = req_data.get("threshold")
-            refractory = req_data.get("refractory_ms")
-            with TAP_DETECTOR_LOCK:
-                if TAP_DETECTOR is not None:
-                    if thresh is not None:
-                        TAP_DETECTOR.set_threshold(int(thresh))
-                    if refractory is not None:
-                        TAP_DETECTOR.set_refractory(int(refractory))
-                    st = TAP_DETECTOR.get_state()
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "state": st}).encode())
-                    return
+        if path in ["/api/clack_pose_threshold", "/api/shake_pose_threshold"]:
+            if "threshold_g" in req_data:
+                thresh_g = float(req_data["threshold_g"])
+                UI_CONFIG["shake_threshold_g"] = thresh_g
+                if GLOBAL_POKEBALL:
+                    GLOBAL_POKEBALL.shake_threshold = thresh_g
+                with SHAKE_DETECTOR_LOCK:
+                    if SHAKE_DETECTOR is not None:
+                        SHAKE_DETECTOR.shake_threshold = thresh_g
+            elif "threshold" in req_data:
+                val = float(req_data["threshold"])
+                thresh_g = round(max(1.0, min(5.0, val / 1500.0)), 2)
+                UI_CONFIG["shake_threshold_g"] = thresh_g
+                if GLOBAL_POKEBALL:
+                    GLOBAL_POKEBALL.shake_threshold = thresh_g
+                with SHAKE_DETECTOR_LOCK:
+                    if SHAKE_DETECTOR is not None:
+                        SHAKE_DETECTOR.shake_threshold = thresh_g
+
+            with SHAKE_DETECTOR_LOCK:
+                if SHAKE_DETECTOR is not None:
+                    st = SHAKE_DETECTOR.get_state()
                 else:
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "message": "Detector not active"}).encode())
-                    return
+                    st = {"running": False, "mode": "JOYCON_SHAKE_DETECTOR", "threshold": float(UI_CONFIG["shake_threshold_g"])}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "state": st}).encode())
+            return
 
         if path == "/api/backend_restart":
             if "action" not in req_data:
@@ -1177,13 +1192,13 @@ def main() -> None:
 
     def _on_app_started(started_app_name: str) -> None:
         if started_app_name in ["piranha_pose_app", "clack_pose_app"]:
-            logging.info(f"[Lifecycle] AppManager started '{started_app_name}', activating AudioTapDetector...")
-            start_tap_detector()
+            logging.info(f"[Lifecycle] AppManager started '{started_app_name}', activating JoyConShakeDetector...")
+            start_shake_detector()
 
     def _on_app_stopped(stopped_app_name: str) -> None:
         if stopped_app_name in ["piranha_pose_app", "clack_pose_app"]:
-            logging.info(f"[Lifecycle] AppManager stopped '{stopped_app_name}', stopping AudioTapDetector...")
-            stop_tap_detector()
+            logging.info(f"[Lifecycle] AppManager stopped '{stopped_app_name}', stopping JoyConShakeDetector...")
+            stop_shake_detector()
 
     GLOBAL_APP_MANAGER.register_start_callback(_on_app_started)
     GLOBAL_APP_MANAGER.register_stop_callback(_on_app_stopped)

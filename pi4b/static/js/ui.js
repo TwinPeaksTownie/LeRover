@@ -1414,14 +1414,23 @@ export function updateTelemetryUI(data) {
         }
     }
 
-    // Parse Clack Pose Acoustic Telemetry
+    // Parse Clack Pose / Joy-Con Shake Telemetry
     const cpData = data.clack_pose || {};
     const peakEl = document.getElementById('clackPeakDisplay');
     const noiseEl = document.getElementById('clackNoiseDisplay');
     const threshEl = document.getElementById('clackThreshDisplay');
-    if (peakEl && cpData.current_peak !== undefined) peakEl.innerText = cpData.current_peak;
-    if (noiseEl && cpData.noise_floor !== undefined) noiseEl.innerText = cpData.noise_floor;
-    if (threshEl && cpData.peak_threshold !== undefined) threshEl.innerText = cpData.peak_threshold;
+    if (peakEl) {
+        if (cpData.current_mag !== undefined) peakEl.innerText = Number(cpData.current_mag).toFixed(2) + 'G';
+        else if (cpData.current_peak !== undefined) peakEl.innerText = cpData.current_peak;
+    }
+    if (noiseEl) {
+        if (cpData.baseline !== undefined) noiseEl.innerText = Number(cpData.baseline).toFixed(2) + 'G';
+        else if (cpData.noise_floor !== undefined) noiseEl.innerText = cpData.noise_floor;
+    }
+    if (threshEl) {
+        if (cpData.threshold !== undefined) threshEl.innerText = Number(cpData.threshold).toFixed(1) + 'G';
+        else if (cpData.peak_threshold !== undefined) threshEl.innerText = cpData.peak_threshold;
+    }
 
     // Populate Servo Readouts (1-8)
     for (let i = 1; i <= 8; i++) {

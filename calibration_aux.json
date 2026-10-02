@@ -27,6 +27,11 @@
     "min_threshold": 1000,
     "max_threshold": 10000
   },
+  "shake_detector": {
+    "min_threshold_g": 1.0,
+    "max_threshold_g": 5.0,
+    "default_threshold_g": 2.2
+  },
   "rover_drive": {
     "min_speed_pct": 10,
     "max_speed_pct": 100

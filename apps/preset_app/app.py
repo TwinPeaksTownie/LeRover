@@ -763,16 +763,25 @@ class PiranhaPoseApp(BaseApp):
 
     def execute_attack_sequence(self, backend: RobotBackend, source: str = "ui") -> Tuple[bool, str]:
         """Executes the full 8-step Piranha Plant Attack choreography."""
-        if source == "acoustic_tap":
+        if source == "joycon_shake":
+            attack_enabled = bool(self.config["shake_detector"]["shake_attack_enabled"])
+            if not attack_enabled:
+                self.logger.info("[ATTACK SEQ] Joy-Con shake attack disabled in config; playing warning chime.")
+                dispatch_audio_event(kind="incorrect", stop_previous=True)
+                return True, "Joy-Con shake attack sequence disabled by config"
+        elif source == "acoustic_tap":
             attack_enabled = bool(self.config["clack_detector"]["acoustic_attack_enabled"])
             if not attack_enabled:
                 self.logger.info("[ATTACK SEQ] Acoustic attack disabled in config; playing warning chime.")
                 dispatch_audio_event(kind="incorrect", stop_previous=True)
                 return True, "Acoustic attack sequence disabled by config"
 
-        allow_locomotion = bool(self.config["clack_detector"]["allow_acoustic_locomotion"])
-        if source == "acoustic_tap" and not allow_locomotion:
-            should_drive = False
+        if source == "joycon_shake":
+            allow_locomotion = bool(self.config["shake_detector"]["allow_shake_locomotion"])
+            should_drive = allow_locomotion
+        elif source == "acoustic_tap":
+            allow_locomotion = bool(self.config["clack_detector"]["allow_acoustic_locomotion"])
+            should_drive = allow_locomotion
         else:
             should_drive = True
 
