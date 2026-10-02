@@ -20,7 +20,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from websockets.sync.client import connect as ws_connect
 from apps.listener_app.intent_parser import strip_hallucinated_the
@@ -31,14 +31,17 @@ logger = logging.getLogger("so101.listener_app.vosk_client")
 class VoskStreamingSession:
     """Encapsulates an active WebSocket streaming recognition session with Vosk."""
 
-    def __init__(self, ws_url: str, timeout_sec: float = 5.0) -> None:
+    def __init__(self, ws_url: str, timeout_sec: float = 5.0, drain_timeout_sec: float = 2.0) -> None:
         self.ws_url = ws_url
         self.timeout_sec = timeout_sec
+        self.drain_timeout_sec = drain_timeout_sec
         self.ws_client = None
         self._rx_thread: Optional[threading.Thread] = None
         self._stop_rx = threading.Event()
-        self._final_transcript: str = ""
+        self._complete_parts: List[str] = []
+        self._authoritative_transcript: str = ""
         self._interim_transcript: str = ""
+        self._final_result_event = threading.Event()
         self._msg_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         self._lock = threading.Lock()
 
@@ -73,12 +76,41 @@ class VoskStreamingSession:
                 data = json.loads(raw_msg)
                 self._msg_queue.put(data)
 
-                if "text" in data and data["text"]:
-                    with self._lock:
-                        self._final_transcript = str(data["text"]).strip()
-                elif "partial" in data and data["partial"]:
-                    with self._lock:
-                        self._interim_transcript = str(data["partial"]).strip()
+                if "type" in data:
+                    msg_type = str(data["type"])
+                    if msg_type == "final":
+                        if "text" in data:
+                            part = str(data["text"]).strip()
+                            if part:
+                                with self._lock:
+                                    self._complete_parts.append(part)
+                                    self._interim_transcript = ""
+                    elif msg_type == "final_result":
+                        if "text" in data:
+                            part = str(data["text"]).strip()
+                            with self._lock:
+                                self._authoritative_transcript = part
+                                self._final_result_event.set()
+                    elif msg_type == "partial":
+                        part = ""
+                        if "text" in data:
+                            part = str(data["text"]).strip()
+                        elif "partial" in data:
+                            part = str(data["partial"]).strip()
+                        if part:
+                            with self._lock:
+                                self._interim_transcript = part
+                elif "partial" in data:
+                    part = str(data["partial"]).strip()
+                    if part:
+                        with self._lock:
+                            self._interim_transcript = part
+                elif "text" in data:
+                    part = str(data["text"]).strip()
+                    if part:
+                        with self._lock:
+                            self._authoritative_transcript = part
+                            self._final_result_event.set()
             except TimeoutError:
                 continue
             except Exception as e_rx:
@@ -96,25 +128,24 @@ class VoskStreamingSession:
             logger.warning("Failed to send chunk to Vosk WebSocket: %s", se)
 
     def get_interim_transcript(self) -> str:
+        """Returns the current live partial transcript strictly for UI feedback."""
         with self._lock:
             return self._interim_transcript
 
-    def finish(self, drain_timeout_sec: float = 1.0) -> str:
-        """Signals end of stream, drains final recognized result, and closes connection."""
-        logger.info("Finalizing Vosk streaming session...")
+    def finish(self, drain_timeout_sec: Optional[float] = None) -> str:
+        """Signals end of stream, awaits authoritative final_result, and closes connection."""
+        timeout = self.drain_timeout_sec if drain_timeout_sec is None else float(drain_timeout_sec)
+        logger.info("Finalizing Vosk streaming session (drain timeout: %.2fs)...", timeout)
         if self.ws_client is not None:
             try:
                 self.ws_client.send(json.dumps({"type": "final"}))
             except Exception as fe:
                 logger.debug("Failed sending final marker to Vosk: %s", fe)
 
-        # Await final message arrival up to drain_timeout_sec
-        deadline = time.time() + drain_timeout_sec
-        while time.time() < deadline:
-            with self._lock:
-                if self._final_transcript:
-                    break
-            time.sleep(0.05)
+        # Await authoritative final_result event up to timeout
+        signaled = self._final_result_event.wait(timeout=timeout)
+        if not signaled:
+            logger.warning("Vosk final_result timed out after %.2fs", timeout)
 
         self._stop_rx.set()
         if self._rx_thread is not None and self._rx_thread.is_alive():
@@ -128,10 +159,15 @@ class VoskStreamingSession:
             self.ws_client = None
 
         with self._lock:
-            raw_text = self._final_transcript or self._interim_transcript
+            parts = [p for p in self._complete_parts if p]
+            if self._authoritative_transcript:
+                parts.append(self._authoritative_transcript)
+            raw_text = " ".join(parts).strip()
+            # UNDER ZERO CIRCUMSTANCES DO WE FALL BACK TO _interim_transcript!
+            # Premature live guesses are discarded.
 
         cleaned = strip_hallucinated_the(raw_text)
-        logger.info("Vosk streaming recognized raw: '%s' (cleaned: '%s')", raw_text, cleaned)
+        logger.info("Vosk streaming recognized authoritative raw: '%s' (cleaned: '%s')", raw_text, cleaned)
         return cleaned
 
     def __enter__(self) -> VoskStreamingSession:
@@ -155,6 +191,7 @@ class VoskClient:
         self.health_url = f"http://{self.host}:{self.http_port}/health"
         self.recognize_url = f"http://{self.host}:{self.http_port}/recognize"
         self.timeout_sec = float(self.config["asr"]["timeout_sec"])
+        self.drain_timeout_sec = float(self.config["asr"]["drain_timeout_sec"])
         self.use_dynamic_grammar = bool(self.config["asr"]["use_dynamic_grammar"])
 
     def verify_health(self) -> bool:
@@ -172,7 +209,11 @@ class VoskClient:
 
     def create_session(self) -> VoskStreamingSession:
         """Creates a new streaming WebSocket session."""
-        return VoskStreamingSession(self.ws_url, timeout_sec=self.timeout_sec)
+        return VoskStreamingSession(
+            self.ws_url,
+            timeout_sec=self.timeout_sec,
+            drain_timeout_sec=self.drain_timeout_sec,
+        )
 
     # Compatibility alias for batch calls if needed
     def recognize(self, audio_data: bytes, grammar: Optional[Any] = None) -> str:

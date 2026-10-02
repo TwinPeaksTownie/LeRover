@@ -67,6 +67,9 @@ def load_listener_config() -> Dict[str, Any]:
     _ = str(cfg["asr"]["server_url"])
     _ = str(cfg["asr"]["health_url"])
     _ = float(cfg["asr"]["timeout_sec"])
+    drain_sec = float(cfg["asr"]["drain_timeout_sec"])
+    if drain_sec <= 0:
+        raise ValueError("drain_timeout_sec must be positive")
     _ = bool(cfg["asr"]["use_dynamic_grammar"])
     settle_sec = float(cfg["vad"]["settle_delay_sec"])
     if settle_sec <= 0:

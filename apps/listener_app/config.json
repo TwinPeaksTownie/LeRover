@@ -23,6 +23,7 @@
     "server_url": "ws://127.0.0.1:2700",
     "health_url": "http://127.0.0.1:8059/health",
     "timeout_sec": 20.0,
+    "drain_timeout_sec": 2.0,
     "use_dynamic_grammar": false
   },
   "interlock": {

@@ -647,18 +647,18 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(len(speech_started), 0)
 
     def test_vosk_streaming_session_lifecycle(self):
-        """Verifies VoskStreamingSession pushes chunks over WebSocket and retrieves cleaned transcript without grammar."""
+        """Verifies VoskStreamingSession pushes chunks over WebSocket and retrieves cleaned transcript from final_result."""
         from unittest.mock import patch, MagicMock
         from apps.listener_app.vosk_client import VoskStreamingSession
 
-        session = VoskStreamingSession("ws://127.0.0.1:2700", timeout_sec=1.0)
+        session = VoskStreamingSession("ws://127.0.0.1:2700", timeout_sec=1.0, drain_timeout_sec=0.5)
         with patch("apps.listener_app.vosk_client.ws_connect") as mock_connect:
             mock_ws = MagicMock()
             mock_connect.return_value = mock_ws
             mock_ws.recv.side_effect = [
-                '{"type": "connected"}',
-                '{"partial": "sit"}',
-                '{"text": "sit down"}',
+                '{"type": "ready", "sample_rate": 16000}',
+                '{"type": "partial", "text": "sit"}',
+                '{"type": "final_result", "text": "sit down"}',
             ]
 
             session.start()
@@ -667,6 +667,62 @@ class TestListenerPipeline(unittest.TestCase):
 
             self.assertEqual(transcript, "sit down")
             self.assertTrue(mock_ws.send.called)
+
+    def test_vosk_streaming_session_multipart_assembly(self):
+        """Verifies multi-part phrases (intermediate 'final' + trailing 'final_result') assemble into full sentence."""
+        from unittest.mock import patch, MagicMock
+        from apps.listener_app.vosk_client import VoskStreamingSession
+
+        session = VoskStreamingSession("ws://127.0.0.1:2700", timeout_sec=1.0, drain_timeout_sec=0.5)
+        with patch("apps.listener_app.vosk_client.ws_connect") as mock_connect:
+            mock_ws = MagicMock()
+            mock_connect.return_value = mock_ws
+            mock_ws.recv.side_effect = [
+                '{"type": "ready", "sample_rate": 16000}',
+                '{"type": "final", "text": "get up now"}',
+                '{"type": "partial", "text": "you lazy"}',
+                '{"type": "final_result", "text": "you lazy"}',
+            ]
+
+            session.start()
+            session.send_chunk(b"\x00" * 2560)
+            transcript = session.finish(drain_timeout_sec=0.2)
+
+            # Authoritative transcript combines intermediate final phrase and final_result phrase
+            self.assertEqual(transcript, "get up now you lazy")
+
+    def test_vosk_streaming_session_strictly_rejects_premature_partial_fallback(self):
+        """Verifies premature live partial transcripts are NEVER returned as the final transcript."""
+        from unittest.mock import patch, MagicMock
+        from apps.listener_app.vosk_client import VoskStreamingSession
+
+        session = VoskStreamingSession("ws://127.0.0.1:2700", timeout_sec=1.0, drain_timeout_sec=0.05)
+        with patch("apps.listener_app.vosk_client.ws_connect") as mock_connect:
+            mock_ws = MagicMock()
+            mock_connect.return_value = mock_ws
+            mock_ws.recv.side_effect = [
+                '{"type": "ready", "sample_rate": 16000}',
+                '{"type": "partial", "text": "premature unfinished guess"}',
+                TimeoutError("No final_result received before deadline"),
+            ]
+
+            session.start()
+            session.send_chunk(b"\x00" * 2560)
+            # Live interim transcript is available for UI feedback
+            self.assertEqual(session.get_interim_transcript(), "premature unfinished guess")
+            # Final transcript MUST NOT fall back to premature partial guess
+            transcript = session.finish(drain_timeout_sec=0.05)
+            self.assertEqual(transcript, "")
+
+    def test_vosk_client_config_drain_timeout(self):
+        """Verifies drain_timeout_sec is loaded from config and passed to created sessions."""
+        from apps.listener_app.vosk_client import VoskClient
+        cfg = load_listener_config()
+        self.assertEqual(cfg["asr"]["drain_timeout_sec"], 2.0)
+        client = VoskClient(cfg)
+        self.assertEqual(client.drain_timeout_sec, 2.0)
+        session = client.create_session()
+        self.assertEqual(session.drain_timeout_sec, 2.0)
 
     def test_listener_multiturn_persists_in_idle(self):
         """Verifies that ListenerApp returns to IDLE after posture execution and awaits Button B."""
