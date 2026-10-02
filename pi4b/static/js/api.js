@@ -354,7 +354,8 @@ export function sendPlaySound(payload) {
             event: payload.event,
             stop_previous: payload.stop_previous,
             delay_sec: payload.delay_sec,
-            wav_path: payload.wav_path
+            wav_path: payload.wav_path,
+            blocking: Boolean(payload.blocking)
         })
     }, 1000);
 }

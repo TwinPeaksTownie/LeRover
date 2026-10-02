@@ -150,21 +150,25 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
                 "event": event_name,
                 "wav_path": wav_path or "",
                 "stop_previous": stop_previous,
-                "delay_sec": 0.0
+                "delay_sec": 0.0,
+                "blocking": blocking
             }).encode("utf-8")
             req = urllib.request.Request(
                 get_pi4b_sound_url(),
                 data=payload,
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if blocking:
+                req_timeout = max(5.0, duration_sec + 5.0)
+            else:
+                req_timeout = 2.0
+            with urllib.request.urlopen(req, timeout=req_timeout) as resp:
                 pass
         except Exception as e:
             logger.exception("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
 
     if blocking:
         _work()
-        time.sleep(duration_sec)
     else:
         threading.Thread(target=_work, daemon=True).start()
 

@@ -145,7 +145,22 @@ def load_joycon_calibration() -> Tuple[int, int, int, int, int, int]:
             return center_x, center_y, span_x, span_y, min_calib_raw, max_calib_raw
     raise FileNotFoundError(f"Missing required calibration file: calibration_aux.json (searched: {aux_candidates})")
 
-load_joystick_calibration = load_joycon_calibration
+
+def load_joystick_calibration() -> Tuple[int, int]:
+    """Loads empirical Pokéball joystick center calibrations for backward-compatible tests."""
+    aux_candidates = [
+        Path(APP_DIR).resolve().parent.parent / "calibration_aux.json",
+        Path.home() / "so101" / "calibration_aux.json",
+        Path("/home/carson/touch_ui/calibration_aux.json"),
+        Path("/home/carson/so101/calibration_aux.json"),
+    ]
+    for p in aux_candidates:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                calib = json.load(f)
+            sec = calib["pokeball_joystick"]
+            return int(sec["center_x"]), int(sec["center_y"])
+    raise FileNotFoundError(f"Missing required calibration file: calibration_aux.json (searched: {aux_candidates})")
 
 
 def load_shake_detector_config() -> Dict[str, Any]:

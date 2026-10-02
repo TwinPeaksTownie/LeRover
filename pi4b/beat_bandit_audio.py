@@ -197,7 +197,8 @@ class BeatBanditAudioClient:
             "event": "beat_bandit_track",
             "wav_path": self.active_wav_path,
             "stop_previous": True,
-            "delay_sec": 0.0
+            "delay_sec": 0.0,
+            "blocking": False
         }).encode("utf-8")
         req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=2.0) as resp:

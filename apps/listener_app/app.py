@@ -278,11 +278,11 @@ class ListenerApp(BaseApp):
             # 2. Managed Speech Capture Loop
             while attempt <= max_retries and not stop_event.is_set() and not self.abort_listen_event.is_set():
                 chime_kind = "wake" if attempt == 0 else "error"
-                dur = self._play_chime(chime_kind)
+                dur = self._play_chime(chime_kind, blocking=True)
                 if attempt > 0:
                     self.action_taken = f"Could not hear speech (retry {attempt}/{max_retries}). Speak now..."
 
-                if stop_event.wait(timeout=dur + acoustic_pad) or self.abort_listen_event.is_set():
+                if stop_event.wait(timeout=acoustic_pad) or self.abort_listen_event.is_set():
                     break
 
                 with self._selection_lock:

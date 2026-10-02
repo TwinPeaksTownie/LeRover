@@ -115,7 +115,8 @@ class OrnithVoiceApp(BaseApp):
                     "event": kind,
                     "wav_path": "",
                     "stop_previous": stop_previous,
-                    "delay_sec": delay_sec
+                    "delay_sec": delay_sec,
+                    "blocking": False
                 }).encode("utf-8")
                 req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=2.0):

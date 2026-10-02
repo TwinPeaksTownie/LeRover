@@ -96,14 +96,16 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self._simulate_input(buttons=0x02, now=t0)
             self.assertFalse(self.service.is_armed)
 
-        # 1.0s (under 1.5s)
-        with patch("time.time", return_value=t0 + 1.0):
-            self._simulate_input(buttons=0x02, now=t0 + 1.0)
+        a_hold_sec = float(self.service.config["gestures"]["a_hold_sec"])
+
+        # under a_hold_sec
+        with patch("time.time", return_value=t0 + a_hold_sec * 0.5):
+            self._simulate_input(buttons=0x02, now=t0 + a_hold_sec * 0.5)
             self.assertFalse(self.service.is_armed)
 
-        # 1.5s reached -> armed in ROVER mode!
-        with patch("time.time", return_value=t0 + 1.55):
-            self._simulate_input(buttons=0x02, now=t0 + 1.55)
+        # a_hold_sec reached -> armed in ROVER mode!
+        with patch("time.time", return_value=t0 + a_hold_sec + 0.05):
+            self._simulate_input(buttons=0x02, now=t0 + a_hold_sec + 0.05)
             self.assertTrue(self.service.is_armed)
             self.assertEqual(self.service.control_mode, "ROVER")
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
@@ -118,29 +120,30 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.service.rover_ctrl.set_drive.assert_called_with(0.0, 0.0)
             mock_play_chime.assert_called_with("mode_switch_aux")
 
-        # Click Button A (0x02) while in AUX mode -> Switches back to ROVER mode & arms!
+        # Hold Button A (0x02) for a_hold_sec while in AUX mode -> Switches back to ROVER mode & arms!
         t_click_a = t0 + 6.0
         with patch("time.time", return_value=t_click_a):
             self._simulate_input(buttons=0x02, now=t_click_a)
-        with patch("time.time", return_value=t_click_a + 0.1):
-            self._simulate_input(buttons=0x00, now=t_click_a + 0.1)
+        with patch("time.time", return_value=t_click_a + a_hold_sec + 0.05):
+            self._simulate_input(buttons=0x02, now=t_click_a + a_hold_sec + 0.05)
             self.assertEqual(self.service.control_mode, "ROVER")
             self.assertTrue(self.service.is_armed)
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
     @patch("apps.pokeball_app.app.play_chime")
     def test_button_a_hold_starts_pokeball_app_when_inactive(self, mock_play_chime):
-        """Holding Button A for 1.5s when pokeball app is inactive stops active apps and launches pokeball_teleop_app."""
+        """Holding Button A for a_hold_sec when pokeball app is inactive stops active apps and launches pokeball_teleop_app."""
         self.service.app_manager = MagicMock()
         self.service.app_manager.current_app_name = "listener_app"
         self.service.teleop_enabled = False
         t0 = 250.0
+        a_hold_sec = float(self.service.config["gestures"]["a_hold_sec"])
 
         with patch("time.time", return_value=t0):
             self._simulate_input(buttons=0x02, now=t0)
-        with patch("time.time", return_value=t0 + 1.55):
+        with patch("time.time", return_value=t0 + a_hold_sec + 0.05):
             with patch("threading.Thread") as mock_thread:
-                self._simulate_input(buttons=0x02, now=t0 + 1.55)
+                self._simulate_input(buttons=0x02, now=t0 + a_hold_sec + 0.05)
                 self.assertTrue(self.service.a_hold_triggered)
                 self.assertTrue(self.service.is_armed)
                 mock_thread.return_value.start.assert_called_once()
@@ -209,8 +212,8 @@ class TestPokeballServiceGestures(unittest.TestCase):
         self.service.zero_calibrated = True
         t0 = 500.0
 
-        # Simulate stick UP (raw_y = center_y - 1000, physical forward) with NO button pressed (0x00)
-        up_y = self.service.joystick_center_y - 1000
+        # Simulate stick UP (raw_y = center_y + 1000, physical forward) with NO button pressed (0x00)
+        up_y = self.service.joystick_center_y + 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
                 self._simulate_input(buttons=0x00, now=t0, raw_y=up_y)
@@ -221,14 +224,14 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 )
 
     def test_gantry_down_nudges_left_in_aux_mode(self):
-        """In AUX mode, tilting stick DOWN (norm_y > 0.35) must dispatch /api/nudge_physical with direction='left'."""
+        """In AUX mode, tilting stick DOWN (norm_y < -0.35) must dispatch /api/nudge_physical with direction='left'."""
         self.service.teleop_enabled = True
         self.service.control_mode = "AUX"
         self.service.zero_calibrated = True
         t0 = 600.0
 
-        # Simulate stick DOWN (raw_y = center_y + 1000, physical back) with NO button pressed (0x00)
-        down_y = self.service.joystick_center_y + 1000
+        # Simulate stick DOWN (raw_y = center_y - 1000, physical back) with NO button pressed (0x00)
+        down_y = self.service.joystick_center_y - 1000
         with patch.object(self.service, "_send_aux_request") as mock_aux:
             with patch("time.time", return_value=t0):
                 self._simulate_input(buttons=0x00, now=t0, raw_y=down_y)
@@ -450,6 +453,88 @@ class TestClackTapDetectorLifecycle(unittest.TestCase):
         with patch("urllib.request.urlopen"):
             detector._dispatch_action(1, [], 5000)
         mock_sound_cb.assert_called_with("smw_stomp_bones")
+
+
+class TestJoyConShakeDetector(unittest.TestCase):
+    """Verifies JoyConShakeDetector active gating, IMU parsing, and multi-shake accumulation."""
+
+    def test_shake_detector_is_active_gate(self):
+        sys.path.insert(0, str(REPO_ROOT / "pi4b"))
+        from joycon_shake_detector import JoyConShakeDetector
+
+        mock_sound_cb = MagicMock()
+        mock_service = MagicMock()
+        mock_service.telemetry = {"accel": {"mag": 2.5, "baseline": 1.0}}
+        mock_service.shake_threshold = 2.2
+        is_active = False
+
+        detector = JoyConShakeDetector(
+            joycon_service=mock_service,
+            play_sound_cb=mock_sound_cb,
+            is_active_cb=lambda: is_active
+        )
+        detector.start()
+
+        # Inactive: shake registered callback ignored
+        detector._on_joycon_shake(2.8, 1.8)
+        self.assertEqual(detector._shake_count, 0)
+        mock_sound_cb.assert_not_called()
+
+        # Inactive: dispatch action rejected
+        detector._dispatch_action(1, 1.8)
+        mock_sound_cb.assert_not_called()
+
+        # Active: shake registered and actions dispatch
+        is_active = True
+        with patch("urllib.request.urlopen"):
+            detector._dispatch_action(1, 1.8)
+        mock_sound_cb.assert_called_with("smw_stomp_bones")
+
+        with patch("urllib.request.urlopen"):
+            detector._dispatch_action(2, 1.8)
+        mock_sound_cb.assert_called_with("smw_save_menu")
+
+        with patch("urllib.request.urlopen"):
+            detector._dispatch_action(3, 1.8)
+        mock_sound_cb.assert_called_with("smw_vine")
+
+        with patch("urllib.request.urlopen") as mock_url:
+            mock_url.return_value.__enter__.return_value.read.return_value = b'{"status": "ok"}'
+            detector._dispatch_action(4, 1.8)
+
+        detector.stop()
+
+    def test_pokeball_service_detect_shake(self):
+        """Verifies exponential baseline tracking and spike detection in PokeballService."""
+        service = PokeballService()
+        service.shake_threshold = 2.0
+        service.shake_cooldown = 0.35
+        service.baseline_accel_mag = 1.0
+
+        t0 = 1000.0
+        # Normal resting reading: delta ~ 0
+        is_shake, delta = service._detect_shake(1.0, t0)
+        self.assertFalse(is_shake)
+        self.assertAlmostEqual(service.baseline_accel_mag, 1.0, places=2)
+
+        # Spike reading > threshold
+        t1 = t0 + 0.1
+        is_shake, delta = service._detect_shake(3.5, t1)
+        self.assertTrue(is_shake)
+        self.assertGreater(delta, 2.0)
+        self.assertEqual(service.shake_count, 1)
+
+        # Within cooldown period: must return False
+        t2 = t1 + 0.1
+        is_shake, delta = service._detect_shake(3.5, t2)
+        self.assertFalse(is_shake)
+        self.assertEqual(service.shake_count, 1)
+
+        # After cooldown period: must trigger next shake
+        t3 = t1 + 0.4
+        is_shake, delta = service._detect_shake(3.5, t3)
+        self.assertTrue(is_shake)
+        self.assertEqual(service.shake_count, 2)
 
 
 if __name__ == "__main__":
