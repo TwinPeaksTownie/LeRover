@@ -89,6 +89,19 @@ class TestBeatBanditAudioSync(unittest.TestCase):
         client.stop_playback()
         self.assertEqual(client.get_audio_playback_time(), -1.0)
 
+        # Verify start_playback sets playback_start_time via time.time without NameError
+        from unittest.mock import patch, MagicMock
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.status = 200
+            mock_urlopen.return_value.__enter__.return_value = mock_resp
+            client.active_wav_path = "/tmp/test.wav"
+            res = client.start_playback()
+            self.assertTrue(res)
+            self.assertGreater(client.playback_start_time, 0.0)
+            self.assertGreaterEqual(client.get_audio_playback_time(), 0.0)
+            client.stop_playback()
+
     def test_choreography_player_uses_audio_time_fn(self):
         """Test 3: Verify ChoreographyPlayer locks its evaluation timeline to get_audio_time_fn."""
         backend = MockBackend()
