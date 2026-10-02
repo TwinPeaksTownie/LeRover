@@ -34,5 +34,17 @@
     "max_volts": 3.3,
     "max_distance_mm": 1000.0,
     "update_rate_hz": 10
+  },
+  "collision_guard": {
+    "enabled": true,
+    "danger_zone_cm": 25.0,
+    "min_valid_cm": 4.0,
+    "max_valid_cm": 100.0,
+    "ground_exclusion_adc": 62000,
+    "recovery_button": "a",
+    "recovery_hold_sec": 2.0,
+    "speed_penalty_pct": 50,
+    "halt_pulse_left": 1500,
+    "halt_pulse_right": 1500
   }
 }
