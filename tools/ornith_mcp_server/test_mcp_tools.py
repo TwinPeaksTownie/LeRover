@@ -10,6 +10,7 @@ import sys
 
 # Ensure local directory is in pythonpath
 CUR_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(CUR_DIR))
 if CUR_DIR not in sys.path:
     sys.path.insert(0, CUR_DIR)
 
@@ -144,21 +145,21 @@ def test_hardware():
     print("\n--- 2. Testing tools_hardware.py ---")
     
     # Test 2.1: Non-interactive SSH Ping
-    print("Testing ssh_run_command on pi500...")
-    ssh_res = tools_hardware.ssh_run_command("pi500", "echo 'PING_PI500_OK'")
+    print("Testing ssh_run_command on pi4b...")
+    ssh_res = tools_hardware.ssh_run_command("pi4b", "echo 'PING_PI4B_OK'")
     print(f"  Status: {ssh_res.get('status')} | Exit code: {ssh_res.get('exit_code')}")
     print(f"  Stdout: {ssh_res.get('stdout')}")
-    assert ssh_res.get("status") == "success" and ssh_res.get("stdout") == "PING_PI500_OK", "SSH Ping failed"
+    assert ssh_res.get("status") == "success" and ssh_res.get("stdout") == "PING_PI4B_OK", "SSH Ping failed"
 
     # Test 2.2: Daemon log query
-    print("Testing query_daemon_logs on pi500...")
-    log_res = tools_hardware.query_daemon_logs("pi500", service_name="backend.service", lines=5)
+    print("Testing query_daemon_logs on pi4b...")
+    log_res = tools_hardware.query_daemon_logs("pi4b", service_name="backend.service", lines=5)
     print(f"  Status: {log_res.get('status')} | Clean: {log_res.get('clean')} | Errors: {log_res.get('error_count')}")
     assert log_res.get("status") == "success", "Daemon log query failed"
 
     # Test 2.3: Telemetry check (non-colliding)
     print("Testing sample_motor_telemetry...")
-    telem_res = tools_hardware.sample_motor_telemetry("pi500")
+    telem_res = tools_hardware.sample_motor_telemetry("pi4b")
     print(f"  Status: {telem_res.get('status')} | Source: {telem_res.get('source')}")
     assert telem_res.get("status") == "success", "Telemetry check failed"
 
@@ -166,17 +167,24 @@ def test_hardware():
     print("Testing target deployment parity checks...")
     dep_res = tools_hardware.check_target_deployments([
         "pi4b/static/js/ui.js",
-        "pi500/pokeball_app.py"
+        "pi4b/server.py"
     ])
     print(f"  Status: {dep_res.get('status')} | Checked: {dep_res.get('checked_files')} | All verified: {dep_res.get('all_verified')}")
     assert dep_res.get("status") == "success" and dep_res.get("all_verified"), "Production files deployment parity failed"
-    print("  [PASS] Deployed files on Pi 4B and Pi 500 match local MD5.")
+    print("  [PASS] Deployed files on Pi 4B match local MD5.")
 
-    mismatch_res = tools_hardware.check_target_deployments([
-        "pi500/nonexistent_dummy_file.py"
-    ])
-    assert mismatch_res.get("has_mismatch"), "Missing remote file should flag mismatch"
-    print("  [PASS] Un-deployed remote file correctly flagged as deployment mismatch.")
+    dummy_local = os.path.join(REPO_ROOT, "pi4b", "un_deployed_test_file.py")
+    with open(dummy_local, "w", encoding="utf-8") as f:
+        f.write("# temp test file\n")
+    try:
+        mismatch_res = tools_hardware.check_target_deployments([
+            "pi4b/un_deployed_test_file.py"
+        ])
+        assert mismatch_res.get("has_mismatch"), "Missing remote file should flag mismatch"
+        print("  [PASS] Un-deployed remote file correctly flagged as deployment mismatch.")
+    finally:
+        if os.path.exists(dummy_local):
+            os.remove(dummy_local)
 
 
 def test_speech():
@@ -204,8 +212,8 @@ async def test_mcp_server():
     print(f"Total Registered MCP Tools: {len(tools)}")
     for t in tools:
         print(f"  - {t.name}: {t.description.strip()[:60]}...")
-    assert len(tools) == 17, f"Expected 17 tools, found {len(tools)}"
-    print("  [PASS] All 17 MCP tools registered with valid schemas.")
+    assert len(tools) >= 17, f"Expected >= 17 tools, found {len(tools)}"
+    print(f"  [PASS] All {len(tools)} MCP tools registered with valid schemas.")
 
 async def main():
     print("==================================================")

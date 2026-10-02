@@ -1,7 +1,7 @@
 """
 tools_hardware.py - Remote Hardware Verification & Telemetry Tools for Ornith
 Provides non-colliding hardware verification tools over SSH and HTTP REST:
-1. Non-interactive SSH command execution (Pi 500, Pi 4B, Mac Mini)
+1. Non-interactive SSH command execution (Pi 4B, Mac Mini)
 2. MD5 checksum file deployment verification (Verification State 1)
 3. Non-colliding motor telemetry sampling via REST endpoints (States 2 & 3)
 4. Systemd daemon journal log scanning for serial timeouts and tracebacks (State 4)
@@ -92,7 +92,7 @@ def verify_file_deployment(local_file: str, remote_path: str, node: str = "pi4b"
     Args:
         local_file: Absolute or workspace path to the local source file.
         remote_path: Absolute path to the destination file on the remote node.
-        node: Remote node alias (defaults to 'pi500').
+        node: Remote node alias (defaults to 'pi4b').
         
     Returns:
         Dict with match status, local MD5, and remote MD5.

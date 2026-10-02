@@ -283,13 +283,22 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
 def scan_code_contracts(diff_text: str = "", repo_path: str = None, check_deployments: bool = True) -> dict:
     repo_path = _get_repo_path(repo_path)
 
-    diff_res = get_git_diff(repo_path)
-    if not diff_text and diff_res.get("status") == "success":
-        diff_text = diff_res.get("diff", "")
-
-    modified_files = diff_res.get("modified_files", []) if isinstance(diff_res, dict) else []
-    untracked_files = diff_res.get("untracked_files", []) if isinstance(diff_res, dict) else []
-    all_changed_files = list(dict.fromkeys(modified_files + untracked_files))
+    custom_diff_provided = bool(diff_text and diff_text.strip())
+    if not custom_diff_provided:
+        diff_res = get_git_diff(repo_path)
+        if diff_res["status"] == "success":
+            diff_text = diff_res["diff"]
+            modified_files = diff_res["modified_files"]
+            untracked_files = diff_res["untracked_files"]
+        else:
+            diff_text = ""
+            modified_files = []
+            untracked_files = []
+        all_changed_files = list(dict.fromkeys(modified_files + untracked_files))
+    else:
+        modified_files = []
+        untracked_files = []
+        all_changed_files = []
 
     violations = []
     warnings = []
@@ -488,8 +497,9 @@ def query_ornith_for_review(
         if diff_res["status"] != "success":
             return diff_res
         diff_text = diff_res["diff"]
-
-    contract_res = scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
+        contract_res = scan_code_contracts(repo_path=repo_path)
+    else:
+        contract_res = scan_code_contracts(diff_text=diff_text, repo_path=repo_path)
 
     if "violations" in contract_res and contract_res["violations"]:
         violations_detail = "\n".join(

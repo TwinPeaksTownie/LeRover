@@ -30,7 +30,7 @@ import socket
 
 def resolve_follower_host(cli_host: Optional[str] = None) -> str:
     """Dynamically resolves follower robot host IP (Pi 4B) based on network environment."""
-    if cli_host and cli_host not in ["192.168.0.130", "default", ""]:
+    if cli_host and cli_host not in ["default", ""]:
         return cli_host
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

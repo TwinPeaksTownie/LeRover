@@ -52,16 +52,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "bus_reconnect_backoff_sec": 0.25
     },
     "direct_ethernet": {
-        "pi500_ip": "10.0.0.1",
         "pi4b_ip": "10.0.0.2",
         "subnet": "10.0.0.0/24"
     },
     "wifi_defaults": {
-        "pi500_ip": "192.168.0.130",
         "pi4b_ip": "192.168.0.86",
         "mac_ip": "192.168.0.149",
         "pc_ip": "192.168.0.194",
-        "pi500_host": "pi500.local",
         "pi4b_host": "raspberrypi.local",
         "mac_host": "mac-mini.local",
         "pc_host": "workstation.local"
@@ -70,7 +67,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "pi4b_http": 8082,
         "pi4b_video": 8083,
         "pi4b_audio_udp": 5004,
-        "pi500_http": 8085,
         "mac_http": 8086,
         "voice_bridge_http": 8058,
         "teleop_zmq": 5555,
@@ -88,7 +84,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         }
     },
     "auth": {
-        "pi500_user": "user",
         "pi4b_user": "carson",
         "mac_user": "twinpeakstownie"
     }
@@ -116,15 +111,15 @@ def validate_network_config(cfg: Dict[str, Any]) -> None:
         if k not in cfg["hardware"]:
             raise KeyError(f"Missing required key 'hardware.{k}' in network configuration")
 
-    for k in ["pi500_ip", "pi4b_ip", "subnet"]:
+    for k in ["pi4b_ip", "subnet"]:
         if k not in cfg["direct_ethernet"]:
             raise KeyError(f"Missing required key 'direct_ethernet.{k}' in network configuration")
 
-    for k in ["pi500_ip", "pi4b_ip", "mac_ip", "pc_ip", "pi500_host", "pi4b_host", "mac_host", "pc_host"]:
+    for k in ["pi4b_ip", "mac_ip", "pc_ip", "pi4b_host", "mac_host", "pc_host"]:
         if k not in cfg["wifi_defaults"]:
             raise KeyError(f"Missing required key 'wifi_defaults.{k}' in network configuration")
 
-    for k in ["pi4b_http", "pi4b_video", "pi4b_audio_udp", "pi500_http", "mac_http", "voice_bridge_http", "teleop_zmq", "teleop_zmq_heartbeat", "servo_studio_http"]:
+    for k in ["pi4b_http", "pi4b_video", "pi4b_audio_udp", "mac_http", "voice_bridge_http", "teleop_zmq", "teleop_zmq_heartbeat", "servo_studio_http"]:
         if k not in cfg["ports"]:
             raise KeyError(f"Missing required key 'ports.{k}' in network configuration")
 
@@ -368,7 +363,7 @@ def get_master_backend_ip() -> str:
     cfg = load_network_config()
     if cfg["topology_mode"] == "STANDALONE_PI4B":
         return str(cfg["endpoints"]["master_backend"]["host"])
-    return get_pi500_ip(prefer_port=int(cfg["endpoints"]["master_backend"]["port"]))
+    return get_pi4b_ip(prefer_port=int(cfg["endpoints"]["master_backend"]["port"]))
 
 
 def get_touch_ui_ip() -> str:
@@ -425,29 +420,7 @@ def get_backend_host(prefer_port: Optional[int] = 8085) -> str:
         raise KeyError(f"Invalid topology_mode '{topology_mode}'. Expected 'STANDALONE_PI4B' or 'DUAL_NODE'")
     if topology_mode == "STANDALONE_PI4B":
         return str(cfg["endpoints"]["master_backend"]["host"])
-    eth_ip = cfg["direct_ethernet"]["pi500_ip"]
-
-    if is_hotspot_active():
-        candidates: List[Tuple[str, Optional[int]]] = [
-            (eth_ip, prefer_port),
-            (eth_ip, 22),
-            (eth_ip, None)
-        ]
-        return resolve_target(candidates, "pi500_ip")
-
-    wifi_ip = cfg["wifi_defaults"]["pi500_ip"]
-    m_host = cfg["wifi_defaults"]["pi500_host"]
-
-    candidates = [
-        (eth_ip, prefer_port),
-        (eth_ip, 22),
-        (wifi_ip, prefer_port),
-        (wifi_ip, 22),
-        (m_host, prefer_port),
-        (eth_ip, None),
-        (wifi_ip, None)
-    ]
-    return resolve_target(candidates, "pi500_ip")
+    return get_pi4b_ip(prefer_port=prefer_port)
 
 
 def get_backend_url(path: str = "/api/status", port: int = 8085) -> str:
@@ -457,8 +430,8 @@ def get_backend_url(path: str = "/api/status", port: int = 8085) -> str:
 
 
 def get_pi500_ip(prefer_port: Optional[int] = 8085) -> str:
-    """Transitional backward-compatible alias for get_backend_host."""
-    return get_backend_host(prefer_port=prefer_port)
+    """Deprecated alias: re-routes legacy Pi 500 calls directly to Pi 4B."""
+    return get_pi4b_ip(prefer_port=prefer_port)
 
 
 def get_pi4b_ip(prefer_port: Optional[int] = 8082) -> str:
@@ -554,7 +527,6 @@ def get_active_connection_mode() -> Dict[str, Any]:
                 "ssid": active_ssid,
                 "is_cloud_enabled": m["is_cloud_enabled"],
                 "is_offline": False,
-                "pi500_ip": get_pi500_ip(),
                 "pi4b_ip": get_pi4b_ip()
             }
 
@@ -564,7 +536,6 @@ def get_active_connection_mode() -> Dict[str, Any]:
             "ssid": active_ssid,
             "is_cloud_enabled": True,
             "is_offline": False,
-            "pi500_ip": get_pi500_ip(),
             "pi4b_ip": get_pi4b_ip()
         }
 
@@ -573,14 +544,12 @@ def get_active_connection_mode() -> Dict[str, Any]:
         "ssid": None,
         "is_cloud_enabled": False,
         "is_offline": True,
-        "pi500_ip": get_pi500_ip(),
         "pi4b_ip": get_pi4b_ip()
     }
 
 
 if __name__ == "__main__":
     print("Hotspot Active:", is_hotspot_active())
-    print("Pi 500 IP:", get_pi500_ip())
     print("Pi 4B IP:", get_pi4b_ip())
     print("Mac IP:", get_mac_ip())
     print("Ports:", get_ports())

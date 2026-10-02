@@ -14,7 +14,6 @@ import threading
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("wifi_blacklist")
 
-PI500_ETH_IP = "10.0.0.1"
 PI4B_ETH_IP = "10.0.0.2"
 
 
@@ -39,8 +38,6 @@ def enable_wifi_local() -> bool:
         time.sleep(1.0)
         # Trigger reconnection via wifi_mode_manager if present
         mgr_script = "/home/carson/touch_ui/scripts/wifi_mode_manager.py"
-        if not os.path.exists(mgr_script):
-            mgr_script = "/home/user/so101/scripts/wifi_mode_manager.py"
         if os.path.exists(mgr_script):
             subprocess.Popen([sys.executable, mgr_script])
         return True
@@ -49,52 +46,24 @@ def enable_wifi_local() -> bool:
         return False
 
 
-def disable_wifi_remote_pi500() -> bool:
-    """Disables Wi-Fi on Pi 500 via direct Ethernet SSH."""
-    logger.info("Disabling Pi 500 Wi-Fi over Direct Ethernet (%s)...", PI500_ETH_IP)
-    cmd = [
-        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
-        f"user@{PI500_ETH_IP}",
-        "sudo rfkill block wifi; sudo nmcli radio wifi off"
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=6)
-    logger.info("Pi 500 Wi-Fi disable output: out='%s' err='%s'", res.stdout.strip(), res.stderr.strip())
-    return res.returncode == 0
-
-
-def enable_wifi_remote_pi500() -> bool:
-    """Enables Wi-Fi on Pi 500 via direct Ethernet SSH."""
-    logger.info("Enabling Pi 500 Wi-Fi over Direct Ethernet (%s)...", PI500_ETH_IP)
-    cmd = [
-        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4",
-        f"user@{PI500_ETH_IP}",
-        "sudo rfkill unblock wifi; sudo nmcli radio wifi on"
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=6)
-    logger.info("Pi 500 Wi-Fi enable output: out='%s' err='%s'", res.stdout.strip(), res.stderr.strip())
-    return res.returncode == 0
-
-
 def start_safety_watchdog(timeout_sec: int = 600):
     """Forks a detached background watchdog process that automatically unblocks Wi-Fi after timeout."""
     logger.info("Launching detached safety watchdog (%d seconds)...", timeout_sec)
-    restore_cmd = f"sleep {timeout_sec} && sudo rfkill unblock wifi && sudo nmcli radio wifi on && ssh -o StrictHostKeyChecking=no -o ConnectTimeout=4 user@{PI500_ETH_IP} 'sudo rfkill unblock wifi; sudo nmcli radio wifi on'"
+    restore_cmd = f"sleep {timeout_sec} && sudo rfkill unblock wifi && sudo nmcli radio wifi on"
     subprocess.Popen(["bash", "-c", restore_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
 def disable_all(watchdog_sec: int = 600):
-    logger.info("=== DISABLING WI-FI ACROSS PI 4B AND PI 500 ===")
+    logger.info("=== DISABLING WI-FI ON PI 4B ===")
     start_safety_watchdog(watchdog_sec)
-    disable_wifi_remote_pi500()
     disable_wifi_local()
-    logger.info("=== Wi-Fi is now DISABLED on both Pis. Robot operating in 100% Direct Ethernet Isolation. ===")
+    logger.info("=== Wi-Fi is now DISABLED on Pi 4B. ===")
 
 
 def enable_all():
-    logger.info("=== RESTORING WI-FI ACROSS PI 4B AND PI 500 ===")
+    logger.info("=== RESTORING WI-FI ON PI 4B ===")
     enable_wifi_local()
-    enable_wifi_remote_pi500()
-    logger.info("=== Wi-Fi has been RESTORED on both Pis. ===")
+    logger.info("=== Wi-Fi has been RESTORED on Pi 4B. ===")
 
 
 if __name__ == "__main__":

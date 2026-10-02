@@ -9,7 +9,6 @@ import paramiko
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "wifi_networks.json")
 
 HOSTS = [
-    {"name": "Pi 500", "ip": "192.168.0.130", "user": "user", "pass": None, "sudo": False},
     {"name": "Pi 4B", "ip": "192.168.0.86", "user": "carson", "pass": "raspberry", "sudo": True},
 ]
 

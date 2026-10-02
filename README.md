@@ -31,14 +31,14 @@ The system is distributed across three physical compute nodes communicating over
                 v                                                 v
    +----------------------------------------------------------------------------+
    |                      Follower Arm & Motion Controller                      |
-   |                      (Raspberry Pi 500 @ 192.168.0.130)                    |
+   |                      (Raspberry Pi 4B @ 192.168.0.86)                      |
    |                                                                            |
-   |   [ API Server :8085 ] <---> [ AppManager ] <---> [ RobotBackend HAL ]     |
+   |   [ API Server :8082 ] <---> [ AppManager ] <---> [ RobotBackend HAL ]     |
    |                                      |                     |               |
    |        +-----------------------------+                     v               |
-   |        | Managed Applications:                      /dev/ttyACM0 (1M Baud) |
+   |        | Managed Applications:                      /dev/ttyACM1 (1M Baud) |
    |        |  * TeleopControlApp (ZMQ Leader-Follower)         |               |
-   |        |  * PokeballApp (Dual Aux/Rover BLE Teleop)        v               |
+   |        |  * JoyconApp (Dual Aux/Rover BLE Teleop)          v               |
    |        |  * ServoStudioApp (Web Calibration UI)     [ Feetech STS Bus ]    |
    +------------------------------------------------------------+---------------+
                                                                 |
@@ -52,12 +52,12 @@ The system is distributed across three physical compute nodes communicating over
                                                                                   +---------------------------+
 ```
 
-### 1. Motion Controller & Master Host (Raspberry Pi 500 @ `192.168.0.130`)
-* **Hardware Authority:** Serves as the single source of truth for physical motor states and bus connectivity over `/dev/ttyACM0`.
-* **Core Daemon (`main.py`):** Runs the master orchestration process hosting the REST API (`api_server.py`), hardware abstraction layer (`robot_backend.py`), and the application lifecycle manager (`app_manager.py`).
+### 1. Motion Controller & Master Host (Raspberry Pi 4B @ `192.168.0.86`)
+* **Hardware Authority:** Serves as the single source of truth for physical motor states and bus connectivity over `/dev/ttyACM1` (and KB2040 rover controller on `/dev/ttyACM0`).
+* **Core Daemon (`server.py`):** Runs the master orchestration process hosting the REST API (`backend.service` on port 8082), hardware abstraction layer, and touchscreen UI.
 * **Active Managed Applications:**
   * `TeleopControlApp`: High-frequency ZMQ subscriber receiving leader joint frames and translating them to calibrated follower ticks.
-  * `PokeballApp`: BLE client receiving inputs from the Poké Ball Plus controller to operate auxiliary actuators and drivetrain.
+  * `JoyconApp`: Bluetooth Joy-Con teleoperation interface for auxiliary actuators and drivetrain.
   * `ServoStudioApp`: Standalone visual dashboard for individual servo testing, torque toggling, and joint limit calibration.
 
 ### 2. Touchscreen Kiosk UI & Router (Raspberry Pi 4B @ `192.168.0.86`)
@@ -95,7 +95,7 @@ All servos communicate via the half-duplex Feetech STS TTL serial protocol with 
 
 ## Poké Ball Plus Teleoperation & Safety Bridge
 
-The `pi500/pokeball_app.py` module provides handheld teleoperation with dual operating modes and a strict safety bridge:
+The teleoperation module provides handheld teleoperation with dual operating modes and a strict safety bridge:
 
 ```
                   +----------------------------------------------+
@@ -110,8 +110,8 @@ The `pi500/pokeball_app.py` module provides handheld teleoperation with dual ope
           |  * Hard Limit Ricochet: Audio alert on mechanical limits     |
           +------------------------------+-------------------------------+
                                          |
-                       HOLD JOYSTICK CLICK (BUTTON A)
-                               FOR 3.0 SECONDS
+                        HOLD JOYSTICK CLICK (BUTTON A)
+                                FOR 3.0 SECONDS
                                          |
                                          v
           +--------------------------------------------------------------+
@@ -135,22 +135,12 @@ The `pi500/pokeball_app.py` module provides handheld teleoperation with dual ope
 
 ```
 LeRover/
-├── pi500/                      # Pi 500 Motion Controller Stack
-│   ├── main.py                 # Master daemon & startup entry point
-│   ├── api_server.py           # HTTP REST API server (:8085)
-│   ├── app_manager.py          # Managed application lifecycle coordinator
-│   ├── robot_backend.py        # Low-level hardware abstraction layer
-│   ├── aux_servo_controller.py # Direct Feetech serial protocol driver
-│   ├── teleop_control_loop.py  # ZMQ Leader-to-Follower control loop
-│   ├── pokeball_app.py         # Poké Ball Plus BLE dual-mode application
-│   ├── servo_studio_app.py     # Interactive servo calibration dashboard
-│   ├── telemetry_proxies.py    # Hardware state caching & proxy helpers
-│   └── power_manager.py        # Voltage monitoring & power protection
-├── pi4b/                       # Pi 4B Touchscreen Kiosk & Media Router
-│   ├── server.py               # Touchscreen Kiosk web server (:8082)
+├── pi4b/                       # Standalone Master Controller & Touch UI Stack
+│   ├── server.py               # Touchscreen Kiosk & Master API server (:8082)
 │   ├── api_gateway.py          # API forwarder & routing layer
 │   ├── audio_service.py        # PulseAudio non-blocking playback engine
 │   ├── telemetry_poller.py     # Background state polling service
+│   ├── network_resolver.py     # Network resolution & dynamic topology engine
 │   ├── rover_launcher.py       # Standalone rover process supervisor
 │   └── static/                 # Touchscreen frontend HTML5/JS assets
 ├── rover/                      # Overlander-4 Rover Control Package
@@ -174,7 +164,7 @@ LeRover/
 
 ## Core Operational & Safety Rules
 
-1. **Pi 500 Source of Truth:** The Pi 500 (`192.168.0.130`) maintains exclusive authority over physical motor states. Upstream nodes must query live telemetry rather than caching or asserting unverified positions.
+1. **Pi 4B Source of Truth:** The standalone Pi 4B (`192.168.0.86`) maintains exclusive authority over physical motor states and bus connectivity. Upstream nodes must query live telemetry rather than caching or asserting unverified positions.
 2. **Zero Runtime EEPROM Writes:** Register offsets (Registers 31, 32, 55) must never be written during runtime. All spatial centering, angle bounds, and homing calculations are calculated in software memory using `follower.json` and `calibration_aux.json`.
 3. **Loud Failure Modes:** Code must raise explicit errors when telemetry reads fail. Never inject dummy defaults (e.g. `or 2048`) that could corrupt persistent calibration files.
 4. **PulseAudio Audio Pipeline:** On the Pi 4B, all sound playback must be dispatched through `paplay` or default ALSA sinks to avoid resource locking with the desktop audio subsystem.
@@ -183,17 +173,7 @@ LeRover/
 
 ## Quickstart & Execution
 
-### 1. Running the Motion Controller (Pi 500)
-```bash
-# SSH into Pi 500
-ssh user@192.168.0.130
-
-# Start the unified master daemon
-cd /home/user/so101/pi500
-python3 main.py
-```
-
-### 2. Running the Touchscreen Kiosk (Pi 4B)
+### 1. Running the Touchscreen Kiosk & Motion Backend (Pi 4B)
 ```bash
 # SSH into Pi 4B
 ssh carson@192.168.0.86
@@ -203,14 +183,14 @@ sudo systemctl restart backend.service
 systemctl --user restart touchscreen.service
 ```
 
-### 3. Launching Leader Arm Teleoperation (Mac Mini)
+### 2. Launching Leader Arm Teleoperation (Mac Mini)
 ```bash
 # SSH into Mac Mini
 ssh twinpeakstownie@192.168.0.149
 
 # Stream leader arm motion
 cd ~/lerobot
-python3 so101_leader_client.py --ip 192.168.0.130 --port 5555
+python3 so101_leader_client.py --ip 192.168.0.86 --port 5555
 ```
 
 ### 4. Running the Rover Web Simulator Locally

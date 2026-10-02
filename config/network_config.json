@@ -37,16 +37,13 @@
     "bus_reconnect_backoff_sec": 0.25
   },
   "direct_ethernet": {
-    "pi500_ip": "10.0.0.1",
     "pi4b_ip": "10.0.0.2",
     "subnet": "10.0.0.0/24"
   },
   "wifi_defaults": {
-    "pi500_ip": "192.168.0.130",
     "pi4b_ip": "192.168.0.86",
     "mac_ip": "192.168.0.149",
     "pc_ip": "192.168.0.194",
-    "pi500_host": "pi500.local",
     "pi4b_host": "raspberrypi.local",
     "mac_host": "mac-mini.local",
     "pc_host": "workstation.local"
@@ -55,7 +52,6 @@
     "pi4b_http": 8082,
     "pi4b_video": 8083,
     "pi4b_audio_udp": 5004,
-    "pi500_http": 8085,
     "mac_http": 8086,
     "voice_bridge_http": 8058,
     "vosk_server_port": 8059,
@@ -90,7 +86,6 @@
     }
   },
   "auth": {
-    "pi500_user": "user",
     "pi4b_user": "carson",
     "mac_user": "twinpeakstownie"
   },
