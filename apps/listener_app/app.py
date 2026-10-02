@@ -199,10 +199,10 @@ class ListenerApp(BaseApp):
     def last_analyzed_track(self, val: Optional[Dict[str, Any]]) -> None:
         self.dispatcher.last_analyzed_track = val
 
-    def _play_chime(self, chime_key: str, blocking: bool = False) -> float:
+    def _play_chime(self, chime_key: str) -> float:
         event_name = str(self.config["chimes"][chime_key])
         try:
-            return audio_resolver.dispatch_audio_event(event_name, blocking=blocking)
+            return audio_resolver.dispatch_audio_event(event_name)
         except Exception as e:
             logger.warning("Failed to dispatch audio chime '%s': %s", event_name, e)
             return 0.0
@@ -255,6 +255,7 @@ class ListenerApp(BaseApp):
         max_retries = int(self.config["execution"]["max_retries"])
         acoustic_pad = float(self.config["vad"]["acoustic_decay_pad_sec"])
         post_settle = float(self.config["vad"]["post_chime_settle_sec"])
+        settle_delay = float(self.config["vad"]["settle_delay_sec"])
 
         while not stop_event.is_set():
             with self._selection_lock:
@@ -278,11 +279,16 @@ class ListenerApp(BaseApp):
             # 2. Managed Speech Capture Loop
             while attempt <= max_retries and not stop_event.is_set() and not self.abort_listen_event.is_set():
                 chime_kind = "wake" if attempt == 0 else "error"
-                dur = self._play_chime(chime_kind, blocking=True)
+                event_name = str(self.config["chimes"][chime_kind])
+                dur = audio_resolver.get_audio_duration_sec(event_name)
+                self._play_chime(chime_kind)
                 if attempt > 0:
                     self.action_taken = f"Could not hear speech (retry {attempt}/{max_retries}). Speak now..."
 
-                if stop_event.wait(timeout=acoustic_pad) or self.abort_listen_event.is_set():
+                delay_wait = dur + settle_delay
+                logger.info("Awaiting pre-calculated audio delay %.3fs (dur=%.3fs + settle=%.3fs) before mic capture (attempt %d/%d)...",
+                            delay_wait, dur, settle_delay, attempt + 1, max_retries + 1)
+                if stop_event.wait(timeout=delay_wait) or self.abort_listen_event.is_set():
                     break
 
                 with self._selection_lock:

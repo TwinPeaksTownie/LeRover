@@ -268,7 +268,7 @@ def sync_rover_speed_config(pct: int):
 
 CURRENT_PAPLAY_PROC: Optional[subprocess.Popen] = None
 
-def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = "", blocking: bool = False) -> float:
+def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool = False, delay_sec: float = 0.0, kind: str = "") -> float:
     """Dispatches audio playback on Pi 4B PulseAudio daemon with fail-fast validation and full traceback logging."""
     active_event = event if event else kind
     if active_event == "stop_audio":
@@ -344,10 +344,7 @@ def play_sound_helper(event: str = "", wav_path: str = "", stop_previous: bool =
             if CURRENT_PAPLAY_PROC is not None and CURRENT_PAPLAY_PROC.poll() is not None:
                 CURRENT_PAPLAY_PROC = None
 
-    if blocking:
-        _work()
-    else:
-        threading.Thread(target=_work, daemon=True).start()
+    threading.Thread(target=_work, daemon=True).start()
     return duration_sec
 
 def manage_local_backend(action: str) -> Optional[int]:
@@ -941,7 +938,7 @@ class UnifiedHandler(MasterApiHandler):
                 return
 
             # Strict schema validation: require exact contract keys
-            required_keys = ["event", "stop_previous", "delay_sec", "wav_path", "blocking"]
+            required_keys = ["event", "stop_previous", "delay_sec", "wav_path"]
             missing_keys = [k for k in required_keys if k not in req_data]
             if missing_keys:
                 self.send_response(400)
@@ -956,13 +953,12 @@ class UnifiedHandler(MasterApiHandler):
             stop_prev = bool(req_data["stop_previous"])
             delay_s = float(req_data["delay_sec"])
             wav_p = str(req_data["wav_path"])
-            is_blocking = bool(req_data["blocking"])
 
-            dur = play_sound_helper(event=event_name, wav_path=wav_p, stop_previous=stop_prev, delay_sec=delay_s, blocking=is_blocking)
+            dur = play_sound_helper(event=event_name, wav_path=wav_p, stop_previous=stop_prev, delay_sec=delay_s)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p, "duration_sec": dur, "blocking": is_blocking}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "ok", "sound": event_name or wav_p, "duration_sec": dur}).encode('utf-8'))
             return
 
         if path == "/api/connect_hotspot":

@@ -133,8 +133,8 @@ def get_pi4b_sound_url() -> str:
     return f"http://{pi4b_ip}:8082/api/play_sound"
 
 
-def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0, blocking: bool = False) -> float:
-    """Dispatches sound playback event to Pi 4B audio service asynchronously or blocking.
+def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None, stop_previous: bool = True, delay_sec: float = 0.0) -> float:
+    """Dispatches sound playback event to Pi 4B audio service asynchronously.
     Returns exact audio duration in seconds.
     """
     event_name = kind
@@ -151,26 +151,17 @@ def dispatch_audio_event(kind: str = "incorrect", wav_path: Optional[str] = None
                 "wav_path": wav_path or "",
                 "stop_previous": stop_previous,
                 "delay_sec": 0.0,
-                "blocking": blocking
             }).encode("utf-8")
             req = urllib.request.Request(
                 get_pi4b_sound_url(),
                 data=payload,
                 headers={"Content-Type": "application/json"}
             )
-            if blocking:
-                req_timeout = max(5.0, duration_sec + 5.0)
-            else:
-                req_timeout = 2.0
-            with urllib.request.urlopen(req, timeout=req_timeout) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
                 pass
         except Exception as e:
             logger.exception("Failed to dispatch audio event '%s' (%s) to Pi 4B: %s", event_name, sound_file, e)
 
-    if blocking:
-        _work()
-    else:
-        threading.Thread(target=_work, daemon=True).start()
-
+    threading.Thread(target=_work, daemon=True).start()
     return duration_sec
 
