@@ -23,7 +23,7 @@
     "server_url": "ws://127.0.0.1:2700",
     "health_url": "http://127.0.0.1:8059/health",
     "timeout_sec": 20.0,
-    "drain_timeout_sec": 2.0,
+    "drain_timeout_sec": 3.5,
     "use_dynamic_grammar": false
   },
   "interlock": {
@@ -34,7 +34,7 @@
     "settle_delay_sec": 0.65,
     "post_chime_settle_sec": 1.5,
     "silence_timeout_sec": 10.0,
-    "post_speech_silence_sec": 0.85,
+    "post_speech_silence_sec": 1.0,
     "acoustic_decay_pad_sec": 0.15,
     "stream_flush_bytes": 4800,
     "max_record_sec": 10.0,

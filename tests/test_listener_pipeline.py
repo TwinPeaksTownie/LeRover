@@ -259,7 +259,7 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(cfg["vad"]["settle_delay_sec"], 0.65)
         self.assertEqual(cfg["vad"]["post_chime_settle_sec"], 1.5)
         self.assertEqual(cfg["vad"]["silence_timeout_sec"], 10.0)
-        self.assertEqual(cfg["vad"]["post_speech_silence_sec"], 0.85)
+        self.assertEqual(cfg["vad"]["post_speech_silence_sec"], 1.0)
         self.assertEqual(cfg["vad"]["min_record_sec"], 0.8)
         self.assertEqual(cfg["vad"]["energy_threshold"], 300)
         self.assertEqual(cfg["vad"]["sustain_energy_threshold"], 180)
@@ -739,11 +739,11 @@ class TestListenerPipeline(unittest.TestCase):
         """Verifies drain_timeout_sec is loaded from config and passed to created sessions."""
         from apps.listener_app.vosk_client import VoskClient
         cfg = load_listener_config()
-        self.assertEqual(cfg["asr"]["drain_timeout_sec"], 2.0)
+        self.assertEqual(cfg["asr"]["drain_timeout_sec"], 3.5)
         client = VoskClient(cfg)
-        self.assertEqual(client.drain_timeout_sec, 2.0)
+        self.assertEqual(client.drain_timeout_sec, 3.5)
         session = client.create_session()
-        self.assertEqual(session.drain_timeout_sec, 2.0)
+        self.assertEqual(session.drain_timeout_sec, 3.5)
 
     def test_listener_multiturn_persists_in_idle(self):
         """Verifies that ListenerApp returns to IDLE after posture execution and awaits Button B."""
