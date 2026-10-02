@@ -25,6 +25,14 @@
     "auto_recover_stalls": true,
     "stall_timeout_sec": 3.5,
     "uhubctl_location": "1-1",
-    "uhubctl_port": 3
+    "uhubctl_port": 1
+  },
+  "distance_sensor": {
+    "model": "goBILDA_3111_0001_0001",
+    "analog_pin": "A3",
+    "adc_resolution_bits": 16,
+    "max_volts": 3.3,
+    "max_distance_mm": 1000.0,
+    "update_rate_hz": 10
   }
 }
