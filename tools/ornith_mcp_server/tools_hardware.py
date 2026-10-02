@@ -38,7 +38,7 @@ def _log_debug(msg: str):
     sys.stderr.write(f"[HARDWARE] {msg}\n")
     sys.stderr.flush()
 
-def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
+def ssh_run_command(node: str, command: str, timeout_sec: int = 30) -> dict:
     """
     Executes a non-interactive command over SSH on a target system node.
     
@@ -55,7 +55,7 @@ def ssh_run_command(node: str, command: str, timeout_sec: int = 15) -> dict:
     ssh_cmd = [
         "ssh",
         "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=5",
+        "-o", "ConnectTimeout=20",
         "-o", "StrictHostKeyChecking=no",
         target,
         command

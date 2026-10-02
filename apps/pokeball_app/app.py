@@ -233,6 +233,8 @@ class PokeballService:
         self.last_btn_sl = False
         self.last_x_direction = "center"
         self.last_y_direction = "center"
+        self.last_listener_nav_time: float = 0.0
+        self.last_btn_a_listener: bool = False
 
         self.is_busy = False
         self.busy_until = 0.0
@@ -277,6 +279,41 @@ class PokeballService:
         }
         self.pairing_in_progress = False
         self.write_telemetry()
+
+    @property
+    def joystick_center_x(self) -> int:
+        return self.center_x
+
+    @property
+    def joystick_center_y(self) -> int:
+        return self.center_y
+
+    def notification_handler(self, sender: Any, data: Any) -> None:
+        """Compatibility adapter translating synthetic/BLE test packets to Joy-Con report 0x30."""
+        raw = bytearray(data)
+        if len(raw) == 49 and raw[0] == 0x30:
+            self._process_report_30(bytes(raw))
+            return
+
+        if len(raw) >= 5:
+            buttons = raw[1]
+            x_raw = raw[2] | ((raw[3] & 0x0F) << 8)
+            y_raw = (raw[3] >> 4) | (raw[4] << 4)
+
+            rep = bytearray(49)
+            rep[0] = 0x30
+            rep[1] = 0x01
+            rep[2] = 0x80
+            b3 = 0
+            if buttons & 0x01:  # Button B
+                b3 |= 0x04
+            if buttons & 0x02:  # Button A
+                b3 |= 0x08
+            rep[3] = b3
+            rep[9] = x_raw & 0xFF
+            rep[10] = ((x_raw >> 8) & 0x0F) | ((y_raw & 0x0F) << 4)
+            rep[11] = (y_raw >> 4) & 0xFF
+            self._process_report_30(bytes(rep))
 
     def write_telemetry(self) -> None:
         try:
@@ -433,6 +470,35 @@ class PokeballService:
         else:
             y_direction = "center"
 
+        # Check if listener_app is active and in SELECTING state
+        is_listener_selecting = False
+        l_app = None
+        if self.app_manager and self.app_manager.current_app_name == "listener_app":
+            l_app = self.app_manager.active_app
+            if l_app and hasattr(l_app, "state") and l_app.state == "SELECTING":
+                is_listener_selecting = True
+
+        if is_listener_selecting and l_app is not None:
+            # 1. Joystick Y tilt: step row cursor with 0.35s refractory debounce
+            if (now - self.last_listener_nav_time) >= 0.35:
+                if norm_y > 0.4:
+                    l_app.navigate_selection(-1)
+                    self.last_listener_nav_time = now
+                elif norm_y < -0.4:
+                    l_app.navigate_selection(1)
+                    self.last_listener_nav_time = now
+
+            # 2. Button A click: confirm selection & trigger Mac analysis
+            if btn_a and not self.last_btn_a_listener:
+                self.logger.info("🔘 Button A click detected in SELECTING state! Triggering Mac analysis...")
+                if hasattr(l_app, "trigger_analysis"):
+                    l_app.trigger_analysis(l_app.selected_index)
+                elif hasattr(l_app, "select_track"):
+                    l_app.select_track(l_app.selected_index)
+            self.last_btn_a_listener = btn_a
+        else:
+            self.last_btn_a_listener = False
+
         a_hold_sec = float(self.config["gestures"]["a_hold_sec"])
         b_hold_sec = float(self.config["gestures"]["b_hold_sec"])
         arm_lockout_sec = float(self.config["gestures"]["arm_lockout_sec"])
@@ -440,7 +506,7 @@ class PokeballService:
         # ---------------------------------------------------------------------
         # 1. BUTTON A GESTURES: HOLD 2.0s -> ROVER MODE / APP LAUNCH
         # ---------------------------------------------------------------------
-        if btn_a and not btn_b:
+        if btn_a and not btn_b and not is_listener_selecting:
             if self.btn_a_press_start_time is None:
                 self.btn_a_press_start_time = now
             hold_duration_a = now - self.btn_a_press_start_time

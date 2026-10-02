@@ -302,7 +302,17 @@ async def _ws_client_handler(websocket) -> None:
                 try:
                     cmd = json.loads(message)
                     cmd_type = str(cmd["type"])
-                    if cmd_type == "final":
+                    if cmd_type == "set_grammar":
+                        raw_grammar = cmd["grammar"]
+                        if not isinstance(raw_grammar, list):
+                            raise ValueError("set_grammar payload requires 'grammar' list")
+                        phrases = [str(p) for p in raw_grammar]
+                        if "[unk]" not in phrases:
+                            phrases.append("[unk]")
+                        rec = vosk.KaldiRecognizer(m, sample_rate, json.dumps(phrases))
+                        logger.info("Configured session recognizer with %d dynamic grammar phrases", len(phrases))
+                        await websocket.send(json.dumps({"type": "grammar_set", "count": len(phrases)}))
+                    elif cmd_type == "final":
                         fres = json.loads(rec.FinalResult())
                         final_text = str(fres["text"]).strip()
                         await websocket.send(json.dumps({

@@ -100,6 +100,9 @@ def load_listener_config() -> Dict[str, Any]:
     acoustic_decay_pad_sec = float(cfg["vad"]["acoustic_decay_pad_sec"])
     if acoustic_decay_pad_sec < 0:
         raise ValueError("acoustic_decay_pad_sec cannot be negative")
+    flush_bytes = int(cfg["vad"]["stream_flush_bytes"])
+    if flush_bytes <= 0:
+        raise ValueError("stream_flush_bytes must be positive")
     _ = float(cfg["vad"]["max_record_sec"])
     _ = float(cfg["vad"]["min_record_sec"])
     _ = int(cfg["vad"]["energy_threshold"])
@@ -447,12 +450,13 @@ class ListenerApp(BaseApp):
             self.logger.warning("Failed to dispatch audio chime '%s': %s", event_name, e, exc_info=True)
             return 0.0
 
-    def _flush_stream(self, stream_resp: Any, drain_bytes: int = 3200) -> None:
+    def _flush_stream(self, stream_resp: Any, drain_bytes: Optional[int] = None) -> None:
         """Reads and discards initial bytes to flush startup transients or acoustic residues."""
         if stream_resp is None:
             return
+        bytes_to_drain = int(self.config["vad"]["stream_flush_bytes"]) if drain_bytes is None else drain_bytes
         try:
-            _ = stream_resp.read(drain_bytes)
+            _ = stream_resp.read(bytes_to_drain)
         except Exception as e:
             self.logger.debug("Stream flush read note: %s", e)
 
@@ -618,21 +622,21 @@ class ListenerApp(BaseApp):
         self._stream_resp = None
 
         try:
-            while not stop_event.is_set() and not self.abort_listen_event.is_set():
+            while not stop_event.is_set():
                 with self._selection_lock:
                     self.state = "IDLE"
                 if not self.action_taken or self.action_taken == "Listening for voice command...":
                     self.action_taken = "Press Button B to speak"
                 self.logger.info("ListenerApp in IDLE. Awaiting Button B single tap to start listening...")
 
-                # 1. Await single Button B tap (or stop/abort)
-                while not stop_event.is_set() and not self.abort_listen_event.is_set():
+                # 1. Await single Button B tap (or stop)
+                while not stop_event.is_set():
                     if self.start_listen_event.wait(timeout=0.1):
                         self.start_listen_event.clear()
                         break
 
-                if stop_event.is_set() or self.abort_listen_event.is_set():
-                    self.logger.info("Stop or abort signaled while in IDLE. Exiting ListenerApp...")
+                if stop_event.is_set():
+                    self.logger.info("Stop signaled while in IDLE. Exiting ListenerApp...")
                     break
 
                 pre_roll_buffer: deque[bytes] = deque(maxlen=pre_roll_chunks)
@@ -664,7 +668,7 @@ class ListenerApp(BaseApp):
                             self._stream_resp = None
                         try:
                             self._stream_resp = self._connect_daemon_audio_stream()
-                            self._flush_stream(self._stream_resp, drain_bytes=3200)
+                            self._flush_stream(self._stream_resp)
                             self.logger.info("Fresh daemon microphone stream connected and flushed.")
                         except Exception as e:
                             self.logger.warning("Could not open daemon audio stream (%s), entering polling mode...", e, exc_info=True)
@@ -724,6 +728,14 @@ class ListenerApp(BaseApp):
                             _ = ws_client.recv(timeout=1.0)
                         except Exception as ex_init:
                             self.logger.debug("Initial greeting read skipped: %s", ex_init)
+
+                        if bool(self.config["asr"]["use_dynamic_grammar"]):
+                            grammar_list = self._extract_dynamic_grammar()
+                            try:
+                                ws_client.send(json.dumps({"type": "set_grammar", "grammar": grammar_list}))
+                                self.logger.info("Sent dynamic grammar (%d phrases) to Vosk WebSocket session.", len(grammar_list))
+                            except Exception as g_err:
+                                self.logger.warning("Failed sending dynamic grammar to Vosk WebSocket: %s", g_err)
 
                         def _rx_worker() -> None:
                             while not stop_rx.is_set():
@@ -1042,6 +1054,15 @@ class ListenerApp(BaseApp):
 
                 pre_roll_buffer.clear()
 
+                if self.abort_listen_event.is_set():
+                    self.logger.info("Voice capture turn aborted by user gesture. Returning to IDLE.")
+                    self.action_taken = "Voice turn cancelled. Press Button B to speak"
+                    self.abort_listen_event.clear()
+                    self.start_listen_event.clear()
+                    with self._selection_lock:
+                        self.state = "IDLE"
+                    continue
+
                 if self.single_turn:
                     self.logger.info("Single-turn voice command completed. Terminating ListenerApp...")
                     if self.caller_app and self.app_manager is not None:
@@ -1064,6 +1085,8 @@ class ListenerApp(BaseApp):
 
                 with self._selection_lock:
                     self.state = "IDLE"
+                self.abort_listen_event.clear()
+                self.start_listen_event.clear()
                 if not self.action_taken.endswith("Press Button B to speak"):
                     self.action_taken = f"{self.action_taken}. Press Button B to speak"
                 self.logger.info("Command turn completed. ListenerApp returned to IDLE state. Awaiting Button B.")
