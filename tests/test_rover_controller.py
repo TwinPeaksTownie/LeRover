@@ -85,10 +85,23 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.assertEqual(telem["right_pulse"], 1334)
 
     def test_speed_step_adjustment(self):
-        """adjust_speed_pct must step max_speed_pct and update max_pulse_offset atomically."""
+        """adjust_speed_pct must step max_speed_pct and update max_pulse_offset atomically up and down."""
+        self.assertEqual(self.controller.max_speed_pct, 35)
+
+        # SR button: step up +5%
         new_speed = self.controller.adjust_speed_pct(5)
         self.assertEqual(new_speed, 40)
         self.assertEqual(self.controller.max_pulse_offset, 200)
+
+        # SL button: step down -5%
+        decreased_speed = self.controller.adjust_speed_pct(-5)
+        self.assertEqual(decreased_speed, 35)
+        self.assertEqual(self.controller.max_pulse_offset, 175)
+
+        # SL button: step down again -5%
+        decreased_speed2 = self.controller.adjust_speed_pct(-5)
+        self.assertEqual(decreased_speed2, 30)
+        self.assertEqual(self.controller.max_pulse_offset, 150)
 
     def test_throttle_gated_steering(self):
         """When enforce_throttle_gate is True and throttle is 0, steering must not move wheels."""
