@@ -52,7 +52,8 @@ def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             _ = cfg["pwm"]["max_pulse_us"]
             _ = cfg["pwm"]["max_pulse_offset"]
             _ = cfg["pwm"]["max_speed_pct"]
-            _ = cfg["control"]["accel_ramp_rate"]
+            _ = float(cfg["control"]["accel_time_sec"])
+            _ = float(cfg["control"]["decel_time_sec"])
             _ = cfg["control"]["watchdog_timeout_sec"]
             _ = cfg["control"]["steering_trim"]
             _ = cfg["control"]["speed_step_pct"]
@@ -201,7 +202,8 @@ class RoverController:
         self.max_pulse_us = int(self.config["pwm"]["max_pulse_us"])
         self.max_pulse_offset = int(self.config["pwm"]["max_pulse_offset"])
         self.max_speed_pct = int(self.config["pwm"]["max_speed_pct"])
-        self.accel_ramp_rate = float(self.config["control"]["accel_ramp_rate"])
+        self.accel_time_sec = float(self.config["control"]["accel_time_sec"])
+        self.decel_time_sec = float(self.config["control"]["decel_time_sec"])
         self.watchdog_timeout = float(self.config["control"]["watchdog_timeout_sec"])
         self.steering_trim = float(self.config["control"]["steering_trim"])
         self.speed_step_pct = int(self.config["control"]["speed_step_pct"])
@@ -289,6 +291,58 @@ class RoverController:
             self.steering_trim = max(-0.25, min(0.25, float(trim)))
             self.telemetry["steering_trim"] = round(self.steering_trim, 3)
             logger.info("RoverController updated steering_trim: %+.3f", self.steering_trim)
+
+    @property
+    def accel_ramp_rate(self) -> float:
+        """Backward compatibility adapter for tests inspecting or overriding ramp rate."""
+        if self.accel_time_sec <= (1.0 / self.loop_rate_hz):
+            return 1.0
+        return 1.0 / (self.accel_time_sec * self.loop_rate_hz)
+
+    @accel_ramp_rate.setter
+    def accel_ramp_rate(self, val: float) -> None:
+        """Backward compatibility setter for unit tests configuring instant or scaled response."""
+        v = float(val)
+        if v >= 1.0:
+            self.accel_time_sec = 1.0 / self.loop_rate_hz
+            self.decel_time_sec = 1.0 / self.loop_rate_hz
+        else:
+            self.accel_time_sec = 1.0 / (v * self.loop_rate_hz) if v > 0 else 2.0
+            self.decel_time_sec = 0.5
+
+    @staticmethod
+    def _apply_asymmetric_slew(current: float, target: float, accel_step: float, decel_step: float) -> float:
+        """Applies linear slew rate limiting distinguishing acceleration away from zero vs braking toward zero."""
+        if current == 0.0:
+            if target > 0.0:
+                return min(target, accel_step)
+            elif target < 0.0:
+                return max(target, -accel_step)
+            return 0.0
+
+        if current > 0.0:
+            if target >= current:
+                # Accelerating in positive direction
+                return min(target, current + accel_step)
+            elif target >= 0.0:
+                # Decelerating toward zero in positive territory
+                return max(target, current - decel_step)
+            else:
+                # Reversing direction: brake to zero first
+                val_after_decel = current - decel_step
+                return max(0.0, val_after_decel)
+
+        # current < 0.0
+        if target <= current:
+            # Accelerating in negative direction
+            return max(target, current - accel_step)
+        elif target <= 0.0:
+            # Decelerating toward zero in negative territory
+            return min(target, current + decel_step)
+        else:
+            # Reversing direction: brake to zero first
+            val_after_decel = current + decel_step
+            return min(0.0, val_after_decel)
 
     def _check_config_reload(self) -> None:
         """Polls /tmp/rover_config.json dynamically to allow runtime speed changes and trim adjustments without restart."""
@@ -592,9 +646,17 @@ class RoverController:
                 target_left = max(-1.0, min(1.0, throttle + steering))
                 target_right = max(-1.0, min(1.0, throttle - steering))
 
-                # Apply software smoothing acceleration ramp
-                self._current_left_val += (target_left - self._current_left_val) * self.accel_ramp_rate
-                self._current_right_val += (target_right - self._current_right_val) * self.accel_ramp_rate
+                # Calculate per-tick slew step limits from physical timing
+                accel_step = (1.0 / self.accel_time_sec) / self.loop_rate_hz if self.accel_time_sec > 0 else 1.0
+                decel_step = (1.0 / self.decel_time_sec) / self.loop_rate_hz if self.decel_time_sec > 0 else 1.0
+
+                # Apply asymmetric linear slew rate limiting
+                self._current_left_val = self._apply_asymmetric_slew(
+                    self._current_left_val, target_left, accel_step, decel_step
+                )
+                self._current_right_val = self._apply_asymmetric_slew(
+                    self._current_right_val, target_right, accel_step, decel_step
+                )
 
                 # Map to 50Hz PWM pulse widths using calibrated neutral and limits from rover_config.json
                 # Left motor forward: higher pulse (>1500 us)

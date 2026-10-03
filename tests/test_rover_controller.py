@@ -153,6 +153,29 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.assertFalse(telem["in_danger_zone"])
 
 
+    def test_asymmetric_slew_timing(self):
+        """Verifies that acceleration takes 2.0s (50 ticks) and deceleration takes 0.5s (13 ticks)."""
+        accel_step = (1.0 / 2.0) / 25.0  # 0.020
+        decel_step = (1.0 / 0.5) / 25.0  # 0.080
+
+        # 1. Acceleration from 0.0 to 1.0
+        val = 0.0
+        for tick in range(1, 51):
+            val = RoverController._apply_asymmetric_slew(val, 1.0, accel_step, decel_step)
+            expected = round(tick * 0.020, 4)
+            self.assertAlmostEqual(val, expected, places=3)
+        self.assertAlmostEqual(val, 1.0, places=3)
+
+        # 2. Deceleration from 1.0 to 0.0
+        for tick in range(1, 13):
+            val = RoverController._apply_asymmetric_slew(val, 0.0, accel_step, decel_step)
+            expected = round(1.0 - (tick * 0.080), 4)
+            self.assertAlmostEqual(val, expected, places=3)
+        # At tick 13, it should reach 0.0 exactly
+        val = RoverController._apply_asymmetric_slew(val, 0.0, accel_step, decel_step)
+        self.assertEqual(val, 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

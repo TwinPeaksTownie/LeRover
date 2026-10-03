@@ -7,7 +7,8 @@
     "max_speed_pct": 35
   },
   "control": {
-    "accel_ramp_rate": 0.20,
+    "accel_time_sec": 2.0,
+    "decel_time_sec": 0.5,
     "watchdog_timeout_sec": 1.0,
     "steering_trim": 0.05,
     "speed_step_pct": 5,
