@@ -27,7 +27,7 @@
   },
   "audit": {
     "active_backend": "nim",
-    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "model": "meta/llama-3.2-11b-vision-instruct",
     "lm_studio_url": "http://127.0.0.1:1234/v1/chat/completions",
     "nim_url": "https://integrate.api.nvidia.com/v1/chat/completions",
     "max_tokens": 16384,
@@ -46,7 +46,7 @@
       },
       "nim": {
         "url": "https://integrate.api.nvidia.com/v1/chat/completions",
-        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "model": "meta/llama-3.2-11b-vision-instruct",
         "max_tokens": 16384,
         "temperature": 0.2,
         "reasoning_effort": "low",

@@ -49,6 +49,8 @@ def load_guard_config(repo_root: Optional[Path] = None) -> Tuple[Dict[str, Any],
     _ = float(rover_cfg["collision_guard"]["min_valid_cm"])
     _ = float(rover_cfg["collision_guard"]["max_valid_cm"])
     _ = int(rover_cfg["collision_guard"]["ground_exclusion_adc"])
+    _ = int(rover_cfg["collision_guard"]["lockout_speed_threshold_pct"])
+    _ = int(rover_cfg["collision_guard"]["docked_speed_pct"])
     _ = str(rover_cfg["collision_guard"]["recovery_button"])
     _ = float(rover_cfg["collision_guard"]["recovery_hold_sec"])
     _ = int(rover_cfg["collision_guard"]["speed_penalty_pct"])
@@ -90,6 +92,8 @@ class ObstacleSafetyGuard:
         self.guard_cfg = self.config["collision_guard"]
         self.enabled = bool(self.guard_cfg["enabled"])
         self.danger_zone_cm = float(self.guard_cfg["danger_zone_cm"])
+        self.lockout_speed_threshold_pct = int(self.guard_cfg["lockout_speed_threshold_pct"])
+        self.docked_speed_pct = int(self.guard_cfg["docked_speed_pct"])
         self.recovery_btn = str(self.guard_cfg["recovery_button"])
         self.recovery_hold_sec = float(self.guard_cfg["recovery_hold_sec"])
         self.speed_penalty_pct = int(self.guard_cfg["speed_penalty_pct"])
@@ -191,15 +195,17 @@ class ObstacleSafetyGuard:
 
         # State 1: NORMAL Operation
         if self.state == self.STATE_NORMAL:
-            if self.enabled and in_danger and throttle > 0.05:
-                # Emergency collision condition: forward throttle toward danger zone obstacle!
+            # Gated lockout: Trigger lockout only if obstacle in danger zone, forward throttle > 0.05,
+            # AND current speed cap > lockout_speed_threshold_pct (50%).
+            # If current speed <= 50%, lockout is suppressed to permit low-speed tactile crawl/maneuvering at wall.
+            if self.enabled and in_danger and throttle > 0.05 and self.last_known_speed > self.lockout_speed_threshold_pct:
                 self.state = self.STATE_LOCKOUT
                 self.a_hold_start = None
                 self.dispatch_emergency_halt(True)
                 action_taken = "TRIGGERED_LOCKOUT"
                 logger.warning(
-                    "EMERGENCY COLLISION GUARD HALT! Obstacle at %s cm (danger threshold %.1f cm). Entering LOCKOUT.",
-                    dist_cm, self.danger_zone_cm
+                    "EMERGENCY COLLISION GUARD HALT! Obstacle at %s cm (danger threshold %.1f cm) at %d%% speed. Entering LOCKOUT.",
+                    dist_cm, self.danger_zone_cm, self.last_known_speed
                 )
 
         # State 2: LOCKOUT Latch (Requires 2.0s hold on button 'A')
@@ -209,20 +215,17 @@ class ObstacleSafetyGuard:
                     self.a_hold_start = current_time
                     action_taken = "HOLDING_RECOVERY_BUTTON"
                 elif (current_time - self.a_hold_start) >= self.recovery_hold_sec:
-                    # 2.0 second recovery threshold met!
-                    penalized_speed = max(
-                        self.min_speed_pct,
-                        int(self.last_known_speed * (self.speed_penalty_pct / 100.0))
-                    )
-                    self.dispatch_speed_penalty(penalized_speed)
+                    # 2.0 second recovery threshold met! Dock speed cap to 50%
+                    docked_speed = min(self.last_known_speed, self.docked_speed_pct)
+                    self.dispatch_speed_penalty(docked_speed)
                     self.dispatch_emergency_halt(False)
                     self.state = self.STATE_NORMAL
                     self.a_hold_start = None
-                    self.last_known_speed = penalized_speed
+                    self.last_known_speed = docked_speed
                     action_taken = "CLEARED_LOCKOUT"
                     logger.info(
-                        "COLLISION GUARD RECOVERED! Button '%s' held for %.1fs. Speed reduced to %d%%.",
-                        self.recovery_btn, self.recovery_hold_sec, penalized_speed
+                        "COLLISION GUARD RECOVERED! Button '%s' held for %.1fs. Speed docked to %d%%.",
+                        self.recovery_btn, self.recovery_hold_sec, docked_speed
                     )
             else:
                 self.a_hold_start = None

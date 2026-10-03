@@ -14,14 +14,16 @@ class TestObstacleSafetyGuard(unittest.TestCase):
 
     def setUp(self):
         self.config = {
-            "pwm": {"max_speed_pct": 35},
+            "pwm": {"max_speed_pct": 70},
             "control": {"min_speed_pct": 0, "max_speed_pct_limit": 100},
             "collision_guard": {
                 "enabled": True,
-                "danger_zone_cm": 25.0,
+                "danger_zone_cm": 15.0,
                 "min_valid_cm": 4.0,
                 "max_valid_cm": 100.0,
                 "ground_exclusion_adc": 62000,
+                "lockout_speed_threshold_pct": 50,
+                "docked_speed_pct": 50,
                 "recovery_button": "a",
                 "recovery_hold_sec": 2.0,
                 "speed_penalty_pct": 50,
@@ -46,7 +48,29 @@ class TestObstacleSafetyGuard(unittest.TestCase):
             "in_danger_zone": False,
             "distance_cm": None,
             "emergency_halt": False,
-            "max_speed_pct": 35
+            "max_speed_pct": 70
+        }
+        mock_telem.return_value = {
+            "drivetrain": {"throttle": 1.0},
+            "buttons": {"a": False}
+        }
+        res = self.guard.step(now=100.0)
+        self.assertEqual(res["state"], "NORMAL")
+        self.assertEqual(res["action"], "NONE")
+        mock_halt.assert_not_called()
+
+    @patch.object(ObstacleSafetyGuard, "query_distance_status")
+    @patch.object(ObstacleSafetyGuard, "read_joycon_telemetry")
+    @patch.object(ObstacleSafetyGuard, "dispatch_emergency_halt")
+    def test_low_speed_forward_drive_suppresses_lockout(self, mock_halt, mock_telem, mock_dist):
+        """When speed <= 50%, obstacle in danger zone does NOT trigger lockout (permits crawling at wall)."""
+        self.guard.last_known_speed = 40
+        mock_dist.return_value = {
+            "object_detected": True,
+            "in_danger_zone": True,
+            "distance_cm": 10.0,
+            "emergency_halt": False,
+            "max_speed_pct": 40
         }
         mock_telem.return_value = {
             "drivetrain": {"throttle": 1.0},
@@ -67,7 +91,7 @@ class TestObstacleSafetyGuard(unittest.TestCase):
             "in_danger_zone": True,
             "distance_cm": 12.0,
             "emergency_halt": False,
-            "max_speed_pct": 35
+            "max_speed_pct": 70
         }
         mock_telem.return_value = {
             "drivetrain": {"throttle": -1.0},
@@ -81,14 +105,15 @@ class TestObstacleSafetyGuard(unittest.TestCase):
     @patch.object(ObstacleSafetyGuard, "query_distance_status")
     @patch.object(ObstacleSafetyGuard, "read_joycon_telemetry")
     @patch.object(ObstacleSafetyGuard, "dispatch_emergency_halt")
-    def test_danger_zone_forward_drive_triggers_lockout(self, mock_halt, mock_telem, mock_dist):
-        """Obstacle in danger zone while driving forward triggers emergency halt and LOCKOUT."""
+    def test_high_speed_forward_drive_triggers_lockout(self, mock_halt, mock_telem, mock_dist):
+        """Obstacle in danger zone while driving forward at speed > 50% triggers emergency halt and LOCKOUT."""
+        self.guard.last_known_speed = 70
         mock_dist.return_value = {
             "object_detected": True,
             "in_danger_zone": True,
-            "distance_cm": 15.0,
+            "distance_cm": 12.0,
             "emergency_halt": False,
-            "max_speed_pct": 35
+            "max_speed_pct": 70
         }
         mock_telem.return_value = {
             "drivetrain": {"throttle": 0.8},
@@ -103,17 +128,17 @@ class TestObstacleSafetyGuard(unittest.TestCase):
     @patch.object(ObstacleSafetyGuard, "read_joycon_telemetry")
     @patch.object(ObstacleSafetyGuard, "dispatch_emergency_halt")
     @patch.object(ObstacleSafetyGuard, "dispatch_speed_penalty")
-    def test_recovery_requires_2s_hold(self, mock_speed, mock_halt, mock_telem, mock_dist):
-        """Holding button A < 2s maintains LOCKOUT; holding >= 2s clears LOCKOUT and reduces speed to 50%."""
+    def test_recovery_requires_2s_hold_and_docks_to_50pct(self, mock_speed, mock_halt, mock_telem, mock_dist):
+        """Holding button A < 2s maintains LOCKOUT; holding >= 2s clears LOCKOUT and docks speed to 50%."""
         self.guard.state = "LOCKOUT"
-        self.guard.last_known_speed = 35
+        self.guard.last_known_speed = 80
 
         mock_dist.return_value = {
             "object_detected": True,
             "in_danger_zone": True,
-            "distance_cm": 15.0,
+            "distance_cm": 12.0,
             "emergency_halt": True,
-            "max_speed_pct": 35
+            "max_speed_pct": 80
         }
         mock_telem.return_value = {
             "drivetrain": {"throttle": 0.0},
@@ -133,12 +158,13 @@ class TestObstacleSafetyGuard(unittest.TestCase):
         mock_halt.assert_not_called()
         mock_speed.assert_not_called()
 
-        # Step 3: t=102.1 (2.1s elapsed, >= 2.0s) -> Recovery triggers!
+        # Step 3: t=102.1 (2.1s elapsed, >= 2.0s) -> Recovery triggers! Docks speed to 50%
         res3 = self.guard.step(now=102.1)
         self.assertEqual(res3["state"], "NORMAL")
         self.assertEqual(res3["action"], "CLEARED_LOCKOUT")
         mock_halt.assert_called_once_with(False)
-        mock_speed.assert_called_once_with(17)  # 35 * 0.5 = 17
+        mock_speed.assert_called_once_with(50)
+        self.assertEqual(self.guard.last_known_speed, 50)
 
 
 if __name__ == "__main__":

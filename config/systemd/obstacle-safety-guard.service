@@ -1,0 +1,17 @@
+[Unit]
+Description=Overlander-4 Obstacle Collision Safety Guard Supervisor
+After=backend.service
+Wants=backend.service
+
+[Service]
+Type=simple
+User=carson
+WorkingDirectory=/home/carson/touch_ui
+ExecStart=/usr/bin/python3 /home/carson/touch_ui/scripts/obstacle_safety_guard.py
+Restart=always
+RestartSec=2s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

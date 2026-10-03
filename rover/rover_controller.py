@@ -75,6 +75,8 @@ def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             _ = float(cfg["collision_guard"]["min_valid_cm"])
             _ = float(cfg["collision_guard"]["max_valid_cm"])
             _ = int(cfg["collision_guard"]["ground_exclusion_adc"])
+            _ = int(cfg["collision_guard"]["lockout_speed_threshold_pct"])
+            _ = int(cfg["collision_guard"]["docked_speed_pct"])
             _ = str(cfg["collision_guard"]["recovery_button"])
             _ = float(cfg["collision_guard"]["recovery_hold_sec"])
             _ = int(cfg["collision_guard"]["speed_penalty_pct"])
@@ -231,6 +233,8 @@ class RoverController:
         self.min_valid_cm = float(self.guard_cfg["min_valid_cm"])
         self.max_valid_cm = float(self.guard_cfg["max_valid_cm"])
         self.ground_exclusion_adc = int(self.guard_cfg["ground_exclusion_adc"])
+        self.lockout_speed_threshold_pct = int(self.guard_cfg["lockout_speed_threshold_pct"])
+        self.docked_speed_pct = int(self.guard_cfg["docked_speed_pct"])
         self.halt_pulse_left = int(self.guard_cfg["halt_pulse_left"])
         self.halt_pulse_right = int(self.guard_cfg["halt_pulse_right"])
         self.emergency_halt: bool = False
@@ -462,6 +466,8 @@ class RoverController:
                 self._target_y = 0.0
                 self._current_left_val = 0.0
                 self._current_right_val = 0.0
+                self._last_left_pulse = self.halt_pulse_left
+                self._last_right_pulse = self.halt_pulse_right
         logger.info("RoverController emergency_halt set to %s", self.emergency_halt)
 
     def set_max_speed_pct(self, pct: int) -> int:
@@ -473,7 +479,7 @@ class RoverController:
             self.telemetry["max_speed_pct"] = new_pct
             self.telemetry["max_pulse_offset"] = self.max_pulse_offset
             logger.info("RoverController updated speed: %d%% (pulse offset %d us)", self.max_speed_pct, self.max_pulse_offset)
-            return self.max_speed_pct
+            return new_pct
 
     def adjust_speed_pct(self, delta_pct: int) -> int:
         """Adjusts maximum speed cap by delta_pct in memory, clamping between min and max limits."""
@@ -484,7 +490,7 @@ class RoverController:
             self.telemetry["max_speed_pct"] = self.max_speed_pct
             self.telemetry["max_pulse_offset"] = self.max_pulse_offset
             logger.info("RoverController adjusted speed: %d%% (pulse offset %d us)", self.max_speed_pct, self.max_pulse_offset)
-            return self.max_speed_pct
+            return new_pct
 
     def set_drive(self, x: float, y: float, enforce_throttle_gate: bool = False) -> None:
         """Sets normalized joystick drive inputs (x=steering [-1.0..1.0], y=throttle [-1.0..1.0]).
@@ -628,10 +634,31 @@ class RoverController:
                 y = 0.0
 
             if halt_active:
-                left_pulse = self.halt_pulse_left
-                right_pulse = self.halt_pulse_right
-                self._current_left_val = 0.0
-                self._current_right_val = 0.0
+                if y < -0.05:
+                    # Allow reverse escape while forward obstacle is locking forward drive
+                    throttle = y
+                    with self._lock:
+                        trim = self.steering_trim
+                    steering = x + (trim * throttle)
+                    target_left = max(-1.0, min(0.0, throttle + steering))
+                    target_right = max(-1.0, min(0.0, throttle - steering))
+                    accel_step = (1.0 / self.accel_time_sec) / self.loop_rate_hz if self.accel_time_sec > 0 else 1.0
+                    decel_step = (1.0 / self.decel_time_sec) / self.loop_rate_hz if self.decel_time_sec > 0 else 1.0
+                    self._current_left_val = self._apply_asymmetric_slew(
+                        self._current_left_val, target_left, accel_step, decel_step
+                    )
+                    self._current_right_val = self._apply_asymmetric_slew(
+                        self._current_right_val, target_right, accel_step, decel_step
+                    )
+                    left_pulse = self.neutral_pulse_us + int(self._current_left_val * self.max_pulse_offset)
+                    right_pulse = self.neutral_pulse_us - int(self._current_right_val * self.max_pulse_offset)
+                    left_pulse = max(self.min_pulse_us, min(self.max_pulse_us, left_pulse))
+                    right_pulse = max(self.min_pulse_us, min(self.max_pulse_us, right_pulse))
+                else:
+                    left_pulse = self.halt_pulse_left
+                    right_pulse = self.halt_pulse_right
+                    self._current_left_val = 0.0
+                    self._current_right_val = 0.0
             else:
                 # Standard arcade drive calculation:
                 # y = throttle (+ forward, - reverse)

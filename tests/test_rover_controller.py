@@ -136,12 +136,12 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.assertFalse(telem["in_danger_zone"])
 
     def test_distance_telemetry_danger_zone(self):
-        """Readings corresponding to <= danger_zone_cm (e.g. 12000 ADC ~ 18.3 cm) must trigger danger zone."""
-        self.controller._parse_stat_line("STAT:AUTO,1500,1500,0,0,1000,1000,1000,12000")
+        """Readings corresponding to <= danger_zone_cm (e.g. 8000 ADC ~ 12.2 cm) must trigger danger zone."""
+        self.controller._parse_stat_line("STAT:AUTO,1500,1500,0,0,1000,1000,1000,8000")
         telem = self.controller.get_telemetry()
         self.assertTrue(telem["object_detected"])
         self.assertIsNotNone(telem["distance_cm"])
-        self.assertLessEqual(telem["distance_cm"], 25.0)
+        self.assertLessEqual(telem["distance_cm"], 15.0)
         self.assertTrue(telem["in_danger_zone"])
 
     def test_distance_telemetry_safe_zone(self):

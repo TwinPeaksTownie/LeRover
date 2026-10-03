@@ -38,10 +38,12 @@
   },
   "collision_guard": {
     "enabled": true,
-    "danger_zone_cm": 25.0,
+    "danger_zone_cm": 15.0,
     "min_valid_cm": 4.0,
     "max_valid_cm": 100.0,
     "ground_exclusion_adc": 62000,
+    "lockout_speed_threshold_pct": 50,
+    "docked_speed_pct": 50,
     "recovery_button": "a",
     "recovery_hold_sec": 2.0,
     "speed_penalty_pct": 50,
