@@ -774,6 +774,7 @@ class JoyConService:
                         )
                         if is_teleop_active:
                             self.control_mode = "AUX"
+                            self.is_armed = False
                             if self.rover_ctrl:
                                 self.rover_ctrl.set_drive(0.0, 0.0)
                             self.logger.info("🔀 [MODE SWITCH] Button B clicked -> Switched to AUX Mode (Gantry & Pedestal).")
@@ -812,7 +813,10 @@ class JoyConService:
                 gated_idle = (throttle == 0.0 and steering == 0.0)
 
                 if self.rover_ctrl:
-                    self.rover_ctrl.set_drive(steering, throttle)
+                    if self.is_armed:
+                        self.rover_ctrl.set_drive(steering, throttle)
+                    else:
+                        self.rover_ctrl.set_drive(0.0, 0.0)
 
             elif self.control_mode == "AUX":
                 # Rover drivetrain strictly locked

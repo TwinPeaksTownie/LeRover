@@ -54,6 +54,7 @@ class TestJoyConTeleop(unittest.TestCase):
         self.mock_rover = MockRoverController()
         self.service.rover_ctrl = self.mock_rover
         self.service.teleop_enabled = True
+        self.service.is_armed = True
         self.service.center_x = DEFAULT_STICK_X
         self.service.center_y = DEFAULT_STICK_Y
         self.service.zero_calibrated = True
@@ -112,6 +113,14 @@ class TestJoyConTeleop(unittest.TestCase):
         self.assertEqual(self.service.telemetry["drivetrain"]["throttle"], 1.0)
         self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
         self.assertEqual(self.mock_rover.last_y, 1.0)
+
+    def test_disarmed_rover_does_not_drive(self):
+        """When rover drivetrain is disarmed (is_armed = False), drive commands remain 0.0."""
+        self.service.is_armed = False
+        rep = self._make_report(btn_r=True)
+        self.service._process_report_30(rep)
+        self.assertEqual(self.mock_rover.last_y, 0.0)
+        self.assertEqual(self.mock_rover.last_x, 0.0)
 
     def test_reverse_drive_zr_button(self):
         """Holding ZR button alone must command reverse throttle (-1.0)."""

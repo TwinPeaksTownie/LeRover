@@ -137,6 +137,7 @@ class TestJoyConRAndAIsolation(unittest.TestCase):
         """When teleop is enabled, pressing Button R drives forward at throttle 1.0."""
         self.service.teleop_enabled = True
         self.service.control_mode = "ROVER"
+        self.service.is_armed = True
 
         # Send Report 0x3F with R pressed
         raw = bytearray(12)
