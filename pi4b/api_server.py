@@ -474,7 +474,8 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             if val is None:
                 return self._send_json({"status": "error", "message": "Missing required 'target' or 'value' parameter"}, 400)
 
-            val = max(3, min(4800, val))
+            s8_min, s8_max = self.backend.get_s8_bounds()
+            val = max(s8_min, min(s8_max, val))
             ok, msg = self.backend.move_target(8, val, speed=400, max_t=500)
             self._send_json({"status": "ok" if ok else "error", "message": msg, "target": val})
 

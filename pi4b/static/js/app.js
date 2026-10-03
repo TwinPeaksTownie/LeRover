@@ -134,7 +134,7 @@ export function sendSliderMove(targetVal) {
 
 export function nudgeSlider(delta) {
     let targetVal = currentVerifiedPos + delta;
-    targetVal = Math.max(3, Math.min(4800, targetVal));
+    targetVal = Math.max(100, Math.min(4800, targetVal));
     sendSliderMove(targetVal);
 }
 
@@ -157,7 +157,7 @@ export function syncGantryPosition(pos) {
 }
 
 export function moveGantryMaxLeft() {
-    sendSliderMove(3);
+    sendSliderMove(100);
 }
 
 export function moveGantryCenter() {
