@@ -121,6 +121,12 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"Failed to get git diff: {str(e)}"}
 
+def _load_calibrated_neutral_ticks() -> int:
+    calib_file = os.path.join(REPO_ROOT, "calibration_aux.json")
+    with open(calib_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return int(data["7"]["center_ticks"])
+
 class ContractVisitor(ast.NodeVisitor):
     def __init__(self, filename: str, is_hardware_or_calibration: bool):
         self.filename = filename
@@ -145,14 +151,16 @@ class ContractVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Constant(self, node):
-        if self.is_hw and isinstance(node.value, int) and node.value == int("2048"):
-            self.violations.append({
-                "rule": "DYNAMIC_CALIBRATION",
-                "file": self.filename,
-                "line": node.lineno,
-                "snippet": "2048",
-                "reason": "Hardcoded 2048 tick neutral pose violates dynamic calibration schema."
-            })
+        if self.is_hw and isinstance(node.value, int):
+            calib_neutral = _load_calibrated_neutral_ticks()
+            if node.value == calib_neutral:
+                self.violations.append({
+                    "rule": "DYNAMIC_CALIBRATION",
+                    "file": self.filename,
+                    "line": node.lineno,
+                    "snippet": str(node.value),
+                    "reason": f"Hardcoded {node.value} tick neutral pose violates dynamic calibration schema. Poses must resolve dynamically from calibration_aux.json."
+                })
         self.generic_visit(node)
 
     def visit_ExceptHandler(self, node):
