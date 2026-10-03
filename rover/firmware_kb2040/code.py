@@ -48,16 +48,14 @@ sm = rp2pio.StateMachine(
     in_shift_right=True,
 )
 
-# Light Control Output Pins (Pins D4, D8, D9, D10, A0)
-light_out_pins = []
-for p in [board.D4, board.D8, board.D9, board.D10, board.A0]:
-    try:
-        dio = digitalio.DigitalInOut(p)
-        dio.direction = digitalio.Direction.OUTPUT
-        dio.value = True  # Default Idle HIGH
-        light_out_pins.append(dio)
-    except Exception:
-        pass
+# Light Control Output Pin (D8)
+light_pin = None
+try:
+    light_pin = digitalio.DigitalInOut(board.D8)
+    light_pin.direction = digitalio.Direction.OUTPUT
+    light_pin.value = True  # Default Idle HIGH
+except Exception:
+    pass
 
 light_pulse_until = 0.0
 
@@ -186,14 +184,14 @@ while True:
     set_pulse_width(motor1_pwm, left_out)
     set_pulse_width(motor2_pwm, right_out)
     
-    # 6.5 Apply Light Control Output Pulse
+    # 6.5 Apply Light Control Output Pulse on D8
     is_pulsing = now < light_pulse_until
-    for dio in light_out_pins:
+    if light_pin:
         if is_pulsing:
-            dio.direction = digitalio.Direction.OUTPUT
-            dio.value = False  # Short to GND (simulates button press)
+            light_pin.direction = digitalio.Direction.OUTPUT
+            light_pin.value = False  # Short to GND (simulates button press)
         else:
-            dio.direction = digitalio.Direction.INPUT  # High-impedance float
+            light_pin.direction = digitalio.Direction.INPUT  # High-impedance float
 
     # 7. NeoPixel LED Status
     if mode == "RC":
