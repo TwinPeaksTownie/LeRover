@@ -812,6 +812,15 @@ class JoyConService:
                     throttle = 0.0
                 gated_idle = (throttle == 0.0 and steering == 0.0)
 
+                # Ensure RoverController is initialized if armed
+                if self.is_armed and self.rover_ctrl is None and RoverController is not None:
+                    try:
+                        self.rover_ctrl = RoverController()
+                        self.rover_ctrl.start()
+                        self.logger.info("🏎️ [AUTONOMOUS ROVER INIT] Initialized RoverController in JoyConService.")
+                    except Exception as ex:
+                        self.logger.error("Failed to auto-initialize RoverController: %s", ex)
+
                 if self.rover_ctrl:
                     if self.is_armed:
                         self.rover_ctrl.set_drive(steering, throttle)
@@ -1114,10 +1123,13 @@ class JoyConApp(BaseApp):
         service.arm_lockout_until = time.time() + float(self.config["gestures"]["arm_lockout_sec"])
 
         if self.rover_ctrl is None:
-            if RoverController is None:
+            if service.rover_ctrl is not None:
+                self.rover_ctrl = service.rover_ctrl
+            elif RoverController is None:
                 raise RuntimeError("RoverController dependency is missing for joycon_teleop_app")
-            self.rover_ctrl = RoverController()
-            self.rover_ctrl.start()
+            else:
+                self.rover_ctrl = RoverController()
+                self.rover_ctrl.start()
         service.rover_ctrl = self.rover_ctrl
         self.rover_ctrl.set_drive(0.0, 0.0)
 
