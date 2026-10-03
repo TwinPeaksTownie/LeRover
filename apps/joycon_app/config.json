@@ -35,10 +35,10 @@
     "stationary_motion_threshold_g": 0.05
   },
   "gestures": {
-    "a_hold_sec": 0.1,
+    "a_hold_sec": 2.0,
     "b_hold_sec": 2.0,
     "b_double_tap_sec": 0.40,
-    "arm_drivetrain_sec": 0.1,
+    "arm_drivetrain_sec": 2.0,
     "arm_lockout_sec": 0.0,
     "chord_abort_sec": 1.0,
     "chord_click_suppress_sec": 0.5
@@ -50,8 +50,8 @@
     "arm_rover": "rover_arm_drivetrain",
     "mode_switch_rover": "mode_switch_rover",
     "mode_switch_aux": "mode_switch_aux",
-    "speed_up": "beep_high",
-    "speed_down": "beep_low",
+    "speed_up": "correct",
+    "speed_down": "incorrect",
     "chord_abort": "ornith_abort_recording",
     "app_exit_idle": "app_exit_idle"
   }

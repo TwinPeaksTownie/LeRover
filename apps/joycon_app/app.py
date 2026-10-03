@@ -604,8 +604,6 @@ class JoyConService:
         # 1. BUTTON A GESTURES: HOLD -> ROVER MODE / APP LAUNCH
         # ---------------------------------------------------------------------
         if btn_a and not btn_b and not is_listener_selecting:
-            self.control_mode = "ROVER"
-            self.is_armed = True
             if self.btn_a_press_start_time is None:
                 self.btn_a_press_start_time = now
             hold_duration_a = now - self.btn_a_press_start_time
@@ -654,6 +652,8 @@ class JoyConService:
         # 2. BUTTON B GESTURES: HOLD 2.0s -> LISTENER APP; CLICK 1x -> AUX MODE
         # ---------------------------------------------------------------------
         if btn_b and not btn_a:
+            if not self.last_btn_b:
+                self.button_b_click_event.set()
             if self.btn_b_press_start_time is None:
                 self.btn_b_press_start_time = now
             hold_duration_b = now - self.btn_b_press_start_time
@@ -736,26 +736,17 @@ class JoyConService:
                         play_chime(self.config["chimes"]["speed_down"])
 
                 # Strict Throttle-Gated Steering:
-                # Hold R -> Forward (+1.0), Hold ZR -> Reverse (-1.0)
-                # Neither or Both -> Throttle = 0.0 AND Steering = 0.0
+                steering = norm_x
                 if btn_r and not btn_zr:
                     throttle = 1.0
-                    steering = norm_x
-                    gated_idle = False
                 elif btn_zr and not btn_r:
                     throttle = -1.0
-                    steering = norm_x
-                    gated_idle = False
                 else:
                     throttle = 0.0
-                    steering = 0.0
-                    gated_idle = True
+                gated_idle = (throttle == 0.0 and steering == 0.0)
 
                 if self.rover_ctrl:
-                    if (self.is_armed or btn_a) and now >= self.arm_lockout_until:
-                        self.rover_ctrl.set_drive(steering, throttle, enforce_throttle_gate=True)
-                    else:
-                        self.rover_ctrl.set_drive(0.0, 0.0)
+                    self.rover_ctrl.set_drive(steering, throttle)
 
             elif self.control_mode == "AUX":
                 # Rover drivetrain strictly locked

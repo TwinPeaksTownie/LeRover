@@ -215,6 +215,7 @@ class RoverController:
         self.mock_mode = mock_mode
 
         self.guard_cfg = self.config["collision_guard"]
+        self.collision_guard_enabled = bool(self.guard_cfg["enabled"])
         self.sensor_cfg = self.config["distance_sensor"]
         self.adc_max = (1 << int(self.sensor_cfg["adc_resolution_bits"])) - 1
         self.max_dist_cm = float(self.sensor_cfg["max_distance_mm"]) / 10.0
@@ -481,17 +482,11 @@ class RoverController:
             logger.info("RoverController adjusted speed: %d%% (pulse offset %d us)", self.max_speed_pct, self.max_pulse_offset)
             return new_pct
 
-    def set_drive(self, x: float, y: float, enforce_throttle_gate: bool = False) -> None:
-        """Sets normalized joystick drive inputs (x=steering [-1.0..1.0], y=throttle [-1.0..1.0]).
-        If enforce_throttle_gate is True, steering is suppressed to 0.0 when throttle is idle (|y| < 0.01).
-        """
+    def set_drive(self, x: float, y: float) -> None:
+        """Sets normalized joystick drive inputs (x=steering [-1.0..1.0], y=throttle [-1.0..1.0])."""
         # Clamp inputs
         x_clamped = max(-1.0, min(1.0, float(x)))
         y_clamped = max(-1.0, min(1.0, float(y)))
-
-        if enforce_throttle_gate and abs(y_clamped) < 0.01:
-            x_clamped = 0.0
-            y_clamped = 0.0
 
         with self._lock:
             self._target_x = x_clamped
@@ -580,7 +575,7 @@ class RoverController:
                 x = 0.0
                 y = 0.0
 
-            if halt_active:
+            if self.collision_guard_enabled and halt_active:
                 if y < -0.05:
                     # Allow reverse escape while forward obstacle is locking forward drive
                     throttle = y

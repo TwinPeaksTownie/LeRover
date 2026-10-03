@@ -31,7 +31,7 @@
     "update_rate_hz": 10
   },
   "collision_guard": {
-    "enabled": true,
+    "enabled": false,
     "danger_zone_cm": 15.0,
     "min_valid_cm": 4.0,
     "max_valid_cm": 100.0,

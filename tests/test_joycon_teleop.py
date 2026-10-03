@@ -24,9 +24,7 @@ for p in [str(REPO_ROOT / "config"), str(REPO_ROOT / "pi4b")]:
 from apps.joycon_app.app import JoyConService, JoyConApp, load_joycon_config, load_joycon_calibration
 from rover.rover_controller import RoverController
 
-CALIB = load_joycon_calibration()
-DEFAULT_STICK_X = CALIB["center_x"]
-DEFAULT_STICK_Y = CALIB["center_y"]
+DEFAULT_STICK_X, DEFAULT_STICK_Y, _, _, _, _ = load_joycon_calibration()
 
 
 class MockRoverController:
@@ -38,13 +36,9 @@ class MockRoverController:
         self.speed_pct = 35
         self.max_pulse_offset = 175
 
-    def set_drive(self, x: float, y: float, enforce_throttle_gate: bool = False):
-        if enforce_throttle_gate and abs(y) < 0.01:
-            self.last_x = 0.0
-            self.last_y = 0.0
-        else:
-            self.last_x = float(x)
-            self.last_y = float(y)
+    def set_drive(self, x: float, y: float):
+        self.last_x = float(x)
+        self.last_y = float(y)
 
     def adjust_speed_pct(self, delta: int) -> int:
         self.speed_pct = max(10, min(100, self.speed_pct + int(delta)))
@@ -127,16 +121,16 @@ class TestJoyConTeleop(unittest.TestCase):
         self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
         self.assertEqual(self.mock_rover.last_y, -1.0)
 
-    def test_idle_throttle_gated_steering(self):
-        """When neither R nor ZR is held, horizontal stick deflection must NOT drive wheels."""
+    def test_idle_steering(self):
+        """When neither R nor ZR is held, horizontal stick deflection commands steering directly."""
         # Deflect stick fully to the right (center + span -> norm_x = 1.0)
         deflected_x = int(DEFAULT_STICK_X + self.service.span_x)
         rep = self._make_report(btn_r=False, btn_zr=False, stick_x=deflected_x)
         self.service._process_report_30(rep)
         self.assertEqual(self.service.telemetry["drivetrain"]["throttle"], 0.0)
-        self.assertEqual(self.service.telemetry["drivetrain"]["steering"], 0.0)
-        self.assertTrue(self.service.telemetry["drivetrain"]["gated_idle"])
-        self.assertEqual(self.mock_rover.last_x, 0.0)
+        self.assertAlmostEqual(self.service.telemetry["drivetrain"]["steering"], 1.0, places=1)
+        self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
+        self.assertAlmostEqual(self.mock_rover.last_x, 1.0, places=1)
         self.assertEqual(self.mock_rover.last_y, 0.0)
 
     def test_steering_while_forward(self):

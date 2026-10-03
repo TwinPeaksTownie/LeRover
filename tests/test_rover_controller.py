@@ -104,13 +104,13 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.assertEqual(decreased_speed2, 30)
         self.assertEqual(self.controller.max_pulse_offset, 150)
 
-    def test_throttle_gated_steering(self):
-        """When enforce_throttle_gate is True and throttle is 0, steering must not move wheels."""
-        self.controller.set_drive(1.0, 0.0, enforce_throttle_gate=True)
+    def test_in_place_steering(self):
+        """When throttle is 0 and steering is applied, wheels rotate for in-place turn."""
+        self.controller.set_drive(1.0, 0.0)
         time.sleep(0.1)
         telem = self.controller.get_telemetry()
-        self.assertEqual(telem["left_pulse"], 1500)
-        self.assertEqual(telem["right_pulse"], 1500)
+        self.assertGreater(telem["left_pulse"], 1500)
+        self.assertGreater(telem["right_pulse"], 1500)
 
     def test_emergency_halt_clamping(self):
         """When emergency_halt is True, full forward throttle must be clamped to neutral 1500."""
