@@ -11,27 +11,23 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MCP_DIR = os.path.join(REPO_ROOT, "tools", "ornith_mcp_server")
+MCP_DIR = os.path.join(REPO_ROOT, "tools", "mcp_servers", "code_auditor")
 for p in [REPO_ROOT, MCP_DIR]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import tools_audit
+import auditor
 
 def main():
     task_summary = (
-        "Overhaul of Pokéball Plus gestures (2.0s hold on Button A to arm rover with 4.25s countdown lockout, "
-        "Button B emergency brake, 1.0s simultaneous A+B chord hold to cancel audio capture, "
-        "Button B double-click within 1.0s to commit speech turn to LLM), "
-        "unified AppManager lifecycle audio cues, and centralized audio resolution architecture "
-        "without hardcoded filepaths."
+        "Decoupled monolithic Ornith supervisor into 3 distinct MCP servers: "
+        "code-auditor (QA and AST contracts), device-bridge (telemetry and deployment), and voice-bridge (TTS)."
     )
 
-    print("=== Launching Ornith Adversarial Audit ===")
-    res = tools_audit.query_ornith_for_review(
+    print("=== Launching Adversarial Code Review ===")
+    res = auditor.query_adversarial_review(
         task_summary=task_summary,
-        repo_path=REPO_ROOT,
-        speak_verdict=True
+        repo_path=REPO_ROOT
     )
 
     if "verdict" not in res:
@@ -47,7 +43,7 @@ def main():
     print("\n=== SPOKEN SUMMARY ===")
     print(spoken)
 
-    out_file = os.path.join(REPO_ROOT, "ornith_audit_result.json")
+    out_file = os.path.join(REPO_ROOT, "code_audit_result.json")
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2, ensure_ascii=False)
     print(f"\nAudit results saved to {out_file}")

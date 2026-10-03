@@ -27,12 +27,12 @@
 
 ### 5. Mandatory Verification State Machine & Two-Gate Review
 Every task must transition sequentially through two audit gates and four verification states:
-- **Gate 1 (Build Plan Audit - Pre-Execution)**: Ornith audits `implementation_plan.md` against chronological operator directives for Rule 13 (Anti-Slop / False Tri-States), Rule 1 (Fail-Fast), and Rule 3 (Dynamic Calibration). Physical deployment checks are disabled (`check_deployments=False`).
-- **State 1 (Pipeline Continuity & Target Deployment)**: Trace pipeline continuity, sync modified files to physical target directory (`/home/carson/touch_ui/` on Pi 4B), and restart host processes.
+- **Gate 1 (Build Plan Audit - Pre-Execution)**: Code Auditor (`code-auditor/audit_implementation_plan`) audits `implementation_plan.md` against chronological operator directives for Rule 13 (Anti-Slop / False Tri-States), Rule 1 (Fail-Fast), and Rule 3 (Dynamic Calibration). Physical deployment checks are disabled.
+- **State 1 (Pipeline Continuity & Target Deployment)**: Trace pipeline continuity, sync modified files to physical target directory (`/home/carson/touch_ui/` on Pi 4B via `device-bridge/deploy_to_pi`), and restart host processes.
 - **State 2 (Dynamic Variance & Motion Cycle)**: Execute a complete bidirectional motion/workload cycle ($Origin \rightarrow Target\,A \rightarrow Target\,B \rightarrow Origin$) under live application conditions, verifying target coordinates dynamically vary across timestamps.
-- **State 3 (Live Telemetry & Physical Sampling)**: Sample live encoder telemetry and socket streams across checkpoints (e.g. 5s, 25s, 50s) to prove physical servos reached commanded coordinates without serial timeouts.
-- **State 4 (Log Audit & Hardware Parity)**: Query daemon logs (`journalctl`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
-- **Gate 2 (Deployment Audit - Post-Execution)**: Ornith executes final adversarial review over the live git diff, remote MD5 parity (`check_deployments=True`), and daemon log cleanliness, announcing the spoken verdict aloud.
+- **State 3 (Live Telemetry & Physical Sampling)**: Sample live encoder and sensor telemetry via `device-bridge/sample_motor_telemetry` or `device-bridge/sample_rover_telemetry` across checkpoints to prove physical hardware reached commanded coordinates without serial timeouts.
+- **State 4 (Log Audit & Hardware Parity)**: Query daemon logs (`device-bridge/query_daemon_logs`) to verify zero unhandled exceptions, serial timeouts, or bounding errors occurred.
+- **Gate 2 (Deployment Audit - Post-Execution)**: Code Auditor (`code-auditor/invoke_adversarial_review`) executes final adversarial review over the live git diff, remote MD5 parity, and daemon log cleanliness. Voice announcements are dispatched via `voice-bridge`.
 
 ---
 

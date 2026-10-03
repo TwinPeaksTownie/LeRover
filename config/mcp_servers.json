@@ -1,0 +1,35 @@
+{
+  "code_auditor": {
+    "active_backend": "nim",
+    "nim_url": "https://integrate.api.nvidia.com/v1",
+    "nim_model": "deepseek-ai/deepseek-r1",
+    "lm_studio_url": "http://127.0.0.1:1234/v1",
+    "lm_studio_model": "ornith-1.0-35b-a3b-instruct",
+    "max_tokens": 4096,
+    "temperature": 0.1
+  },
+  "device_bridge": {
+    "targets": {
+      "pi4b": {
+        "host": "192.168.0.86",
+        "user": "carson",
+        "port": 22,
+        "remote_base_dir": "/home/carson/touch_ui",
+        "services": [
+          "backend",
+          "touchscreen"
+        ]
+      }
+    },
+    "telemetry_endpoints": {
+      "follower": "http://192.168.0.86:8082/api/telemetry",
+      "rover": "http://192.168.0.86:8089/api/status"
+    },
+    "connect_timeout_sec": 3.0
+  },
+  "voice_bridge": {
+    "pocket_tts_url": "http://127.0.0.1:8057/tts",
+    "voice_url": "hf://laura",
+    "default_target": "local"
+  }
+}
