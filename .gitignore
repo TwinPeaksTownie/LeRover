@@ -36,4 +36,5 @@ scratch/
 reference/
 .pio/
 **/.pio/
+tools/ornith_mcp_server/
 
