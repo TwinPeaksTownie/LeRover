@@ -22,12 +22,6 @@
     "serial_timeout_sec": 0.01,
     "write_timeout_sec": 1.0
   },
-  "watchdog": {
-    "auto_recover_stalls": false,
-    "stall_timeout_sec": 3.5,
-    "uhubctl_location": "1-1",
-    "uhubctl_port": 1
-  },
   "distance_sensor": {
     "model": "goBILDA_3111_0001_0001",
     "analog_pin": "A3",

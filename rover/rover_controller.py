@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """RoverController module for GoBilda Overlander-4 chassis.
 Manages serial communication with the Adafruit KB2040 safety bridge over GPIO UART (/dev/serial0),
-25 Hz heartbeat packets, differential arcade drive kinematics, and safety watchdogs.
+25 Hz heartbeat packets, differential arcade drive kinematics, and collision guard.
 Supports mock/simulated serial mode for local PC testing.
 """
 
@@ -60,10 +60,6 @@ def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             _ = cfg["control"]["min_speed_pct"]
             _ = cfg["control"]["max_speed_pct_limit"]
             _ = cfg["control"]["loop_rate_hz"]
-            _ = bool(cfg["watchdog"]["auto_recover_stalls"])
-            _ = float(cfg["watchdog"]["stall_timeout_sec"])
-            _ = str(cfg["watchdog"]["uhubctl_location"])
-            _ = int(cfg["watchdog"]["uhubctl_port"])
             _ = str(cfg["distance_sensor"]["model"])
             _ = str(cfg["distance_sensor"]["analog_pin"])
             _ = int(cfg["distance_sensor"]["adc_resolution_bits"])
@@ -216,13 +212,6 @@ class RoverController:
         self.assert_rts = bool(self.config["hardware_interface"]["assert_rts"])
         self.serial_timeout = float(self.config["hardware_interface"]["serial_timeout_sec"])
         self.write_timeout = float(self.config["hardware_interface"]["write_timeout_sec"])
-        self.auto_recover_stalls = bool(self.config["watchdog"]["auto_recover_stalls"])
-        self.stall_timeout_sec = float(self.config["watchdog"]["stall_timeout_sec"])
-        self.uhubctl_location = str(self.config["watchdog"]["uhubctl_location"])
-        self.uhubctl_port = int(self.config["watchdog"]["uhubctl_port"])
-        self._last_stall_recovery: float = time.time()
-        self._port_opened_time: float = time.time()
-        self._packets_since_open: int = 0
         self.mock_mode = mock_mode
 
         self.guard_cfg = self.config["collision_guard"]
@@ -524,23 +513,6 @@ class RoverController:
             data["last_cmd"] = self._last_cmd_sent.strip()
             return data
 
-    def _recover_stalled_port(self) -> None:
-        """Executes uhubctl hardware power-cycle of the KB2040 USB port to recover from endpoint stall."""
-        import subprocess
-        loc = self.uhubctl_location
-        port = self.uhubctl_port
-        cmd = ["sudo", "uhubctl", "-l", loc, "-p", str(port), "-a", "cycle", "-d", "2"]
-        logger.info("Executing hardware USB port power cycle: %s", " ".join(cmd))
-        try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=8.0)
-            if res.returncode == 0:
-                logger.info("Successfully cycled USB port %d on hub %s: %s", port, loc, res.stdout.strip())
-            else:
-                logger.warning("uhubctl exited with code %d: %s", res.returncode, res.stderr.strip())
-        except Exception as e:
-            logger.error("Failed to execute uhubctl USB recovery: %s", e)
-        time.sleep(1.5)
-
     def _uart_loop(self) -> None:
         """Main 25 Hz (40 ms) serial heartbeat loop communicating with Adafruit KB2040."""
         ser = None
@@ -557,35 +529,9 @@ class RoverController:
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
                     logger.info("Opened hardware serial port %s at %d baud.", self.serial_port, self.baudrate)
-                    self._last_stall_recovery = time.time()
-                    self._port_opened_time = time.time()
-                    self._packets_since_open = 0
                 except Exception as e:
                     logger.warning("Failed to open serial port %s: %s. Retrying in 2s...", self.serial_port, e)
                     time.sleep(2.0)
-                    continue
-
-            # Watchdog stall detection: auto-recover via uhubctl if no STAT: received
-            if not self.mock_mode and self.auto_recover_stalls and ser and ser.is_open:
-                now_check = time.time()
-                last_rx = self.telemetry["last_seen"]
-                is_stalled = (
-                    (last_rx == 0.0 and self._packets_since_open > 100 and (now_check - self._port_opened_time) > 5.0 and (now_check - self._last_stall_recovery) > 5.0) or
-                    (last_rx > 0.0 and (now_check - last_rx) > self.stall_timeout_sec and (now_check - self._last_stall_recovery) > (self.stall_timeout_sec * 2.0))
-                )
-                if is_stalled:
-                    logger.warning(
-                        "🚨 Microcontroller USB endpoint stall detected on %s! (last_seen=%.1f, packets_since_open=%d). Triggering uhubctl power cycle...",
-                        self.serial_port, last_rx, self._packets_since_open
-                    )
-                    self._last_stall_recovery = now_check
-                    self._packets_since_open = 0
-                    try:
-                        ser.close()
-                    except Exception as e:
-                        logger.debug("Stalled serial port close encountered error: %s", e)
-                    ser = None
-                    self._recover_stalled_port()
                     continue
 
             loop_start = time.time()
@@ -704,7 +650,6 @@ class RoverController:
                 self.telemetry["left_out"] = left_pulse
                 self.telemetry["right_out"] = right_pulse
                 self.telemetry["packets_sent"] += 1
-                self._packets_since_open += 1
 
             # Dispatch to hardware serial or mock sink
             if ser and ser.is_open:
