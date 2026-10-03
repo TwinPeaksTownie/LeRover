@@ -189,10 +189,10 @@ def query_daemon_logs(
     """Scans systemd journal logs on the target node for serial timeouts and unhandled crashes."""
     cmd = f'journalctl -u {service_name} --since "{since}" -n {lines} --no-pager'
     res = ssh_run_command(node, cmd)
-    if res.get("status") != "success":
+    if "status" not in res or res["status"] != "success":
         return res
 
-    log_text = res.get("stdout", "")
+    log_text = res["stdout"]
     detected_errors = []
     error_markers = [
         "0 bytes received", "SerialException", "Traceback", "KeyError:",

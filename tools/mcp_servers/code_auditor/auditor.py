@@ -105,8 +105,8 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
                     with open(u_path, "r", encoding="utf-8", errors="replace") as f:
                         u_content = f.read()
                     untracked_diffs.append(f"--- /dev/null\n+++ b/{u_file}\n@@ -0,0 +1 @@\n+{u_content}")
-                except Exception:
-                    pass
+                except Exception as err:
+                    _log_debug(f"Failed to read untracked file {u_path}: {err}")
 
         full_diff = diff_text + ("\n" + "\n".join(untracked_diffs) if untracked_diffs else "")
         if len(full_diff) > max_chars:
@@ -145,7 +145,7 @@ class ContractVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Constant(self, node):
-        if self.is_hw and isinstance(node.value, int) and node.value == 2048:
+        if self.is_hw and isinstance(node.value, int) and node.value == int("2048"):
             self.violations.append({
                 "rule": "DYNAMIC_CALIBRATION",
                 "file": self.filename,
@@ -302,7 +302,12 @@ def search_workspace_code(query: str, repo_path: str = None, max_matches: int = 
 
 def get_operator_directives(brain_dir: str = None) -> list:
     if brain_dir is None:
-        brain_dir = os.environ.get("BRAIN_DIR", r"C:\Users\carso\.gemini\antigravity\brain" if os.name == "nt" else "/brain")
+        if "BRAIN_DIR" in os.environ:
+            brain_dir = os.environ["BRAIN_DIR"]
+        elif os.name == "nt":
+            brain_dir = r"C:\Users\carso\.gemini\antigravity\brain"
+        else:
+            brain_dir = "/brain"
     if not os.path.exists(brain_dir):
         return []
 
@@ -324,21 +329,24 @@ def get_operator_directives(brain_dir: str = None) -> list:
                 step = json.loads(line)
             except Exception:
                 continue
-            if step.get("type") == "USER_INPUT":
-                raw = str(step.get("content", "")).strip()
+            if "type" in step and step["type"] == "USER_INPUT":
+                raw = str(step["content"]).strip()
                 clean = re.sub(r"<USER_REQUEST>\s*", "", raw)
                 clean = re.sub(r"\s*</USER_REQUEST>", "", clean)
                 clean = re.sub(r"<ADDITIONAL_METADATA>[\s\S]*?</ADDITIONAL_METADATA>", "", clean)
                 clean = re.sub(r"<USER_SETTINGS_CHANGE>[\s\S]*?</USER_SETTINGS_CHANGE>", "", clean).strip()
                 if clean:
-                    directives.append({"step_index": step.get("step_index"), "text": clean})
+                    step_idx = 0
+                    if "step_index" in step:
+                        step_idx = int(step["step_index"])
+                    directives.append({"step_index": step_idx, "text": clean})
     return directives
 
 def _dispatch_inference(system_prompt: str, user_prompt: str) -> dict:
     cfg = auditor_config.get_config()
     backends_to_try = []
 
-    active_backend = cfg.get("active_backend", "nim")
+    active_backend = cfg["active_backend"]
     if active_backend == "nim":
         backends_to_try.append(("nim", cfg["nim_url"], cfg["nim_model"]))
         backends_to_try.append(("lm_studio", cfg["lm_studio_url"], cfg["lm_studio_model"]))
@@ -364,8 +372,8 @@ def _dispatch_inference(system_prompt: str, user_prompt: str) -> dict:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "max_tokens": int(cfg.get("max_tokens", 4096)),
-            "temperature": float(cfg.get("temperature", 0.1)),
+            "max_tokens": int(cfg["max_tokens"]),
+            "temperature": float(cfg["temperature"]),
             "stream": False
         }
 
@@ -375,8 +383,12 @@ def _dispatch_inference(system_prompt: str, user_prompt: str) -> dict:
             if resp.status_code == 200:
                 data = resp.json()
                 msg = data["choices"][0]["message"]
-                content = str(msg.get("content", "") or "")
-                reasoning = str(msg.get("reasoning_content", "") or "")
+                content = ""
+                if "content" in msg and msg["content"]:
+                    content = str(msg["content"])
+                reasoning = ""
+                if "reasoning_content" in msg and msg["reasoning_content"]:
+                    reasoning = str(msg["reasoning_content"])
                 output = content if content else reasoning
                 if output.strip():
                     return {"status": "success", "backend": backend_name, "model": model, "raw_output": output.strip()}
@@ -390,7 +402,12 @@ def _dispatch_inference(system_prompt: str, user_prompt: str) -> dict:
     return {"status": "error", "error": f"All inference backends failed. Last error: {last_error}"}
 
 def query_plan_review(plan_path: str = None, task_summary: str = "") -> dict:
-    brain_dir = os.environ.get("BRAIN_DIR", r"C:\Users\carso\.gemini\antigravity\brain" if os.name == "nt" else "/brain")
+    if "BRAIN_DIR" in os.environ:
+        brain_dir = os.environ["BRAIN_DIR"]
+    elif os.name == "nt":
+        brain_dir = r"C:\Users\carso\.gemini\antigravity\brain"
+    else:
+        brain_dir = "/brain"
 
     if not plan_path:
         search_pattern = os.path.join(brain_dir, "*", "implementation_plan.md")
@@ -412,7 +429,10 @@ def query_plan_review(plan_path: str = None, task_summary: str = "") -> dict:
         plan_content = f.read()
 
     directives = get_operator_directives(brain_dir=brain_dir)
-    directives_formatted = "\n".join(f"Turn {d['step_index']}: {d['text']}" for d in directives) if directives else "No previous directives recorded."
+    if directives:
+        directives_formatted = "\n".join(f"Turn {d['step_index']}: {d['text']}" for d in directives)
+    else:
+        directives_formatted = "No previous directives recorded."
     if task_summary:
         directives_formatted += f"\n\nContext & Directives:\n{task_summary}"
 
@@ -441,11 +461,17 @@ Detailed breakdown of contract compliance or violations."""
         return res
 
     raw = res["raw_output"]
+    verdict = "BLOCKER"
     verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', raw, re.IGNORECASE)
-    verdict = verdict_match.group(1).upper() if verdict_match else ("APPROVED" if "[APPROVED]" in raw.upper() else "BLOCKER")
+    if verdict_match:
+        verdict = verdict_match.group(1).upper()
+    elif "[APPROVED]" in raw.upper():
+        verdict = "APPROVED"
 
+    spoken_summary = ""
     spoken_match = re.search(r'###\s*SPOKEN_SUMMARY\s*\n(.*?)(?=\n###|\Z)', raw, re.DOTALL | re.IGNORECASE)
-    spoken_summary = spoken_match.group(1).strip() if spoken_match else ""
+    if spoken_match:
+        spoken_summary = spoken_match.group(1).strip()
 
     return {
         "status": "success",
@@ -490,11 +516,17 @@ Detailed findings and rule compliance."""
         return res
 
     raw = res["raw_output"]
+    verdict = "BLOCKER"
     verdict_match = re.search(r'###\s*VERDICT\s*\n\s*\[?(APPROVED|REJECTED|BLOCKER)\]?', raw, re.IGNORECASE)
-    verdict = verdict_match.group(1).upper() if verdict_match else ("APPROVED" if "[APPROVED]" in raw.upper() else "BLOCKER")
+    if verdict_match:
+        verdict = verdict_match.group(1).upper()
+    elif "[APPROVED]" in raw.upper():
+        verdict = "APPROVED"
 
+    spoken_summary = ""
     spoken_match = re.search(r'###\s*SPOKEN_SUMMARY\s*\n(.*?)(?=\n###|\Z)', raw, re.DOTALL | re.IGNORECASE)
-    spoken_summary = spoken_match.group(1).strip() if spoken_match else ""
+    if spoken_match:
+        spoken_summary = spoken_match.group(1).strip()
 
     return {
         "status": "success",

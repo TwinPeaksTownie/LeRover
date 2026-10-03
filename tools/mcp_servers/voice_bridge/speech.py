@@ -42,8 +42,8 @@ def _play_wav_bytes(wav_bytes: bytes) -> bool:
         winsound.PlaySound(temp_path, winsound.SND_FILENAME)
         try:
             os.remove(temp_path)
-        except Exception:
-            pass
+        except Exception as err:
+            _log_debug(f"Failed removing temp wav file {temp_path}: {err}")
         return True
     except Exception as e:
         _log_debug(f"winsound playback failed: {e}")
@@ -57,9 +57,9 @@ def speak_laura(text: str, voice_url: str = None) -> dict:
         return {"status": "error", "error": "Cannot speak empty text"}
 
     cfg = voice_config.get_config()
-    tts_url_base = cfg.get("pocket_tts_url", "http://127.0.0.1:8057/tts")
+    tts_url_base = str(cfg["pocket_tts_url"])
     if voice_url is None:
-        voice_url = cfg.get("voice_url", "hf://laura")
+        voice_url = str(cfg["voice_url"])
 
     encoded_text = urllib.parse.quote(clean_text)
     encoded_voice = urllib.parse.quote(voice_url)
