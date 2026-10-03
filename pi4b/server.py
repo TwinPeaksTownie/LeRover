@@ -50,7 +50,7 @@ import network_resolver
 import audio_resolver
 from robot_backend import RobotBackend
 from app_manager import AppManager
-from apps.pokeball_app.app import PokeballService
+from apps.joycon_app.app import JoyConService, PokeballService
 from api_server import MasterApiHandler, set_chime_callback, ensure_leader_poller_started
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -60,7 +60,8 @@ PORT_MASTER_API = 8085
 
 GLOBAL_BACKEND: Optional[RobotBackend] = None
 GLOBAL_APP_MANAGER: Optional[AppManager] = None
-GLOBAL_POKEBALL: Optional[PokeballService] = None
+GLOBAL_JOYCON: Optional[JoyConService] = None
+GLOBAL_POKEBALL: Optional[JoyConService] = None
 
 STATUS_CACHE: Dict[str, Any] = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
@@ -91,7 +92,7 @@ def start_shake_detector() -> bool:
             try:
                 from joycon_shake_detector import JoyConShakeDetector
                 SHAKE_DETECTOR = JoyConShakeDetector(
-                    joycon_service=GLOBAL_POKEBALL,
+                    joycon_service=GLOBAL_JOYCON,
                     play_sound_cb=play_sound_helper,
                     is_active_cb=lambda: (
                         bool(GLOBAL_APP_MANAGER and GLOBAL_APP_MANAGER.current_app_name in ["piranha_pose_app", "clack_pose_app"])
@@ -1022,8 +1023,8 @@ class UnifiedHandler(MasterApiHandler):
             if "threshold_g" in req_data:
                 thresh_g = float(req_data["threshold_g"])
                 UI_CONFIG["shake_threshold_g"] = thresh_g
-                if GLOBAL_POKEBALL:
-                    GLOBAL_POKEBALL.shake_threshold = thresh_g
+                if GLOBAL_JOYCON:
+                    GLOBAL_JOYCON.shake_threshold = thresh_g
                 with SHAKE_DETECTOR_LOCK:
                     if SHAKE_DETECTOR is not None:
                         SHAKE_DETECTOR.shake_threshold = thresh_g
@@ -1031,8 +1032,8 @@ class UnifiedHandler(MasterApiHandler):
                 val = float(req_data["threshold"])
                 thresh_g = round(max(1.0, min(5.0, val / 1500.0)), 2)
                 UI_CONFIG["shake_threshold_g"] = thresh_g
-                if GLOBAL_POKEBALL:
-                    GLOBAL_POKEBALL.shake_threshold = thresh_g
+                if GLOBAL_JOYCON:
+                    GLOBAL_JOYCON.shake_threshold = thresh_g
                 with SHAKE_DETECTOR_LOCK:
                     if SHAKE_DETECTOR is not None:
                         SHAKE_DETECTOR.shake_threshold = thresh_g
@@ -1110,8 +1111,8 @@ class UnifiedHandler(MasterApiHandler):
                 service = self.joycon_service
             elif hasattr(self, "pokeball_service") and self.pokeball_service:
                 service = self.pokeball_service
-            elif GLOBAL_POKEBALL:
-                service = GLOBAL_POKEBALL
+            elif GLOBAL_JOYCON:
+                service = GLOBAL_JOYCON
 
             if service and hasattr(service, "trigger_repair"):
                 timeout_sec = None
@@ -1185,17 +1186,18 @@ def main() -> None:
     GLOBAL_BACKEND = RobotBackend(port=serial_port, robot_id="follower")
     GLOBAL_BACKEND.connect()
 
-    # 2. Initialize Joy-Con controller service (running under pokeball_app package)
-    logging.info("Initializing PokeballService (Right Joy-Con HID driver)...")
-    GLOBAL_POKEBALL = PokeballService(backend=GLOBAL_BACKEND)
-    GLOBAL_POKEBALL.start()
+    # 2. Initialize Joy-Con controller service
+    logging.info("Initializing JoyConService (Right Joy-Con HID driver)...")
+    GLOBAL_JOYCON = JoyConService(backend=GLOBAL_BACKEND)
+    GLOBAL_POKEBALL = GLOBAL_JOYCON
+    GLOBAL_JOYCON.start()
 
     # 3. Initialize AppManager & register applications
     logging.info("Initializing AppManager & discovering modular applications...")
     GLOBAL_APP_MANAGER = AppManager(GLOBAL_BACKEND)
-    GLOBAL_APP_MANAGER.pokeball_service = GLOBAL_POKEBALL
-    GLOBAL_APP_MANAGER.joycon_service = GLOBAL_POKEBALL
-    GLOBAL_POKEBALL.app_manager = GLOBAL_APP_MANAGER
+    GLOBAL_APP_MANAGER.joycon_service = GLOBAL_JOYCON
+    GLOBAL_APP_MANAGER.pokeball_service = GLOBAL_JOYCON
+    GLOBAL_JOYCON.app_manager = GLOBAL_APP_MANAGER
     GLOBAL_APP_MANAGER.discover_apps()
 
     def _on_app_started(started_app_name: str) -> None:
@@ -1216,8 +1218,8 @@ def main() -> None:
     set_chime_callback(play_sound_helper)
     MasterApiHandler.backend = GLOBAL_BACKEND
     MasterApiHandler.app_manager = GLOBAL_APP_MANAGER
-    MasterApiHandler.pokeball_service = GLOBAL_POKEBALL
-    MasterApiHandler.joycon_service = GLOBAL_POKEBALL
+    MasterApiHandler.joycon_service = GLOBAL_JOYCON
+    MasterApiHandler.pokeball_service = GLOBAL_JOYCON
 
     # 5. Start background telemetry polling loop
     threading.Thread(target=poll_status_loop, daemon=True, name="StatusPoller").start()
@@ -1265,11 +1267,11 @@ def main() -> None:
         except (AttributeError, RuntimeError, TypeError, OSError) as e:
             logging.exception(f"Error stopping active app '{GLOBAL_APP_MANAGER.current_app_name}': {e}")
 
-    if GLOBAL_POKEBALL:
+    if GLOBAL_JOYCON:
         try:
-            GLOBAL_POKEBALL.stop()
+            GLOBAL_JOYCON.stop()
         except Exception as e:
-            logging.warning(f"Error stopping PokeballService: {e}")
+            logging.warning(f"Error stopping JoyConService: {e}")
 
     if GLOBAL_BACKEND:
         try:

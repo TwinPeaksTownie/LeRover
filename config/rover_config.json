@@ -18,12 +18,12 @@
   },
   "hardware_interface": {
     "assert_dtr": true,
-    "assert_rts": false,
+    "assert_rts": true,
     "serial_timeout_sec": 0.01,
     "write_timeout_sec": 1.0
   },
   "watchdog": {
-    "auto_recover_stalls": true,
+    "auto_recover_stalls": false,
     "stall_timeout_sec": 3.5,
     "uhubctl_location": "1-1",
     "uhubctl_port": 1

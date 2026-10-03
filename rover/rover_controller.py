@@ -550,7 +550,7 @@ class RoverController:
             if not self.mock_mode and ser is None:
                 try:
                     import serial
-                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=self.serial_timeout, write_timeout=self.write_timeout)
+                    ser = serial.Serial(self.serial_port, self.baudrate, timeout=self.serial_timeout, write_timeout=None)
                     ser.dtr = self.assert_dtr
                     if self.assert_rts:
                         ser.rts = True
@@ -596,6 +596,7 @@ class RoverController:
                     if ser.in_waiting > 0:
                         chunk = ser.read(ser.in_waiting)
                         if chunk:
+                            self.telemetry["last_seen"] = time.time()
                             rx_buf.extend(chunk)
                             while b'\n' in rx_buf:
                                 idx = rx_buf.find(b'\n')

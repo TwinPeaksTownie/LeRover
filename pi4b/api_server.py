@@ -20,7 +20,7 @@ from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7
 from app_manager import AppManager
 from apps.teleop_app.app import TeleopControlApp
 from apps.servo_studio.app import ServoStudioApp
-from apps.pokeball_app.app import PokeballApp, PokeballService
+from apps.joycon_app.app import JoyConApp, JoyConService, PokeballApp, PokeballService
 import threading
 
 try:
@@ -433,9 +433,9 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             if mode:
                 disp_mode = mode
             self._send_json({"status": "ok", "mode": disp_mode, "sequences": sequences})
-        elif parsed.path == "/api/pokeball_reconnect":
-            self.app_manager.start_app_by_name("pokeball_teleop_app")
-            self._send_json({"status": "ok", "message": "Poké Ball teleop app restart triggered"})
+        elif parsed.path in ["/api/joycon_reconnect", "/api/pokeball_reconnect"]:
+            self.app_manager.start_app_by_name("joycon_teleop_app")
+            self._send_json({"status": "ok", "message": "Joy-Con teleop app restart triggered"})
         else:
             self._send_json({"status": "ok", "service": "so101_master_api"})
 
@@ -776,11 +776,11 @@ class MasterApiHandler(BaseHTTPRequestHandler):
             l_app.start_listen_event.set()
             return self._send_json({"status": "ok", "action": "listen_triggered"})
 
-        elif parsed.path == "/api/pokeball_teleop_toggle":
+        elif parsed.path in ["/api/joycon_teleop_toggle", "/api/pokeball_teleop_toggle"]:
             if "action" not in body:
                 return self._send_json({"status": "error", "message": "Missing required 'action' parameter"}, 400)
             action = str(body["action"]).lower()
-            is_running = (self.app_manager.current_app_name == "pokeball_teleop_app")
+            is_running = (self.app_manager.current_app_name == "joycon_teleop_app")
             if action == "toggle":
                 if is_running:
                     action = "stop"
@@ -788,10 +788,10 @@ class MasterApiHandler(BaseHTTPRequestHandler):
                     action = "start"
 
             if action in ["stop", "kill"]:
-                self.app_manager.stop_app("pokeball_teleop_app")
+                self.app_manager.stop_app("joycon_teleop_app")
                 self._send_json({"status": "ok", "action": action, "running": False})
             else:
-                ok = self.app_manager.start_app_by_name("pokeball_teleop_app")
+                ok = self.app_manager.start_app_by_name("joycon_teleop_app")
                 if not ok:
                     play_chime("incorrect")
                 self._send_json({"status": "ok" if ok else "error", "action": "start", "running": ok})

@@ -19,7 +19,8 @@ class TestRoverControllerKinematics(unittest.TestCase):
     def setUp(self):
         self.config_path = str(REPO_ROOT / "config" / "rover_config.json")
         self.controller = RoverController(config_path=self.config_path, mock_mode=True)
-        self.controller.accel_ramp_rate = 1.0  # Instant response for deterministic unit testing
+        self.controller.accel_time_sec = 0.0  # Instant response for deterministic unit testing
+        self.controller.decel_time_sec = 0.0
         self.controller.steering_trim = 0.0    # Baseline kinematics testing without trim bias
         self.controller.start()
 
@@ -27,8 +28,8 @@ class TestRoverControllerKinematics(unittest.TestCase):
         self.controller.stop()
 
     def test_config_loaded_rts(self):
-        """Assert that assert_rts is False from rover_config.json."""
-        self.assertFalse(self.controller.assert_rts)
+        """Assert that assert_rts is True from rover_config.json."""
+        self.assertTrue(self.controller.assert_rts)
         self.assertTrue(self.controller.assert_dtr)
 
     def test_neutral_stop(self):
