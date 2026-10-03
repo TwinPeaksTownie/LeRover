@@ -429,89 +429,155 @@ class JoyConService:
                         self.logger.error("Error reading uevent for %s: %s", p, e, exc_info=True)
         return None
 
+    @staticmethod
+    def _make_subcmd_packet(subcmd_id: int, subcmd_data: bytes, packet_num: int = 0) -> bytes:
+        """Constructs an authoritative 49-byte Joy-Con Bluetooth output report (OUTPUT 0x01)."""
+        buf = bytearray(49)
+        buf[0] = 0x01  # OUTPUT 0x01: Subcommand with rumble
+        buf[1] = packet_num & 0x0F  # Incremental packet counter
+        buf[2:10] = bytes([0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40])  # Neutral rumble
+        buf[10] = subcmd_id
+        for i, b in enumerate(subcmd_data):
+            buf[11 + i] = b
+        return bytes(buf)
+
     def _init_joycon(self, fd: int) -> None:
         """Sends initialization subcommands to Joy-Con (R): enables 6-axis IMU and sets standard 60Hz 0x30 report mode."""
         step_delay = float(self.config["hardware"]["init_step_delay_sec"])
         try:
-            # Subcommand 0x40 (Arg 0x01): Enable IMU sensors
-            report_imu = bytes([0x01, 0x00, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0x40, 0x01])
+            # Subcommand 0x40 (Arg 0x01): Enable IMU sensors (exactly 49 bytes)
+            report_imu = self._make_subcmd_packet(0x40, bytes([0x01]), packet_num=0)
             os.write(fd, report_imu)
             time.sleep(step_delay)
-            # Subcommand 0x03 (Arg 0x30): Set standard full input report mode
-            report_mode = bytes([0x01, 0x01, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0x03, 0x30])
+            # Subcommand 0x03 (Arg 0x30): Set standard full input report mode (exactly 49 bytes)
+            report_mode = self._make_subcmd_packet(0x03, bytes([0x30]), packet_num=1)
             os.write(fd, report_mode)
             time.sleep(step_delay)
-            # Subcommand 0x30 (Arg 0x01): Set Player 1 LED solid on rail to stop cycling sync lights
-            report_led = bytes([0x01, 0x02, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0x30, 0x01])
+            # Subcommand 0x30 (Arg 0x01): Set Player 1 LED solid on rail to stop cycling sync lights (exactly 49 bytes)
+            report_led = self._make_subcmd_packet(0x30, bytes([0x01]), packet_num=2)
             os.write(fd, report_led)
             time.sleep(step_delay)
-            self.logger.info("Initialized Joy-Con (R) into 60Hz 0x30 report mode with Player 1 LED set.")
+            self.logger.info("Initialized Joy-Con (R) with 49-byte subcommands into 60Hz 0x30 report mode.")
         except OSError as e:
-            self.logger.error("Joy-Con initialization write failure on fd %d: %s", fd, e, exc_info=True)
-            raise
+            self.logger.warning("Joy-Con initialization write warning on fd %d: %s (will dynamically decode 0x3F/0x30 reports)", fd, e)
 
     def _process_report_30(self, raw: bytes) -> None:
-        """Parses 49-byte Report 0x30 from Joy-Con (R) and evaluates teleop/app gestures."""
-        if len(raw) < 12:
+        """Parses Joy-Con reports dynamically (supporting standard 49-byte Report 0x30 and 12-byte simple Report 0x3F)."""
+        if len(raw) < 4:
             return
 
         now = time.time()
-        bat_raw = raw[2]
-        battery_level = (bat_raw >> 5) & 0x07
+        report_id = raw[0]
 
-        # Byte 3: Right buttons
-        b3 = raw[3]
-        btn_y = bool(b3 & 0x01)
-        btn_x = bool(b3 & 0x02)
-        btn_b = bool(b3 & 0x04)
-        btn_a = bool(b3 & 0x08)
-        btn_sr = bool(b3 & 0x10)
-        btn_sl = bool(b3 & 0x20)
-        btn_r = bool(b3 & 0x40)
-        btn_zr = bool(b3 & 0x80)
+        if report_id == 0x3F:
+            # -----------------------------------------------------------------
+            # Simple HID Mode (Report 0x3F)
+            # -----------------------------------------------------------------
+            # Byte 1: Right face & rail buttons (Down, Right, Left, Up, SL, SR)
+            b1 = raw[1]
+            btn_b = bool(b1 & 0x01)
+            btn_a = bool(b1 & 0x02)
+            btn_y = bool(b1 & 0x04)
+            btn_x = bool(b1 & 0x08)
+            btn_sl = bool(b1 & 0x10)
+            btn_sr = bool(b1 & 0x20)
 
-        # Byte 4: Shared buttons
-        b4 = raw[4]
-        btn_plus = bool(b4 & 0x02)
-        btn_r_stick = bool(b4 & 0x04)
-        btn_home = bool(b4 & 0x10)
+            # Byte 2: Trigger & system buttons (Minus, Plus, LStick, RStick, Home, Capture, R, ZR)
+            b2 = raw[2]
+            btn_plus = bool(b2 & 0x02)
+            btn_r_stick = bool(b2 & 0x08)
+            btn_home = bool(b2 & 0x10)
+            btn_r = bool(b2 & 0x40)
+            btn_zr = bool(b2 & 0x80)
 
-        # Bytes 9-11: Right Stick (12-bit)
-        raw_r_x = raw[9] | ((raw[10] & 0x0F) << 8)
-        raw_r_y = (raw[10] >> 4) | (raw[11] << 4)
+            battery_level = 4
 
-        # Dynamic auto-zero calibration during resting state
-        if not self.zero_calibrated:
-            if not (btn_r or btn_zr or btn_a or btn_b):
-                if self.min_calib_raw <= raw_r_x <= self.max_calib_raw and self.min_calib_raw <= raw_r_y <= self.max_calib_raw:
-                    self.calib_samples_x.append(raw_r_x)
-                    self.calib_samples_y.append(raw_r_y)
-                    if len(self.calib_samples_x) >= self.auto_zero_samples:
-                        self.center_x = int(sum(self.calib_samples_x) / len(self.calib_samples_x))
-                        self.center_y = int(sum(self.calib_samples_y) / len(self.calib_samples_y))
-                        self.zero_calibrated = True
-                        self.logger.info("🎯 Joy-Con (R) stick auto-zero calibrated: center_x=%d, center_y=%d", self.center_x, self.center_y)
+            # Byte 3: Stick Hat data (8 = centered)
+            hat = raw[3] if len(raw) > 3 else 8
+            hat_map = {
+                0: (0.0, 1.0),       # Up
+                1: (0.707, 0.707),   # Up-Right
+                2: (1.0, 0.0),       # Right
+                3: (0.707, -0.707),  # Down-Right
+                4: (0.0, -1.0),      # Down
+                5: (-0.707, -0.707), # Down-Left
+                6: (-1.0, 0.0),      # Left
+                7: (-0.707, 0.707),  # Up-Left
+                8: (0.0, 0.0),       # Center
+            }
+            norm_x, norm_y = hat_map.get(hat, (0.0, 0.0))
 
-        dx = raw_r_x - self.center_x
-        dy = raw_r_y - self.center_y
-        span_x = self.span_x
-        span_y = self.span_y
+            if len(raw) >= 12 and (raw[4] != 0 or raw[5] != 0 or raw[6] != 0):
+                raw_r_x = raw[4] | ((raw[5] & 0x0F) << 8)
+                raw_r_y = (raw[5] >> 4) | (raw[6] << 4)
+                if raw_r_x != 0 or raw_r_y != 0:
+                    dx = raw_r_x - self.center_x
+                    dy = raw_r_y - self.center_y
+                    norm_x = max(-1.0, min(1.0, dx / self.span_x))
+                    norm_y = max(-1.0, min(1.0, dy / self.span_y))
 
-        raw_norm_x = max(-1.0, min(1.0, dx / span_x))
-        raw_norm_y = max(-1.0, min(1.0, dy / span_y))
-
-        # Deadzone filter
-        if abs(raw_norm_x) <= self.deadzone:
-            norm_x = 0.0
         else:
-            sign_x = 1.0 if raw_norm_x > 0 else -1.0
-            norm_x = sign_x * ((abs(raw_norm_x) - self.deadzone) / (1.0 - self.deadzone))
+            # -----------------------------------------------------------------
+            # Standard Full Mode (Report 0x30 / 0x21)
+            # -----------------------------------------------------------------
+            if len(raw) < 12:
+                return
+            bat_raw = raw[2]
+            battery_level = (bat_raw >> 5) & 0x07
 
-        if abs(raw_norm_y) <= self.deadzone:
-            norm_y = 0.0
-        else:
-            sign_y = 1.0 if raw_norm_y > 0 else -1.0
-            norm_y = sign_y * ((abs(raw_norm_y) - self.deadzone) / (1.0 - self.deadzone))
+            # Byte 3: Right buttons
+            b3 = raw[3]
+            btn_y = bool(b3 & 0x01)
+            btn_x = bool(b3 & 0x02)
+            btn_b = bool(b3 & 0x04)
+            btn_a = bool(b3 & 0x08)
+            btn_sr = bool(b3 & 0x10)
+            btn_sl = bool(b3 & 0x20)
+            btn_r = bool(b3 & 0x40)
+            btn_zr = bool(b3 & 0x80)
+
+            # Byte 4: Shared buttons
+            b4 = raw[4]
+            btn_plus = bool(b4 & 0x02)
+            btn_r_stick = bool(b4 & 0x04)
+            btn_home = bool(b4 & 0x10)
+
+            # Bytes 9-11: Right Stick (12-bit)
+            raw_r_x = raw[9] | ((raw[10] & 0x0F) << 8)
+            raw_r_y = (raw[10] >> 4) | (raw[11] << 4)
+
+            # Dynamic auto-zero calibration during resting state
+            if not self.zero_calibrated:
+                if not (btn_r or btn_zr or btn_a or btn_b):
+                    if self.min_calib_raw <= raw_r_x <= self.max_calib_raw and self.min_calib_raw <= raw_r_y <= self.max_calib_raw:
+                        self.calib_samples_x.append(raw_r_x)
+                        self.calib_samples_y.append(raw_r_y)
+                        if len(self.calib_samples_x) >= self.auto_zero_samples:
+                            self.center_x = int(sum(self.calib_samples_x) / len(self.calib_samples_x))
+                            self.center_y = int(sum(self.calib_samples_y) / len(self.calib_samples_y))
+                            self.zero_calibrated = True
+                            self.logger.info("🎯 Joy-Con (R) stick auto-zero calibrated: center_x=%d, center_y=%d", self.center_x, self.center_y)
+
+            dx = raw_r_x - self.center_x
+            dy = raw_r_y - self.center_y
+            span_x = self.span_x
+            span_y = self.span_y
+
+            raw_norm_x = max(-1.0, min(1.0, dx / span_x))
+            raw_norm_y = max(-1.0, min(1.0, dy / span_y))
+
+            # Deadzone filter
+            if abs(raw_norm_x) <= self.deadzone:
+                norm_x = 0.0
+            else:
+                sign_x = 1.0 if raw_norm_x > 0 else -1.0
+                norm_x = sign_x * ((abs(raw_norm_x) - self.deadzone) / (1.0 - self.deadzone))
+
+            if abs(raw_norm_y) <= self.deadzone:
+                norm_y = 0.0
+            else:
+                sign_y = 1.0 if raw_norm_y > 0 else -1.0
+                norm_y = sign_y * ((abs(raw_norm_y) - self.deadzone) / (1.0 - self.deadzone))
 
         # Discrete stick directions for AUX mode manipulation
         if norm_x < -0.35:
@@ -924,7 +990,7 @@ class JoyConService:
                 while not self.stop_event.is_set():
                     r, _, _ = select.select([fd], [], [], 0.05)
                     if r:
-                        raw = os.read(fd, 49)
+                        raw = os.read(fd, 64)
                         if raw:
                             self._process_report_30(raw)
                     now = time.time()
