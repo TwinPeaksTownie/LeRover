@@ -35,10 +35,16 @@ class MockRoverController:
         self.last_y = 0.0
         self.speed_pct = 35
         self.max_pulse_offset = 175
+        self.stopped = False
 
     def set_drive(self, x: float, y: float):
         self.last_x = float(x)
         self.last_y = float(y)
+
+    def stop(self):
+        self.last_x = 0.0
+        self.last_y = 0.0
+        self.stopped = True
 
     def adjust_speed_pct(self, delta: int) -> int:
         self.speed_pct = max(10, min(100, self.speed_pct + int(delta)))
@@ -130,17 +136,27 @@ class TestJoyConTeleop(unittest.TestCase):
         self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
         self.assertEqual(self.mock_rover.last_y, -1.0)
 
-    def test_idle_steering(self):
-        """When neither R nor ZR is held, horizontal stick deflection commands steering directly."""
+    def test_idle_steering_suppressed(self):
+        """When neither R nor ZR is held, horizontal stick deflection is suppressed to 0.0 (strict throttle gating)."""
         # Deflect stick fully to the right (center + span -> norm_x = 1.0)
         deflected_x = int(DEFAULT_STICK_X + self.service.span_x)
         rep = self._make_report(btn_r=False, btn_zr=False, stick_x=deflected_x)
         self.service._process_report_30(rep)
         self.assertEqual(self.service.telemetry["drivetrain"]["throttle"], 0.0)
-        self.assertAlmostEqual(self.service.telemetry["drivetrain"]["steering"], 1.0, places=1)
-        self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
-        self.assertAlmostEqual(self.mock_rover.last_x, 1.0, places=1)
+        self.assertEqual(self.service.telemetry["drivetrain"]["steering"], 0.0)
+        self.assertTrue(self.service.telemetry["drivetrain"]["gated_idle"])
+        self.assertEqual(self.mock_rover.last_x, 0.0)
         self.assertEqual(self.mock_rover.last_y, 0.0)
+
+    def test_simple_hid_0x3f_drives_forward(self):
+        """Report 0x3F (simple HID) with R button pressed drives forward."""
+        # 12-byte simple report with R button pressed
+        buf = bytearray(12)
+        buf[0] = 0x3F
+        buf[2] = 0x40  # R button in byte 2
+        self.service._process_report_30(bytes(buf))
+        self.assertEqual(self.service.telemetry["drivetrain"]["throttle"], 1.0)
+        self.assertEqual(self.mock_rover.last_y, 1.0)
 
     def test_steering_while_forward(self):
         """When R is held, horizontal stick deflection must command steering."""
@@ -153,7 +169,7 @@ class TestJoyConTeleop(unittest.TestCase):
         self.assertEqual(self.mock_rover.last_y, 1.0)
 
     def test_speed_step_sr_and_sl(self):
-        """SR click must increase speed by 5%, SL click must decrease by 5%."""
+        """SR click must increase speed by 5%, SL click must decrease by 5%, respecting refractory debounce."""
         # Initial speed is 35%
         self.assertEqual(self.mock_rover.speed_pct, 35)
 
@@ -162,19 +178,49 @@ class TestJoyConTeleop(unittest.TestCase):
         self.service._process_report_30(rep_sr)
         self.assertEqual(self.mock_rover.speed_pct, 40)
 
+        # Immediate rapid second SR press within 0.25s cooldown must be rejected
+        self.service._process_report_30(rep_sr)
+        self.assertEqual(self.mock_rover.speed_pct, 40)
+
         # SR release
         rep_rel = self._make_report(btn_sr=False)
         self.service._process_report_30(rep_rel)
+
+        # Advance time beyond cooldown
+        self.service.last_speed_step_sr_time = time.time() - 0.30
+        self.service.last_speed_step_time = time.time() - 0.30
 
         # Another SR press
         self.service._process_report_30(rep_sr)
         self.assertEqual(self.mock_rover.speed_pct, 45)
 
-        # SL press
+        # Advance time beyond cooldown
         self.service._process_report_30(rep_rel)
+        self.service.last_speed_step_sl_time = time.time() - 0.30
+        self.service.last_speed_step_time = time.time() - 0.30
+
+        # SL press
         rep_sl = self._make_report(btn_sl=True)
         self.service._process_report_30(rep_sl)
         self.assertEqual(self.mock_rover.speed_pct, 40)
+
+    def test_button_y_close_app(self):
+        """Button Y click must trigger stop() on rover_ctrl, disarm, and disable teleoperation."""
+        self.mock_rover.stopped = False
+        self.service.is_armed = True
+        self.service.teleop_enabled = True
+
+        # Click Button Y (bit 0x01 in byte 3 of report 0x30)
+        rep_y = bytearray(49)
+        rep_y[0] = 0x30
+        rep_y[1] = 0x01
+        rep_y[2] = 0x80
+        rep_y[3] = 0x01  # Button Y
+        self.service._process_report_30(bytes(rep_y))
+
+        self.assertTrue(self.mock_rover.stopped, "Button Y must trigger stop() on rover_ctrl.")
+        self.assertFalse(self.service.is_armed, "Button Y must disarm the drivetrain.")
+        self.assertFalse(self.service.teleop_enabled, "Button Y must disable teleoperation.")
 
     def test_voice_button_b_click(self):
         """Single click of B button must fire button_b_click_event."""

@@ -64,7 +64,7 @@ def get_git_diff(repo_path: str = None, max_chars: int = 2000000) -> dict:
                 modified_files.append(filename)
 
         diff_proc = subprocess.run(
-            ["git", "diff", "HEAD", "--", ".", ":!*manifest.json"],
+            ["git", "diff", "-U5", "HEAD", "--", ".", ":!*manifest.json"],
             cwd=repo_path,
             capture_output=True,
             encoding="utf-8",

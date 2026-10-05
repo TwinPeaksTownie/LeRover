@@ -18,8 +18,8 @@ def set_pixel(color):
     neopixel_write.neopixel_write(pixel_pin, bytearray([g, r, b]))
 
 # PWM setup at 50Hz for ESCs (D6 = Left Motor, D7 = Right Motor)
-motor1_pwm = pwmio.PWMOut(board.D6, frequency=50, duty_cycle=0)
-motor2_pwm = pwmio.PWMOut(board.D7, frequency=50, duty_cycle=0)
+motor1_pwm = pwmio.PWMOut(board.D6, frequency=50, duty_cycle=4915)
+motor2_pwm = pwmio.PWMOut(board.D7, frequency=50, duty_cycle=4915)
 
 def set_pulse_width(pwm, microseconds):
     microseconds = max(1000, min(2000, microseconds))
@@ -31,7 +31,7 @@ uart = None
 try:
     uart = busio.UART(board.TX, board.RX, baudrate=115200, timeout=0.001, receiver_buffer_size=256)
 except Exception:
-    pass
+    uart = None
 
 # Analog distance sensor on A3 (pure telemetry readout only)
 dist_sensor = analogio.AnalogIn(board.A3)
@@ -55,7 +55,7 @@ try:
     light_pin.direction = digitalio.Direction.OUTPUT
     light_pin.value = True  # Default Idle HIGH
 except Exception:
-    pass
+    light_pin = None
 
 light_pulse_until = 0.0
 
@@ -126,6 +126,9 @@ while True:
         if uart_chunk:
             cmd_buf.extend(uart_chunk)
 
+    if len(cmd_buf) > 128:
+        cmd_buf = cmd_buf[-64:]
+
     while b'\n' in cmd_buf:
         idx = cmd_buf.find(b'\n')
         line_bytes = cmd_buf[:idx]
@@ -140,7 +143,7 @@ while True:
                 if len(vals) > 3 and int(vals[3]) == 1:
                     light_pulse_until = now + 0.20  # 200ms pulse
         except Exception:
-            pass
+            continue
                     
     web_active = (now - last_web_command_time) < 1.0
     
@@ -208,9 +211,13 @@ while True:
     if (now - last_print_time) > 0.10:
         last_print_time = now
         stat_line = f"STAT:{mode},{left_out},{right_out},{1 if sbus_active else 0},{1 if web_active else 0},{latest_channels[0]},{latest_channels[1]},{latest_channels[4]},{raw_dist},{1 if is_pulsing else 0}\n"
-        print(stat_line, end="")
+        if usb_cdc.console:
+            try:
+                usb_cdc.console.write(stat_line.encode('utf-8'))
+            except Exception:
+                pass
         if uart:
             try:
                 uart.write(stat_line.encode('utf-8'))
             except Exception:
-                pass
+                uart = None

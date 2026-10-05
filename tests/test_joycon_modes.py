@@ -182,7 +182,7 @@ class TestJoyConModes(unittest.TestCase):
         self.assertEqual(self.mock_rover.last_y, -1.0)
 
     def test_idle_throttle_gated_steering(self):
-        """When neither R nor ZR is held, throttle is 0.0 but steering reflects stick X (throttle gate removed)."""
+        """When neither R nor ZR is held, throttle is 0.0 and steering is suppressed to 0.0 (strict throttle gating)."""
         self.service.is_armed = True
         self.service.control_mode = "ROVER"
 
@@ -191,9 +191,9 @@ class TestJoyConModes(unittest.TestCase):
         self.service._process_report_30(rep_idle)
 
         self.assertEqual(self.service.telemetry["drivetrain"]["throttle"], 0.0)
-        self.assertEqual(self.service.telemetry["drivetrain"]["steering"], 1.0)
-        self.assertFalse(self.service.telemetry["drivetrain"]["gated_idle"])
-        self.assertEqual(self.mock_rover.last_x, 1.0)
+        self.assertEqual(self.service.telemetry["drivetrain"]["steering"], 0.0)
+        self.assertTrue(self.service.telemetry["drivetrain"]["gated_idle"])
+        self.assertEqual(self.mock_rover.last_x, 0.0)
         self.assertEqual(self.mock_rover.last_y, 0.0)
 
     @patch("apps.joycon_app.app.play_chime")
@@ -258,6 +258,32 @@ class TestJoyConModes(unittest.TestCase):
         self.assertEqual(self.service.control_mode, "ROVER")
         self.assertTrue(self.service.is_armed)
         mock_chime.assert_called_with("rover_arm_drivetrain")
+
+    @patch("apps.joycon_app.app.play_chime")
+    def test_neutral_at_arm_prevent_lurch(self, mock_chime):
+        """Holding Button A while R is also held must NOT arm the drivetrain until R is released."""
+        self.service.control_mode = "AUX"
+        self.service.is_armed = False
+
+        # Press A + R simultaneously
+        rep_a_r = self._make_report(btn_a=True, btn_r=True)
+        self.service._process_report_30(rep_a_r)
+
+        # Simulate 2.1s hold while R is still held
+        self.service.btn_a_press_start_time = time.time() - 2.1
+        self.service._process_report_30(rep_a_r)
+
+        # Must still be disarmed because R is pressed
+        self.assertFalse(self.service.is_armed)
+        self.assertEqual(self.service.control_mode, "AUX")
+
+        # Now release R (only A is held)
+        rep_a_only = self._make_report(btn_a=True, btn_r=False)
+        self.service._process_report_30(rep_a_only)
+
+        # Now it arms!
+        self.assertTrue(self.service.is_armed)
+        self.assertEqual(self.service.control_mode, "ROVER")
 
     @patch("apps.joycon_app.app.play_chime")
     def test_idle_hold_a_launches_teleop_app(self, mock_chime):

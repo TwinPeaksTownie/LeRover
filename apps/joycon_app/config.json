@@ -19,11 +19,16 @@
   "pairing": {
     "timeout_sec": 45,
     "scan_timeout_sec": 10,
-    "auto_remove_stale": true
+    "auto_remove_stale": true,
+    "stale_purge_on_startup": true,
+    "auto_pair_on_search": true,
+    "search_scan_interval_sec": 5.0,
+    "unpaired_grace_period_sec": 8.0
   },
   "control": {
     "deadzone": 0.12,
     "speed_step_pct": 5,
+    "speed_step_cooldown_sec": 0.25,
     "auto_zero_samples": 30,
     "gantry_step_ticks": 500,
     "aux_lock_duration_sec": 0.6
@@ -39,7 +44,6 @@
     "b_hold_sec": 2.0,
     "b_double_tap_sec": 0.40,
     "arm_drivetrain_sec": 2.0,
-    "arm_lockout_sec": 0.0,
     "chord_abort_sec": 1.0,
     "chord_click_suppress_sec": 0.5
   },

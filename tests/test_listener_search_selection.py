@@ -23,7 +23,7 @@ for p in [WORKSPACE_ROOT, PI4B_DIR]:
 
 from apps.listener_app.song_pipeline import fetch_search_candidates
 from apps.listener_app.app import ListenerApp
-from apps.pokeball_app.app import PokeballApp
+from apps.joycon_app.app import JoyConApp as PokeballApp
 
 
 class TestListenerSearchSelection(unittest.TestCase):
@@ -135,7 +135,7 @@ class TestListenerSearchSelection(unittest.TestCase):
         self.assertEqual(status["selected_index"], 0)
 
     def test_pokeball_listener_selection_handling(self):
-        from apps.pokeball_app.app import PokeballService
+        from apps.joycon_app.app import JoyConService as PokeballService
         service = PokeballService()
         mock_mgr = MagicMock()
         mock_mgr.current_app_name = "listener_app"

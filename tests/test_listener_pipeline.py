@@ -443,7 +443,7 @@ class TestListenerPipeline(unittest.TestCase):
         self.assertEqual(slug2, "chappell_roan_good_luck_babe")
 
     def test_canonical_app_alias_map(self):
-        canonical_apps = {"teleop_app", "servo_studio_app", "beat_bandit_app", "preset_app", "pokeball_teleop_app", "piranha_pose_app", "ornith_voice"}
+        canonical_apps = {"teleop_app", "servo_studio_app", "beat_bandit_app", "preset_app", "joycon_teleop_app", "piranha_pose_app", "ornith_voice"}
         for alias, app_name in APP_ALIAS_MAP.items():
             self.assertIn(app_name, canonical_apps, f"Alias '{alias}' points to unknown '{app_name}'")
 

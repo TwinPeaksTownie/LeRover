@@ -41,17 +41,18 @@ class TestBeatBanditFailFast(unittest.TestCase):
             self.app.run(self.mock_backend, self.stop_event)
         self.assertIn("authoritative app_manager", str(ctx.exception))
 
-    def test_missing_pokeball_service_raises_attribute_error(self):
+    def test_missing_joycon_service_raises_attribute_error(self):
         self.app.app_manager = MagicMock()
+        self.app.app_manager.joycon_service = None
         self.app.app_manager.pokeball_service = None
         with self.assertRaises(AttributeError) as ctx:
             self.app.run(self.mock_backend, self.stop_event)
-        self.assertIn("authoritative app_manager.pokeball_service", str(ctx.exception))
+        self.assertIn("authoritative app_manager.joycon_service", str(ctx.exception))
 
     def test_missing_button_b_click_event_raises_attribute_error(self):
         self.app.app_manager = MagicMock()
         mock_service = MagicMock(spec=[])  # no button_b_click_event
-        self.app.app_manager.pokeball_service = mock_service
+        self.app.app_manager.joycon_service = mock_service
         with self.assertRaises(AttributeError) as ctx:
             self.app.run(self.mock_backend, self.stop_event)
         self.assertIn("button_b_click_event", str(ctx.exception))
@@ -69,6 +70,7 @@ class TestBeatBanditDoubleClickGesture(unittest.TestCase):
         self.mock_service.button_b_click_event = threading.Event()
 
         self.mock_app_manager = MagicMock()
+        self.mock_app_manager.joycon_service = self.mock_service
         self.mock_app_manager.pokeball_service = self.mock_service
         self.app.app_manager = self.mock_app_manager
 

@@ -480,8 +480,12 @@ class PiranhaPoseApp(BaseApp):
 
         if ctrl:
             try:
-                ctrl.set_drive(0.0, throttle)
-                time.sleep(duration_sec)
+                start_t = time.time()
+                while (time.time() - start_t) < duration_sec:
+                    if self._sequence_stop_event.is_set():
+                        break
+                    ctrl.set_drive(0.0, throttle)
+                    time.sleep(0.04)
                 ctrl.set_drive(0.0, 0.0)
             except Exception as e:
                 self.logger.exception("Rover drive burst helper error: %s", e)

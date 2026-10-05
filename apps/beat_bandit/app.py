@@ -139,19 +139,19 @@ class BeatBanditApp(BaseApp):
 
         if self.app_manager is None:
             raise AttributeError("BeatBanditApp requires authoritative app_manager injected by daemon host")
-        if not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
-            raise AttributeError("BeatBanditApp requires authoritative app_manager.pokeball_service from daemon host")
-        service = self.app_manager.pokeball_service
+        if not hasattr(self.app_manager, "joycon_service") or self.app_manager.joycon_service is None:
+            raise AttributeError("BeatBanditApp requires authoritative app_manager.joycon_service from daemon host")
+        service = self.app_manager.joycon_service
 
         if not hasattr(service, "button_b_click_event") or service.button_b_click_event is None:
-            raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
+            raise AttributeError("JoyConService is missing required 'button_b_click_event' attribute")
         service.button_b_click_event.clear()
 
         if "double_click_window_sec" not in self.config:
             raise KeyError("Fail-Fast Error: Missing required 'double_click_window_sec' in config.json")
         double_click_window = float(self.config["double_click_window_sec"])
 
-        self.logger.info("BeatBanditApp run loop active. Monitoring Pokeball Button B double-clicks (window=%.2fs)...", double_click_window)
+        self.logger.info("BeatBanditApp run loop active. Monitoring Joy-Con Button B double-clicks (window=%.2fs)...", double_click_window)
 
         last_b_click_time = 0.0
 

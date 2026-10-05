@@ -18,7 +18,7 @@ sys.path.insert(0, str(REPO_ROOT / "pi4b"))
 sys.path.insert(0, str(REPO_ROOT / "apps"))
 
 import audio_resolver
-from apps.pokeball_app.app import PokeballService
+from apps.joycon_app.app import JoyConService as PokeballService
 from apps.ornith_voice.app import OrnithVoiceApp
 
 
@@ -59,7 +59,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
         self.service = PokeballService(api_url="http://127.0.0.1:8085")
         self.service.logger = MagicMock()
 
-    @patch("apps.pokeball_app.app.play_chime")
+    @patch("apps.joycon_app.app.play_chime")
     def test_chord_abort_detection(self, mock_play_chime):
         """Simultaneous A + B held for 1.0s must set abort_audio_event."""
         t0 = 100.0
@@ -83,7 +83,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.assertTrue(self.service.abort_audio_event.is_set())
             self.assertTrue(self.service.ab_hold_triggered)
 
-    @patch("apps.pokeball_app.app.play_chime")
+    @patch("apps.joycon_app.app.play_chime")
     def test_rover_arm_hold_and_mode_toggle(self, mock_play_chime):
         """Holding Button A for 1.5s arms drivetrain. Button B click switches to AUX mode. Button A click switches to ROVER mode."""
         self.service.teleop_enabled = True
@@ -130,7 +130,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
             self.assertTrue(self.service.is_armed)
             mock_play_chime.assert_called_with("rover_arm_drivetrain")
 
-    @patch("apps.pokeball_app.app.play_chime")
+    @patch("apps.joycon_app.app.play_chime")
     def test_button_a_hold_starts_pokeball_app_when_inactive(self, mock_play_chime):
         """Holding Button A for a_hold_sec when pokeball app is inactive stops active apps and launches pokeball_teleop_app."""
         self.service.app_manager = MagicMock()
@@ -151,9 +151,9 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 with patch("urllib.request.urlopen"):
                     launch_fn()
                 self.service.app_manager.stop_all.assert_called_once()
-                self.service.app_manager.start_app_by_name.assert_called_with("pokeball_teleop_app")
+                self.service.app_manager.start_app_by_name.assert_called_with("joycon_teleop_app")
 
-    @patch("apps.pokeball_app.app.play_chime")
+    @patch("apps.joycon_app.app.play_chime")
     def test_button_b_hold_launches_listener_app(self, mock_play_chime):
         """Holding Button B for 3.0s must stop active apps and launch listener_app via AppManager."""
         self.service.app_manager = MagicMock()
@@ -178,7 +178,7 @@ class TestPokeballServiceGestures(unittest.TestCase):
                 self.service.app_manager.stop_all.assert_called_once()
                 self.service.app_manager.start_app_by_name.assert_called_with("listener_app")
 
-    @patch("apps.pokeball_app.app.play_chime")
+    @patch("apps.joycon_app.app.play_chime")
     def test_button_b_gestures_while_listener_app_active(self, mock_play_chime):
         """While listener_app is active: single tap triggers start_listen_event, double tap aborts."""
         self.service.app_manager = MagicMock()
@@ -334,6 +334,7 @@ class TestOrnithVoiceCadence(unittest.TestCase):
         mock_service.button_b_click_event = threading.Event()
         mock_service.abort_audio_event = threading.Event()
         mock_app_mgr = MagicMock()
+        mock_app_mgr.joycon_service = mock_service
         mock_app_mgr.pokeball_service = mock_service
         self.app.app_manager = mock_app_mgr
 
@@ -378,9 +379,9 @@ class TestJoystickCalibration(unittest.TestCase):
     """Verifies fail-fast loading of Pokéball joystick calibration."""
 
     def test_calibration_success(self):
-        from apps.pokeball_app.app import load_joystick_calibration
+        from apps.joycon_app.app import load_joystick_calibration
         with open(REPO_ROOT / "calibration_aux.json", "r", encoding="utf-8") as f:
-            expected = json.load(f)["pokeball_joystick"]
+            expected = json.load(f)["joycon_joystick"]
         cx, cy = load_joystick_calibration()
         self.assertIsInstance(cx, int)
         self.assertIsInstance(cy, int)
@@ -388,7 +389,7 @@ class TestJoystickCalibration(unittest.TestCase):
         self.assertEqual(cy, expected["center_y"])
 
     def test_calibration_missing_block_raises_keyerror(self):
-        from apps.pokeball_app.app import load_joystick_calibration
+        from apps.joycon_app.app import load_joystick_calibration
         bad_calib = {"7": {"center_ticks": 2400}}
         with patch("builtins.open", unittest.mock.mock_open(read_data=json.dumps(bad_calib))):
             with patch("os.path.exists", return_value=True):

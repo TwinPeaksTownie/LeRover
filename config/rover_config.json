@@ -7,20 +7,21 @@
     "max_speed_pct": 35
   },
   "control": {
+    "command_timeout_sec": 0.30,
     "accel_time_sec": 2.0,
     "decel_time_sec": 0.5,
-    "watchdog_timeout_sec": 1.0,
     "steering_trim": 0.05,
     "speed_step_pct": 5,
     "min_speed_pct": 0,
     "max_speed_pct_limit": 100,
-    "loop_rate_hz": 25
+    "loop_rate_hz": 15
   },
   "hardware_interface": {
     "assert_dtr": true,
     "assert_rts": true,
     "serial_timeout_sec": 0.01,
-    "write_timeout_sec": 1.0
+    "write_timeout_sec": 0.25,
+    "max_consecutive_write_failures": 5
   },
   "distance_sensor": {
     "model": "goBILDA_3111_0001_0001",
@@ -29,19 +30,5 @@
     "max_volts": 3.3,
     "max_distance_mm": 1000.0,
     "update_rate_hz": 10
-  },
-  "collision_guard": {
-    "enabled": false,
-    "danger_zone_cm": 15.0,
-    "min_valid_cm": 4.0,
-    "max_valid_cm": 100.0,
-    "ground_exclusion_adc": 62000,
-    "lockout_speed_threshold_pct": 50,
-    "docked_speed_pct": 50,
-    "recovery_button": "a",
-    "recovery_hold_sec": 2.0,
-    "speed_penalty_pct": 50,
-    "halt_pulse_left": 1500,
-    "halt_pulse_right": 1500
   }
 }

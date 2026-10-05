@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -80,6 +81,7 @@ def load_joycon_config() -> dict:
 
     _ = float(cfg["control"]["deadzone"])
     _ = int(cfg["control"]["speed_step_pct"])
+    _ = float(cfg["control"]["speed_step_cooldown_sec"])
     _ = int(cfg["control"]["auto_zero_samples"])
     _ = int(cfg["control"]["gantry_step_ticks"])
     _ = float(cfg["control"]["aux_lock_duration_sec"])
@@ -93,7 +95,6 @@ def load_joycon_config() -> dict:
     _ = float(cfg["gestures"]["b_hold_sec"])
     _ = float(cfg["gestures"]["b_double_tap_sec"])
     _ = float(cfg["gestures"]["arm_drivetrain_sec"])
-    _ = float(cfg["gestures"]["arm_lockout_sec"])
     _ = float(cfg["gestures"]["chord_abort_sec"])
     _ = float(cfg["gestures"]["chord_click_suppress_sec"])
 
@@ -110,6 +111,10 @@ def load_joycon_config() -> dict:
     _ = int(cfg["pairing"]["timeout_sec"])
     _ = int(cfg["pairing"]["scan_timeout_sec"])
     _ = bool(cfg["pairing"]["auto_remove_stale"])
+    _ = bool(cfg["pairing"]["stale_purge_on_startup"])
+    _ = bool(cfg["pairing"]["auto_pair_on_search"])
+    _ = float(cfg["pairing"]["search_scan_interval_sec"])
+    _ = float(cfg["pairing"]["unpaired_grace_period_sec"])
 
     return cfg
 
@@ -243,7 +248,9 @@ class JoyConService:
         self.control_mode = "ROVER"  # Exactly two modes: 'ROVER' vs 'AUX' (Rule 13)
         self.is_armed = False
         self.rover_ctrl: Optional[Any] = None
-        self.arm_lockout_until = 0.0
+        if RoverController is not None:
+            self.rover_ctrl = RoverController()
+            self.rover_ctrl.start()
 
         # Timing and gesture state
         self.btn_a_press_start_time: Optional[float] = None
@@ -262,7 +269,10 @@ class JoyConService:
         self.last_btn_b = False
         self.last_btn_y = False
         self.last_btn_sr = False
-        self.last_btn_sl = False
+        self.speed_step_cooldown_sec = float(self.config["control"]["speed_step_cooldown_sec"])
+        self.last_speed_step_sr_time: float = 0.0
+        self.last_speed_step_sl_time: float = 0.0
+        self.last_speed_step_time: float = 0.0  # Alias for backward compatibility
         self.last_x_direction = "center"
         self.last_y_direction = "center"
         self.last_listener_nav_time: float = 0.0
@@ -336,6 +346,12 @@ class JoyConService:
             }
         }
         self.pairing_in_progress = False
+        self.stale_purge_on_startup = bool(self.config["pairing"]["stale_purge_on_startup"])
+        self.auto_pair_on_search = bool(self.config["pairing"]["auto_pair_on_search"])
+        self.search_scan_interval_sec = float(self.config["pairing"]["search_scan_interval_sec"])
+        self.unpaired_grace_period_sec = float(self.config["pairing"]["unpaired_grace_period_sec"])
+        self.search_start_time: float = time.time()
+        self.last_auto_scan_time: float = 0.0
         self.write_telemetry()
 
     @property
@@ -513,8 +529,18 @@ class JoyConService:
                 if raw_r_x != 0 or raw_r_y != 0:
                     dx = raw_r_x - self.center_x
                     dy = raw_r_y - self.center_y
-                    norm_x = max(-1.0, min(1.0, dx / self.span_x))
-                    norm_y = max(-1.0, min(1.0, dy / self.span_y))
+                    raw_norm_x = max(-1.0, min(1.0, dx / self.span_x))
+                    raw_norm_y = max(-1.0, min(1.0, dy / self.span_y))
+                    if abs(raw_norm_x) <= self.deadzone:
+                        norm_x = 0.0
+                    else:
+                        sign_x = 1.0 if raw_norm_x > 0 else -1.0
+                        norm_x = sign_x * ((abs(raw_norm_x) - self.deadzone) / (1.0 - self.deadzone))
+                    if abs(raw_norm_y) <= self.deadzone:
+                        norm_y = 0.0
+                    else:
+                        sign_y = 1.0 if raw_norm_y > 0 else -1.0
+                        norm_y = sign_y * ((abs(raw_norm_y) - self.deadzone) / (1.0 - self.deadzone))
 
         else:
             # -----------------------------------------------------------------
@@ -624,29 +650,37 @@ class JoyConService:
             self.last_btn_a_listener = False
 
         # ---------------------------------------------------------------------
-        # 0. BUTTON Y GESTURE: UNIVERSAL EMERGENCY STOP_APP
+        # 0. BUTTON Y GESTURE: CLOSE CURRENT APP / RETURN TO IDLE
         # ---------------------------------------------------------------------
         if btn_y and not self.last_btn_y:
-            self.logger.info("🛑 [BUTTON Y CLICK] Universal STOP_APP triggered!")
-            if self.app_manager:
-                curr_app = self.app_manager.current_app_name
-                if curr_app:
-                    self.logger.info("Stopping active app '%s' via Button Y...", curr_app)
-                    try:
-                        self.app_manager.stop_app(curr_app)
-                    except Exception as ex:
-                        self.logger.error("Error stopping app '%s' on Button Y: %s", curr_app, ex)
+            self.logger.info("⏹️ [BUTTON Y CLICK] Closing active app and returning to IDLE...")
+            # 1. Orderly stop of rover drivetrain
+            if self.rover_ctrl:
+                try:
+                    self.rover_ctrl.stop()
+                except Exception as ex:
+                    self.logger.error("Error stopping rover on Button Y: %s", ex)
             self.control_mode = "ROVER"
             self.teleop_enabled = False
             self.is_armed = False
-            if self.rover_ctrl:
-                self.rover_ctrl.set_drive(0.0, 0.0)
+
+            # 2. Stop active app in a decoupled worker thread so Joy-Con HID reading loop never blocks
+            if self.app_manager:
+                curr_app = self.app_manager.current_app_name
+                if curr_app:
+                    self.logger.info("Stopping active app '%s' via Button Y (decoupled)...", curr_app)
+                    def _stop_app_worker(app_name: str) -> None:
+                        try:
+                            self.app_manager.stop_app(app_name)
+                        except Exception as ex:
+                            self.logger.error("Error stopping app '%s' on Button Y: %s", app_name, ex)
+                    threading.Thread(target=_stop_app_worker, args=(curr_app,), daemon=True, name=f"ButtonY-StopApp-{curr_app}").start()
+
             play_chime(self.config["chimes"]["app_exit_idle"])
         self.last_btn_y = btn_y
 
         a_hold_sec = float(self.config["gestures"]["a_hold_sec"])
         b_hold_sec = float(self.config["gestures"]["b_hold_sec"])
-        arm_lockout_sec = float(self.config["gestures"]["arm_lockout_sec"])
         chord_abort_sec = float(self.config["gestures"]["chord_abort_sec"])
 
         # ---------------------------------------------------------------------
@@ -674,42 +708,50 @@ class JoyConService:
                 self.btn_a_press_start_time = now
             hold_duration_a = now - self.btn_a_press_start_time
             if hold_duration_a >= a_hold_sec and not self.a_hold_triggered:
-                self.a_hold_triggered = True
-                self.logger.info("🏎️ [BUTTON A HOLD] Triggering ROVER Drive Mode...")
-
-                is_teleop_active = (
-                    self.teleop_enabled or
-                    (self.app_manager is not None and self.app_manager.current_app_name in ["joycon_teleop_app", "pokeball_teleop_app"])
-                )
-
-                if not is_teleop_active:
-                    # Universal IDLE launch: stop whatever app is active and start joycon_teleop_app in ROVER mode
-                    self.logger.info("🚀 Launching joycon_teleop_app in ROVER mode from IDLE/Active state...")
-                    self.control_mode = "ROVER"
-                    self.teleop_enabled = True
-                    self.is_armed = True
-                    self.arm_lockout_until = now + arm_lockout_sec
-                    if self.rover_ctrl:
-                        self.rover_ctrl.set_drive(0.0, 0.0)
-
-                    if self.app_manager:
-                        def _launch_teleop():
-                            try:
-                                self.app_manager.stop_all()
-                                self.app_manager.start_app_by_name("joycon_teleop_app")
-                            except Exception as ex:
-                                self.logger.error("Failed launching joycon_teleop_app: %s", ex, exc_info=True)
-                        threading.Thread(target=_launch_teleop, daemon=True, name="TeleopLaunchWorker").start()
-                    play_chime(self.config["chimes"]["arm_rover"])
+                # Neutral-at-arm safety interlock: triggers (R, ZR) and stick must be centered
+                is_neutral = not (btn_r or btn_zr) and (abs(norm_x) < 0.05 and abs(norm_y) < 0.05)
+                if not is_neutral:
+                    self.logger.warning("⚠️ [ARM INTERLOCK] Cannot arm rover: inputs not neutral (R=%s, ZR=%s, stick=(%.2f, %.2f))",
+                                        btn_r, btn_zr, norm_x, norm_y)
                 else:
-                    # Teleop already active: switch back to ROVER mode and re-arm
-                    self.control_mode = "ROVER"
-                    self.is_armed = True
-                    self.arm_lockout_until = now + arm_lockout_sec
-                    if self.rover_ctrl:
-                        self.rover_ctrl.set_drive(0.0, 0.0)
-                    self.logger.info("🏎️ [MODE SWITCH] Switched back to ROVER Mode and armed drivetrain.")
-                    play_chime(self.config["chimes"]["arm_rover"])
+                    self.a_hold_triggered = True
+                    self.logger.info("🏎️ [BUTTON A HOLD] Triggering ROVER Drive Mode...")
+
+                    is_teleop_active = (
+                        self.teleop_enabled or
+                        (self.app_manager is not None and self.app_manager.current_app_name in ["joycon_teleop_app", "pokeball_teleop_app"])
+                    )
+
+                    if not is_teleop_active:
+                        # Universal IDLE launch: stop whatever app is active and start joycon_teleop_app in ROVER mode
+                        self.logger.info("🚀 Launching joycon_teleop_app in ROVER mode from IDLE/Active state...")
+                        self.control_mode = "ROVER"
+                        self.teleop_enabled = True
+                        self.is_armed = True
+                        if self.rover_ctrl:
+                            self.rover_ctrl.set_drive(0.0, 0.0)
+
+                        if self.app_manager:
+                            def _launch_teleop():
+                                try:
+                                    self.app_manager.stop_all()
+                                    self.app_manager.start_app_by_name("joycon_teleop_app")
+                                except Exception as ex:
+                                    self.logger.error("Failed launching joycon_teleop_app, reverting to safe disarmed state: %s", ex, exc_info=True)
+                                    self.is_armed = False
+                                    self.teleop_enabled = False
+                                    if self.rover_ctrl:
+                                        self.rover_ctrl.stop()
+                            threading.Thread(target=_launch_teleop, daemon=True, name="TeleopLaunchWorker").start()
+                        play_chime(self.config["chimes"]["arm_rover"])
+                    else:
+                        # Teleop already active: switch back to ROVER mode and re-arm
+                        self.control_mode = "ROVER"
+                        self.is_armed = True
+                        if self.rover_ctrl:
+                            self.rover_ctrl.set_drive(0.0, 0.0)
+                        self.logger.info("🏎️ [MODE SWITCH] Switched back to ROVER Mode and armed drivetrain.")
+                        play_chime(self.config["chimes"]["arm_rover"])
         else:
             self.btn_a_press_start_time = None
             self.a_hold_triggered = False
@@ -785,41 +827,40 @@ class JoyConService:
             self.b_hold_triggered = False
 
         # ---------------------------------------------------------------------
-        # 3. TELEOPERATION ACTUATION (When joycon_teleop_app is Active)
+        # 3. TELEOPERATION ACTUATION (When joycon_teleop_app is Active or Armed)
         # ---------------------------------------------------------------------
-        if self.teleop_enabled:
+        if self.teleop_enabled or self.is_armed:
             if self.control_mode == "ROVER":
-                # Speed Adjustments on rising edges of SR and SL
-                if btn_sr and not self.last_btn_sr:
+                # Speed Adjustments on rising edges of SR and SL with refractory debounce
+                if btn_sr and not self.last_btn_sr and (now - self.last_speed_step_sr_time) >= self.speed_step_cooldown_sec:
+                    self.last_speed_step_sr_time = now
+                    self.last_speed_step_time = now
                     if self.rover_ctrl:
                         new_pct = self.rover_ctrl.adjust_speed_pct(int(self.config["control"]["speed_step_pct"]))
                         self.logger.info("🚀 [SPEED STEP +5%%] Rover speed stepped up to %d%%", new_pct)
                         play_chime(self.config["chimes"]["speed_up"])
 
-                if btn_sl and not self.last_btn_sl:
+                if btn_sl and not self.last_btn_sl and (now - self.last_speed_step_sl_time) >= self.speed_step_cooldown_sec:
+                    self.last_speed_step_sl_time = now
+                    self.last_speed_step_time = now
                     if self.rover_ctrl:
                         new_pct = self.rover_ctrl.adjust_speed_pct(-int(self.config["control"]["speed_step_pct"]))
                         self.logger.info("🐢 [SPEED STEP -5%%] Rover speed stepped down to %d%%", new_pct)
                         play_chime(self.config["chimes"]["speed_down"])
 
-                # Strict Throttle-Gated Steering:
-                steering = norm_x
+                # Direct Joy-Con Drive Mapping:
+                # Hold R  -> Forward (+1.0)
+                # Hold ZR -> Reverse (-1.0)
+                # Neither or Both -> Throttle = 0.0
                 if btn_r and not btn_zr:
                     throttle = 1.0
                 elif btn_zr and not btn_r:
                     throttle = -1.0
                 else:
                     throttle = 0.0
-                gated_idle = (throttle == 0.0 and steering == 0.0)
 
-                # Ensure RoverController is initialized if armed
-                if self.is_armed and self.rover_ctrl is None and RoverController is not None:
-                    try:
-                        self.rover_ctrl = RoverController()
-                        self.rover_ctrl.start()
-                        self.logger.info("🏎️ [AUTONOMOUS ROVER INIT] Initialized RoverController in JoyConService.")
-                    except Exception as ex:
-                        self.logger.error("Failed to auto-initialize RoverController: %s", ex)
+                steering = norm_x
+                gated_idle = (throttle == 0.0 and steering == 0.0)
 
                 if self.rover_ctrl:
                     if self.is_armed:
@@ -855,6 +896,8 @@ class JoyConService:
             throttle = 0.0
             steering = 0.0
             gated_idle = True
+            if self.rover_ctrl:
+                self.rover_ctrl.set_drive(0.0, 0.0)
 
         self.last_btn_b = btn_b
         self.last_btn_sr = btn_sr
@@ -977,12 +1020,35 @@ class JoyConService:
         while not self.stop_event.is_set():
             dev_path = self._find_device_path()
             if not dev_path:
+                now = time.time()
                 self.telemetry["connected"] = False
                 self.telemetry["status"] = "SEARCHING"
                 self.write_telemetry()
+
+                # Watchdog clean state check & background discovery
+                if sys.platform != "win32" and self.auto_pair_on_search and not self.pairing_in_progress:
+                    search_duration = now - self.search_start_time
+                    if search_duration >= self.unpaired_grace_period_sec:
+                        if (now - self.last_auto_scan_time) >= self.search_scan_interval_sec:
+                            self.last_auto_scan_time = now
+                            self.logger.info("🔍 [SEARCH WATCHDOG] Joy-Con searching (%ds elapsed). Checking BlueZ device state...", int(search_duration))
+                            try:
+                                b_info = subprocess.run(["bluetoothctl", "info", self.mac_address], capture_output=True, text=True, timeout=4)
+                                b_out = b_info.stdout or ""
+                                is_paired = "Paired: yes" in b_out
+                                if not is_paired and self.mac_address.upper() in b_out.upper():
+                                    self.logger.info("🧹 [CLEAN STATE] Purging unbonded Joy-Con device %s before repair attempt.", self.mac_address)
+                                    subprocess.run(["bluetoothctl", "remove", self.mac_address], capture_output=True, text=True, timeout=4)
+                            except Exception as ex:
+                                self.logger.debug("BlueZ info check in watchdog: %s", ex)
+
+                            # Launch background pairing worker to catch broadcasting Joy-Con
+                            self.trigger_repair(timeout_sec=int(self.config["pairing"]["scan_timeout_sec"]))
+
                 time.sleep(reconnect_delay)
                 continue
 
+            self.search_start_time = time.time()
             was_connected = False
             self.logger.info("Connecting to Joy-Con (R) at %s...", dev_path)
             try:
@@ -1026,8 +1092,29 @@ class JoyConService:
                 play_chime(self.config["chimes"]["disconnect"])
             time.sleep(reconnect_delay)
 
+    def _audit_bluez_startup_state(self) -> None:
+        """Audits BlueZ device records on startup, purging any unbonded zombie entries."""
+        if not self.stale_purge_on_startup:
+            return
+        if sys.platform == "win32":
+            return
+        try:
+            res = subprocess.run(["bluetoothctl", "info", self.mac_address], capture_output=True, text=True, timeout=5)
+            out = res.stdout or ""
+            if "Device " in out and self.mac_address.upper() in out.upper():
+                is_paired = "Paired: yes" in out
+                is_bonded = "Bonded: yes" in out
+                is_connected = "Connected: yes" in out
+                if not is_paired or (not is_bonded and not is_connected):
+                    self.logger.info("🧹 [CLEAN STATE] Purging unbonded zombie device record %s from BlueZ on startup...", self.mac_address)
+                    subprocess.run(["bluetoothctl", "remove", self.mac_address], capture_output=True, text=True, timeout=5)
+                    self.logger.info("🧹 [CLEAN STATE] Purge complete for %s.", self.mac_address)
+        except Exception as e:
+            self.logger.warning("Error auditing BlueZ startup state: %s", e)
+
     def start(self) -> None:
         if self.thread is None or not self.thread.is_alive():
+            self._audit_bluez_startup_state()
             self.stop_event.clear()
             self.thread = threading.Thread(target=self._run_loop, daemon=True, name="JoyConServiceWorker")
             self.thread.start()
@@ -1120,7 +1207,6 @@ class JoyConApp(BaseApp):
         service.control_mode = "ROVER"
         # Explicitly arm drivetrain so holding R drives wheels immediately upon starting the app
         service.is_armed = True
-        service.arm_lockout_until = time.time() + float(self.config["gestures"]["arm_lockout_sec"])
 
         if self.rover_ctrl is None:
             if service.rover_ctrl is not None:
@@ -1145,13 +1231,6 @@ class JoyConApp(BaseApp):
         service.control_mode = "ROVER"
         if self.rover_ctrl:
             self.rover_ctrl.stop()
-            try:
-                self.rover_ctrl.shutdown()
-            except Exception as e:
-                self.logger.exception("Error shutting down RoverController in JoyConApp: %s", e)
-                raise
-            self.rover_ctrl = None
-        service.rover_ctrl = None
         self.logger.info("JoyConApp disabled teleoperation and released rover drivetrain.")
 
     def stop(self) -> None:

@@ -257,16 +257,16 @@ class OrnithVoiceApp(BaseApp):
         self.logger.info("OrnithVoiceApp interaction loop running.")
         if self.app_manager is None:
             raise AttributeError("OrnithVoiceApp requires authoritative app_manager injected by daemon host")
-        if not hasattr(self.app_manager, "pokeball_service") or self.app_manager.pokeball_service is None:
-            raise AttributeError("OrnithVoiceApp requires authoritative app_manager.pokeball_service from daemon host")
-        service = self.app_manager.pokeball_service
+        if not hasattr(self.app_manager, "joycon_service") or self.app_manager.joycon_service is None:
+            raise AttributeError("OrnithVoiceApp requires authoritative app_manager.joycon_service from daemon host")
+        service = self.app_manager.joycon_service
 
         if not hasattr(service, "button_b_click_event") or service.button_b_click_event is None:
-            raise AttributeError("PokeballService is missing required 'button_b_click_event' attribute")
+            raise AttributeError("JoyConService is missing required 'button_b_click_event' attribute")
         service.button_b_click_event.clear()
 
         if not hasattr(service, "abort_audio_event") or service.abort_audio_event is None:
-            raise AttributeError("PokeballService is missing required 'abort_audio_event' attribute")
+            raise AttributeError("JoyConService is missing required 'abort_audio_event' attribute")
         service.abort_audio_event.clear()
 
         auto_send_timeout = self.config["robot_app"]["auto_send_timeout_sec"]
