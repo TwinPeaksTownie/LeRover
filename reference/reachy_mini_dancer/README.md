@@ -419,7 +419,7 @@ Apache 2.0 (aligns with Reachy Mini SDK)
 ⚠️ **Always test choreographies in simulation first**
 ⚠️ **Respect mechanical limits (±15° pitch, safe workspaces)**
 ⚠️ **Monitor robot during execution**
-⚠️ **Keep emergency stop accessible**
+⚠️ **Keep physical disarm accessible**
 
 ---
 

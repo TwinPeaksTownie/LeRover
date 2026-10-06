@@ -235,7 +235,7 @@ def run_simulation():
         # -------------------------------------------------------------
         # TEST 6: Top Red Button (Button B) Tap in ROVER Mode -> Instant Brake
         # -------------------------------------------------------------
-        print("\n--- TEST 6: Top Red Button Tap in ROVER Mode (Emergency Brake) ---")
+        print("\n--- TEST 6: Top Red Button Tap in ROVER Mode (Disarm) ---")
         pkt_brake = generate_pokeball_packet(btn_stick=False, btn_top=True, norm_x=0.0, norm_y=0.0)
         app.notification_handler("sim", pkt_brake)
         time.sleep(0.1)

@@ -12,6 +12,7 @@
     },
     "mac_address": "5C:52:1E:1C:53:82",
     "poll_rate_hz": 60,
+    "telemetry_write_rate_hz": 10,
     "packet_timeout_sec": 4.0,
     "reconnect_delay_sec": 1.0,
     "init_step_delay_sec": 0.05

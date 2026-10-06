@@ -54,10 +54,10 @@ class JoyConApp(BaseApp):
         icon=_CONFIG["icon"]
     )
 
-    def __init__(self, api_url: str = "http://127.0.0.1:8085", rover_ctrl: Optional[Any] = None) -> None:
+    def __init__(self, rover_ctrl: Optional[Any] = None) -> None:
         super().__init__()
         self.config = _CONFIG
-        self.api_url = api_url
+        self.api_url = f"http://{network_resolver.get_master_backend_ip()}:{network_resolver.get_ports()['master_api']}"
         self.rover_ctrl = rover_ctrl
         self.backend: Optional[RobotBackend] = None
         self.joycon_service: Optional[JoyConServiceDaemon] = None
@@ -74,13 +74,14 @@ class JoyConApp(BaseApp):
         def _work():
             try:
                 port = int(network_resolver.get_ports()["pi4b_http"])
-                url = f"http://127.0.0.1:{port}/api/play_sound"
+                url = f"http://{network_resolver.get_master_backend_ip()}:{port}/api/play_sound"
                 payload = json.dumps({"kind": sound_file, "event": event_name, "stop_previous": False, "delay_sec": 0.0}).encode('utf-8')
                 req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(req, timeout=1.5):
                     pass
             except Exception as e:
-                self.logger.warning("Audio request '%s' failed: %s", event_name, e)
+                self.logger.error("Audio request '%s' failed: %s", event_name, e)
+                raise RuntimeError(f"Chime audio dispatch failed for {event_name}") from e
         self.thread_pool.submit(_work)
 
     def _send_aux_request(self, endpoint: str, payload: dict) -> None:
@@ -92,7 +93,8 @@ class JoyConApp(BaseApp):
                 with urllib.request.urlopen(req, timeout=2.5):
                     pass
             except Exception as e:
-                self.logger.warning("Aux API dispatch error (%s): %s", endpoint, e)
+                self.logger.error("Aux API dispatch error (%s): %s", endpoint, e)
+                raise RuntimeError(f"Aux API request failed for {endpoint}") from e
         self.thread_pool.submit(_work)
 
     def on_button_a_held(self):

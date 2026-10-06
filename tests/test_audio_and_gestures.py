@@ -38,7 +38,7 @@ class TestAudioResolver(unittest.TestCase):
             ("ornith_commit_speech", "smw_midway_gate.wav"),
             ("ornith_abort_recording", "smw_switch_timer_ending.wav"),
             ("rover_arm_drivetrain", "mario_kart_start.wav"),
-            ("rover_emergency_brake", "smw_yoshi_runs_away.wav"),
+            ("rover_disarm", "smw_yoshi_runs_away.wav"),
             ("app_exit_idle", "smw_goal_iris-out.wav"),
             ("smw_save_menu", "smw_save_menu.wav"),
         ]
@@ -53,7 +53,7 @@ class TestAudioResolver(unittest.TestCase):
 
 
 class TestPokeballServiceGestures(unittest.TestCase):
-    """Tests A+B chord hold, rover arm hold, and emergency brake."""
+    """Tests A+B chord hold, rover arm hold, and disarm."""
 
     def setUp(self):
         self.service = PokeballService(api_url="http://127.0.0.1:8085")

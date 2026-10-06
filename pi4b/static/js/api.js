@@ -307,7 +307,7 @@ export function sendJoyconRepair(timeoutSec = 45) {
     }, 50000);
 }
 
-export function sendEmergencyKillAll() {
+export function sendKillAll() {
     return safeFetch('/api/kill_all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

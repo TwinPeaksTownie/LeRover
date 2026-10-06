@@ -305,18 +305,18 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             <p>Direct Hardware Telemetry & Interactive Calibration Studio (Feetech STS3215 @ 1 Mbps)</p>
         </div>
         <div class="pill-container">
-            <div id="pill-hw" class="pill online">🟢 HARDWARE: SERIAL PORT LIVE</div>
-            <div id="pill-telemetry" class="pill online">🟢 STREAM: 50Hz LIVE</div>
-            <div id="pill-torque" class="pill offline">🔴 TORQUE: RELAXED</div>
+            <div id="pill-hw" class="pill online">ðŸŸ¢ HARDWARE: SERIAL PORT LIVE</div>
+            <div id="pill-telemetry" class="pill online">ðŸŸ¢ STREAM: 50Hz LIVE</div>
+            <div id="pill-torque" class="pill offline">ðŸ”´ TORQUE: RELAXED</div>
         </div>
     </header>
 
     <div class="controls">
-        <button class="btn-danger" onclick="emergencyStop()">🛑 Emergency Torque Off</button>
-        <button id="btn-home-all" class="btn-home" style="padding: 12px 20px; font-size: 0.88rem; font-weight: 800;" onclick="captureHomeAll()">⚡ Quick Capture Home All</button>
-        <button class="btn-lock" onclick="lockCurrentPose()">🔒 Lock Current Pose (30% Torque)</button>
-        <button class="btn-safe" onclick="safeHome()">🏠 Safe Home All (30% Torque)</button>
-        <button class="btn-secondary" onclick="deselectServo()">🔓 Deselect Active Joint</button>
+        <button class="btn-danger" onclick="disarm()">ðŸ›‘ Disarm Torque</button>
+        <button id="btn-home-all" class="btn-home" style="padding: 12px 20px; font-size: 0.88rem; font-weight: 800;" onclick="captureHomeAll()">âš¡ Quick Capture Home All</button>
+        <button class="btn-lock" onclick="lockCurrentPose()">ðŸ”’ Lock Current Pose (30% Torque)</button>
+        <button class="btn-safe" onclick="safeHome()">ðŸ  Safe Home All (30% Torque)</button>
+        <button class="btn-secondary" onclick="deselectServo()">ðŸ”“ Deselect Active Joint</button>
     </div>
 
     <div class="cards-grid" id="cards"></div>
@@ -349,7 +349,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 render(data);
             } catch (e) {
                 document.getElementById('pill-telemetry').className = 'pill offline';
-                document.getElementById('pill-telemetry').innerText = '🔴 STREAM: OFFLINE';
+                document.getElementById('pill-telemetry').innerText = 'ðŸ”´ STREAM: OFFLINE';
             }
         }
 
@@ -357,10 +357,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             const torquePill = document.getElementById('pill-torque');
             if (data.torque_enabled) {
                 torquePill.className = 'pill online';
-                torquePill.innerText = '🟢 TORQUE: ENABLED (SAFE 30%)';
+                torquePill.innerText = 'ðŸŸ¢ TORQUE: ENABLED (SAFE 30%)';
             } else {
                 torquePill.className = 'pill offline';
-                torquePill.innerText = '🔴 TORQUE: RELAXED (OFF)';
+                torquePill.innerText = 'ðŸ”´ TORQUE: RELAXED (OFF)';
             }
 
             const cardsDiv = document.getElementById('cards');
@@ -383,7 +383,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     card.innerHTML = `
                         <div class="card-header">
                             <div>
-                                <div class="motor-num">Motor ${sid} • Feetech STS3215</div>
+                                <div class="motor-num">Motor ${sid} â€¢ Feetech STS3215</div>
                                 <div class="card-title">${j.label}</div>
                             </div>
                             <button id="btn-select-${sid}" class="${isActive ? 'btn-active' : 'btn-secondary'}" onclick="setActive(${sid})">
@@ -392,7 +392,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         </div>
 
                         <div class="posture-banner">
-                            <span id="posture-text-${sid}" class="posture-text">📍 ${j.posture_desc}</span>
+                            <span id="posture-text-${sid}" class="posture-text">ðŸ“ ${j.posture_desc}</span>
                             <span id="badge-box-${sid}"></span>
                         </div>
 
@@ -427,19 +427,19 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         </div>
 
                         <div class="calib-actions">
-                            <button id="btn-min-${sid}" class="btn-calib" onclick="captureMin(${sid})">📍 Capture Min (<span id="lbl-min-${sid}">${j.follower_raw}</span>)</button>
-                            <button id="btn-home-${sid}" class="btn-home" onclick="captureHome(${sid})">🏠 Capture Home (<span id="lbl-home-${sid}">${j.follower_raw}</span>)</button>
-                            <button id="btn-max-${sid}" class="btn-calib" onclick="captureMax(${sid})">📍 Capture Max (<span id="lbl-max-${sid}">${j.follower_raw}</span>)</button>
+                            <button id="btn-min-${sid}" class="btn-calib" onclick="captureMin(${sid})">ðŸ“ Capture Min (<span id="lbl-min-${sid}">${j.follower_raw}</span>)</button>
+                            <button id="btn-home-${sid}" class="btn-home" onclick="captureHome(${sid})">ðŸ  Capture Home (<span id="lbl-home-${sid}">${j.follower_raw}</span>)</button>
+                            <button id="btn-max-${sid}" class="btn-calib" onclick="captureMax(${sid})">ðŸ“ Capture Max (<span id="lbl-max-${sid}">${j.follower_raw}</span>)</button>
                             
-                            <button id="btn-mode-${sid}" class="btn-mode" onclick="toggleDriveMode(${sid})">🔄 Sign: ${j.drive_mode == 1 ? 'Inverted (1)' : 'Normal (0)'}</button>
-                            <button id="btn-mvhome-${sid}" class="btn-mvhome" onclick="moveToHome(${sid})">🏠 Move to Home (<span id="lbl-mvhome-${sid}">${j.home_tick}</span>)</button>
-                            <button id="btn-hold-${sid}" class="btn-hold" onclick="hold2048(${sid})">🎯 Move to 2048 (Lock Rest)</button>
+                            <button id="btn-mode-${sid}" class="btn-mode" onclick="toggleDriveMode(${sid})">ðŸ”„ Sign: ${j.drive_mode == 1 ? 'Inverted (1)' : 'Normal (0)'}</button>
+                            <button id="btn-mvhome-${sid}" class="btn-mvhome" onclick="moveToHome(${sid})">ðŸ  Move to Home (<span id="lbl-mvhome-${sid}">${j.home_tick}</span>)</button>
+                            <button id="btn-hold-${sid}" class="btn-hold" onclick="hold2048(${sid})">ðŸŽ¯ Move to 2048 (Lock Rest)</button>
                         </div>
 
                         ${isActive ? `
                             <div class="slider-section">
                                 <div class="slider-header">
-                                    <span>🎛️ Interactive Position Control</span>
+                                    <span>ðŸŽ›ï¸ Interactive Position Control</span>
                                     <span>Target: <span id="slider-val-${sid}">${j.follower_raw}</span> Ticks</span>
                                 </div>
                                 <input type="range" min="${j.range_min}" max="${j.range_max}" value="${j.follower_raw}" 
@@ -456,7 +456,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 else if (j.warning) badgeHtml = `<span class="badge badge-warn">${j.warning}</span>`;
 
                 const postureEl = document.getElementById(`posture-text-${sid}`);
-                if (postureEl) postureEl.innerText = `📍 ${j.posture_desc}`;
+                if (postureEl) postureEl.innerText = `ðŸ“ ${j.posture_desc}`;
                 
                 const badgeBox = document.getElementById(`badge-box-${sid}`);
                 if (badgeBox) badgeBox.innerHTML = badgeHtml;
@@ -506,11 +506,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/capture_min?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`✅ Motor ${sid} range_min updated to ${data.range_min} ticks & saved to follower.json!`);
+                    showToast(`âœ… Motor ${sid} range_min updated to ${data.range_min} ticks & saved to follower.json!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -524,11 +524,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/capture_max?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`✅ Motor ${sid} range_max updated to ${data.range_max} ticks & saved to follower.json!`);
+                    showToast(`âœ… Motor ${sid} range_max updated to ${data.range_max} ticks & saved to follower.json!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -542,11 +542,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/capture_home?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`🏠 Motor ${sid} home target set to ${data.home_tick} ticks (offset: ${data.homing_offset}) & saved to follower.json!`);
+                    showToast(`ðŸ  Motor ${sid} home target set to ${data.home_tick} ticks (offset: ${data.homing_offset}) & saved to follower.json!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -560,11 +560,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch('/api/capture_home_all');
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`⚡ QUICK CAPTURED HOME ALL: Live positions captured across all 6 motors & saved to follower.json!`);
+                    showToast(`âš¡ QUICK CAPTURED HOME ALL: Live positions captured across all 6 motors & saved to follower.json!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -578,11 +578,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/toggle_drive_mode?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`🔄 Motor ${sid} drive_mode set to ${data.drive_mode} & saved to follower.json!`);
+                    showToast(`ðŸ”„ Motor ${sid} drive_mode set to ${data.drive_mode} & saved to follower.json!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -596,11 +596,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/hold_2048?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`🎯 Motor ${sid} moving to 2048 (${data.duration}s trajectory) while rest hold pose!`);
+                    showToast(`ðŸŽ¯ Motor ${sid} moving to 2048 (${data.duration}s trajectory) while rest hold pose!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -614,11 +614,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch(`/api/move_to_home?sid=${sid}`);
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`🏠 Motor ${sid} moving to custom home (${data.home_tick} ticks, ${data.duration}s trajectory) while rest hold pose!`);
+                    showToast(`ðŸ  Motor ${sid} moving to custom home (${data.home_tick} ticks, ${data.duration}s trajectory) while rest hold pose!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -631,11 +631,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 const res = await fetch('/api/lock_current_pose');
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    showToast(`🔒 Locked all 6 servos at their current live physical positions under 30% torque!`);
+                    showToast(`ðŸ”’ Locked all 6 servos at their current live physical positions under 30% torque!`);
                     isCapturing = false;
                     await fetchState();
                 } else {
-                    showToast(`❌ Error: ${data.error}`);
+                    showToast(`âŒ Error: ${data.error}`);
                 }
             } finally {
                 isCapturing = false;
@@ -652,8 +652,8 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             fetchState();
         }
 
-        async function emergencyStop() {
-            await fetch('/api/emergency_stop');
+        async function disarm() {
+            await fetch('/api/disarm');
             fetchState();
         }
 
@@ -737,13 +737,13 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._send_json(self.app_instance.move_to_home(sid))
         elif parsed.path == "/api/lock_current_pose":
             self._send_json(self.app_instance.lock_current_pose())
-        elif parsed.path == "/api/emergency_stop":
+        elif parsed.path == "/api/disarm":
             self.app_instance.disable_torque()
-            self._send_json({"status": "ok", "action": "emergency_stop"})
+            self._send_json({"status": "ok", "action": "disarm"})
         elif parsed.path in ["/api/safe_home", "/api/safe_home_all"]:
             self._send_json(self.app_instance.safe_home_all())
         elif parsed.path == "/api/set_goal":
-            goal = int(body.get("goal", qs.get("goal", [2048])[0]))
+            goal = int(body["goal"]) if "goal" in body else int(qs["goal"][0])
             self._send_json(self.app_instance.write_active_goal(sid, goal))
         else:
             self._send_json({"status": "ok", "service": "servo_studio_app"})
@@ -829,7 +829,7 @@ class ServoStudioApp(BaseApp):
                 dist_home = 0
                 at_home = False
                 f_deg = 0.0
-                desc = "🔴 OFFLINE / UNPLUGGED"
+                desc = "ðŸ”´ OFFLINE / UNPLUGGED"
                 warning = "DISCONNECTED"
                 home_pct = 50.0
             else:
@@ -845,23 +845,23 @@ class ServoStudioApp(BaseApp):
 
                 if sid == 1:
                     dir_t = "Centered" if abs(f_deg) < 2.0 else ("Rotated Left (CCW)" if f_deg > 0 else "Rotated Right (CW)")
-                    desc = f"{dir_t} ({abs(f_deg)}°)"
+                    desc = f"{dir_t} ({abs(f_deg)}Â°)"
                 elif sid == 2:
                     dir_t = "Pitched Up/Back" if f_deg > 0 else "Pitched Forward/Down"
-                    desc = f"{dir_t} ({abs(f_deg)}°)"
+                    desc = f"{dir_t} ({abs(f_deg)}Â°)"
                 elif sid == 3:
                     dir_t = "Extended Out" if f_deg > 0 else "Flexed Inward"
-                    desc = f"{dir_t} ({abs(f_deg)}°)"
+                    desc = f"{dir_t} ({abs(f_deg)}Â°)"
                 elif sid == 4:
                     dir_t = "Wrist Pitched Up" if f_deg > 0 else "Wrist Pitched Down"
-                    desc = f"{dir_t} ({abs(f_deg)}°)"
+                    desc = f"{dir_t} ({abs(f_deg)}Â°)"
                 elif sid == 5:
                     dir_t = "Wrist Twisted CW" if f_deg > 0 else "Wrist Twisted CCW"
-                    desc = f"{dir_t} ({abs(f_deg)}°)"
+                    desc = f"{dir_t} ({abs(f_deg)}Â°)"
                 elif sid == 6:
                     desc = f"Gripper Jaws {pct}% Open"
                 else:
-                    desc = f"{f_deg}° Angle"
+                    desc = f"{f_deg}Â° Angle"
 
                 near_min = f_raw <= (rmin + int(span * 0.05))
                 near_max = f_raw >= (rmax - int(span * 0.05))

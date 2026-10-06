@@ -36,9 +36,9 @@
       "file": "mario_kart_start.wav",
       "description": "Legacy alias for rover_arm_drivetrain"
     },
-    "rover_emergency_brake": {
+    "rover_disarm": {
       "file": "smw_yoshi_runs_away.wav",
-      "description": "Emergency brake and disarm rover wheels"
+      "description": "Disarm rover wheels"
     },
     "mode_switch_rover": {
       "file": "smw_pipe.wav",

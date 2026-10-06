@@ -912,8 +912,8 @@ export function triggerBackendRestart() {
         });
 }
 
-export function triggerEmergencyKillAll() {
-    api.sendEmergencyKillAll().catch(() => {});
+export function triggerKillAll() {
+    api.sendKillAll().catch(() => {});
 }
 
 export function triggerJoyconRepair() {
@@ -2328,7 +2328,7 @@ function bindEventListeners() {
     const wifiRestoreBtn = document.getElementById('wifiRestoreBtn');
     const connectHotspotBtn = document.getElementById('connectHotspotBtn');
     const wifiDisableBtn = document.getElementById('wifiDisableBtn');
-    const emergencyKillBtn = document.getElementById('emergencyKillBtn');
+    const disarmAllBtn = document.getElementById('disarmAllBtn');
 
     const pairJoyconBtn = document.getElementById('pairJoyconBtn');
     const drawerPairJoyconBtn = document.getElementById('drawerPairJoyconBtn');
@@ -2338,7 +2338,7 @@ function bindEventListeners() {
     if (wifiRestoreBtn) wifiRestoreBtn.addEventListener('click', () => triggerWifiRestore());
     if (connectHotspotBtn) connectHotspotBtn.addEventListener('click', () => triggerConnectHotspot());
     if (wifiDisableBtn) wifiDisableBtn.addEventListener('click', () => triggerWifiDisable());
-    if (emergencyKillBtn) emergencyKillBtn.addEventListener('click', () => triggerEmergencyKillAll());
+    if (disarmAllBtn) disarmAllBtn.addEventListener('click', () => triggerKillAll());
     if (pairJoyconBtn) pairJoyconBtn.addEventListener('click', () => triggerJoyconRepair());
     if (drawerPairJoyconBtn) drawerPairJoyconBtn.addEventListener('click', () => triggerJoyconRepair());
 
