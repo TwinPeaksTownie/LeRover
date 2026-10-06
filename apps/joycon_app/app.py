@@ -650,21 +650,11 @@ class JoyConService:
             self.last_btn_a_listener = False
 
         # ---------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # 0. BUTTON Y GESTURE: CLOSE CURRENT APP / RETURN TO IDLE
         # ---------------------------------------------------------------------
         if btn_y and not self.last_btn_y:
-            self.logger.info("⏹️ [BUTTON Y CLICK] Closing active app and returning to IDLE...")
-            # 1. Orderly stop of rover drivetrain
-            if self.rover_ctrl:
-                try:
-                    self.rover_ctrl.stop()
-                except Exception as ex:
-                    self.logger.error("Error stopping rover on Button Y: %s", ex)
-            self.control_mode = "ROVER"
-            self.teleop_enabled = False
-            self.is_armed = False
-
-            # 2. Stop active app in a decoupled worker thread so Joy-Con HID reading loop never blocks
+            self.logger.info("[BUTTON Y CLICK] Closing active app and returning to IDLE...")
             if self.app_manager:
                 curr_app = self.app_manager.current_app_name
                 if curr_app:
@@ -674,6 +664,7 @@ class JoyConService:
                             self.app_manager.stop_app(app_name)
                         except Exception as ex:
                             self.logger.error("Error stopping app '%s' on Button Y: %s", app_name, ex)
+                    import threading
                     threading.Thread(target=_stop_app_worker, args=(curr_app,), daemon=True, name=f"ButtonY-StopApp-{curr_app}").start()
 
             play_chime(self.config["chimes"]["app_exit_idle"])
