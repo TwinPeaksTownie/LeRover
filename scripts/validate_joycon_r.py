@@ -13,7 +13,7 @@ Modes:
      throttle, and immediate alert banners if Button A stomps on Button R.
 
 Usage:
-  # On Raspberry Pi (reading local /tmp/joycon_telemetry.json):
+  # On Raspberry Pi (reading local /dev/shm/joycon_telemetry.json):
   python3 scripts/validate_joycon_r.py
   python3 scripts/validate_joycon_r.py --monitor
 
@@ -30,7 +30,7 @@ import sys
 import time
 from typing import Any, Dict, Optional, Tuple
 
-TELEMETRY_PATH = "/tmp/joycon_telemetry.json"
+TELEMETRY_PATH = "/dev/shm/joycon_telemetry.json"
 
 
 class TelemetryReader:

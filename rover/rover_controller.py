@@ -5,14 +5,12 @@ Manages serial communication with the Adafruit KB2040 safety bridge over GPIO UA
 Supports mock/simulated serial mode for local PC testing.
 """
 
-import http.server
 import json
 import logging
 import os
 import sys
 import threading
 import time
-from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any, Tuple
 
 try:
@@ -67,89 +65,12 @@ def load_rover_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     _ = cfg["control"]["min_speed_pct"]
     _ = cfg["control"]["max_speed_pct_limit"]
     _ = cfg["control"]["loop_rate_hz"]
-    _ = str(cfg["distance_sensor"]["model"])
-    _ = str(cfg["distance_sensor"]["analog_pin"])
-    _ = int(cfg["distance_sensor"]["adc_resolution_bits"])
-    _ = float(cfg["distance_sensor"]["max_volts"])
-    _ = float(cfg["distance_sensor"]["max_distance_mm"])
-    _ = float(cfg["distance_sensor"]["update_rate_hz"])
     _ = bool(cfg["hardware_interface"]["assert_dtr"])
     _ = bool(cfg["hardware_interface"]["assert_rts"])
     _ = float(cfg["hardware_interface"]["serial_timeout_sec"])
     _ = float(cfg["hardware_interface"]["write_timeout_sec"])
     _ = int(cfg["hardware_interface"]["max_consecutive_write_failures"])
     return cfg
-
-
-class ThreadingHTTPServer(ThreadingMixIn, http.server.HTTPServer):
-    daemon_threads = True
-
-
-class DistanceStatusHandler(http.server.BaseHTTPRequestHandler):
-    """HTTP handler exposing distance status."""
-
-    def log_message(self, format, *args):
-        # Suppress routine access logs to avoid log spam
-        pass
-
-    def do_GET(self):
-        if self.path in ["/api/status", "/api/distance", "/api/telemetry"]:
-            telem = self.server.rover_ctrl.get_telemetry()
-            payload = {
-                "object_detected": bool(telem["object_detected"]),
-                "distance_cm": telem["distance_cm"],
-                "raw_dist": int(telem["raw_dist"]),
-                "max_speed_pct": int(telem["max_speed_pct"]),
-                "timestamp": telem["last_seen"] or time.time()
-            }
-            body = json.dumps(payload).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        else:
-            self.send_error(404, "Endpoint not found")
-
-    def do_POST(self):
-        if "Content-Length" not in self.headers:
-            self.send_error(400, "Missing Content-Length header")
-            return
-        content_length = int(self.headers["Content-Length"])
-        post_data = self.rfile.read(content_length)
-        try:
-            req_data = json.loads(post_data.decode("utf-8"))
-        except Exception:
-            self.send_error(400, "Invalid JSON payload")
-            return
-
-        if self.path == "/api/speed":
-            for key in ["speed_pct"]:
-                if key not in req_data:
-                    self.send_error(400, f"Missing required parameter: '{key}'")
-                    return
-            new_pct = self.server.rover_ctrl.set_max_speed_pct(int(req_data["speed_pct"]))
-            resp = json.dumps({"status": "ok", "max_speed_pct": new_pct}).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp)))
-            self.end_headers()
-            self.wfile.write(resp)
-
-        elif self.path == "/api/drive":
-            for key in ["throttle", "steering"]:
-                if key not in req_data:
-                    self.send_error(400, f"Missing required parameter: '{key}'")
-                    return
-            self.server.rover_ctrl.set_drive(float(req_data["steering"]), float(req_data["throttle"]))
-            resp = json.dumps({"status": "ok"}).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp)))
-            self.end_headers()
-            self.wfile.write(resp)
-        else:
-            self.send_error(404, "Endpoint not found")
 
 
 class RoverController:
@@ -160,8 +81,7 @@ class RoverController:
         serial_port: Optional[str] = None,
         baudrate: Optional[int] = None,
         config_path: Optional[str] = None,
-        mock_mode: bool = False,
-        enable_http_server: bool = True
+        mock_mode: bool = False
     ) -> None:
         if serial_port is None:
             self.serial_port = network_resolver.get_rover_serial_port()
@@ -172,10 +92,6 @@ class RoverController:
             self.baudrate = network_resolver.get_rover_baudrate()
         else:
             self.baudrate = baudrate
-
-        self.enable_http_server = enable_http_server
-        self._http_server: Optional[ThreadingHTTPServer] = None
-        self._http_thread: Optional[threading.Thread] = None
 
         self.config_path = get_rover_config_path(config_path)
         self.config = load_rover_config(self.config_path)
@@ -200,10 +116,6 @@ class RoverController:
         self.max_consecutive_write_failures = int(self.config["hardware_interface"]["max_consecutive_write_failures"])
         self._drive_event = threading.Event()
         self.mock_mode = mock_mode
-
-        self.sensor_cfg = self.config["distance_sensor"]
-        self.adc_max = (1 << int(self.sensor_cfg["adc_resolution_bits"])) - 1
-        self.max_dist_cm = float(self.sensor_cfg["max_distance_mm"]) / 10.0
 
         # Enforce strict serial port presence when mock_mode is False (No silent auto-mock fallbacks)
         if not self.mock_mode:
@@ -239,10 +151,6 @@ class RoverController:
             "ch1": 1000,
             "ch2": 1000,
             "ch5": 1000,
-            "distance": 0,
-            "raw_dist": 0,
-            "distance_cm": None,
-            "object_detected": False,
             "last_seen": 0.0,
             "packets_sent": 0
         }
@@ -369,28 +277,6 @@ class RoverController:
         self._worker_thread.start()
         logger.info("Started RoverController background thread (port=%s, mock=%s).", self.serial_port, self.mock_mode)
 
-        if self.enable_http_server and self._http_server is None:
-            try:
-                repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                net_cfg_path = os.path.join(repo_root, "config", "network_config.json")
-                http_port = 8089
-                http_host = "0.0.0.0"
-                if os.path.exists(net_cfg_path):
-                    with open(net_cfg_path, "r", encoding="utf-8") as nf:
-                        ncfg = json.load(nf)
-                    if "endpoints" in ncfg and "distance_telemetry" in ncfg["endpoints"]:
-                        http_port = int(ncfg["endpoints"]["distance_telemetry"]["port"])
-                        http_host = str(ncfg["endpoints"]["distance_telemetry"]["host"])
-
-                server = ThreadingHTTPServer((http_host, http_port), DistanceStatusHandler)
-                server.rover_ctrl = self
-                self._http_server = server
-                self._http_thread = threading.Thread(target=server.serve_forever, daemon=True, name="RoverHTTPServer")
-                self._http_thread.start()
-                logger.info("Started RoverController Distance Status HTTP server on %s:%d", http_host, http_port)
-            except Exception as e:
-                logger.warning("Could not bind RoverController HTTP server: %s", e)
-
     def stop(self) -> None:
         """Zeroes target drive inputs allowing the slew rate limiter to smoothly decelerate to neutral."""
         with self._lock:
@@ -399,37 +285,13 @@ class RoverController:
             self._last_drive_update = time.time()
         self._drive_event.set()
 
-    def emergency_stop(self) -> None:
-        """Immediately and unconditionally cuts motor drive to neutral (1500 us) with zero slew delay."""
-        with self._lock:
-            self._target_x = 0.0
-            self._target_y = 0.0
-            self._current_left_val = 0.0
-            self._current_right_val = 0.0
-            self._last_left_pulse = self.neutral_pulse_us
-            self._last_right_pulse = self.neutral_pulse_us
-            self._last_drive_update = time.time()
-            self.telemetry["left_out"] = self.neutral_pulse_us
-            self.telemetry["right_out"] = self.neutral_pulse_us
-            cmd_str = f"CMD:{self.neutral_pulse_us},{self.neutral_pulse_us},{self._slider_val},0\n"
-            self._last_cmd_sent = cmd_str
-            logger.info("🛑 [EMERGENCY STOP] Motor targets and pulses clamped to neutral %d us.", self.neutral_pulse_us)
-        self._drive_event.set()
-
     def shutdown(self) -> None:
         """Shuts down the background communication thread and HTTP status server."""
-        self.emergency_stop()
+        self.set_drive(0.0, 0.0)
         self._stop_event.set()
         self._drive_event.set()
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=1.5)
-        if self._http_server:
-            try:
-                self._http_server.shutdown()
-                self._http_server.server_close()
-            except Exception as e:
-                logger.debug("Error stopping HTTP server: %s", e)
-            self._http_server = None
         logger.info("RoverController shut down.")
 
     def set_max_speed_pct(self, pct: int) -> int:
@@ -655,18 +517,6 @@ class RoverController:
                     self.telemetry["ch1"] = int(parts[5])
                     self.telemetry["ch2"] = int(parts[6])
                     self.telemetry["ch5"] = int(parts[7])
-                    if len(parts) > 8:
-                        raw_dist = int(parts[8])
-                        self.telemetry["distance"] = raw_dist
-                        self.telemetry["raw_dist"] = raw_dist
-                        if raw_dist <= 500:
-                            self.telemetry["object_detected"] = False
-                            self.telemetry["distance_cm"] = None
-                        else:
-                            dist_cm = (raw_dist / float(self.adc_max)) * self.max_dist_cm
-                            self.telemetry["object_detected"] = True
-                            self.telemetry["distance_cm"] = round(dist_cm, 1)
-
                     self.telemetry["last_seen"] = time.time()
         except Exception as parse_err:
             logger.debug("STAT line parse warning: %s", parse_err, exc_info=True)

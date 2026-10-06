@@ -124,8 +124,8 @@ MAC_ADDRESS = _CONFIG["hardware"]["mac_address"]
 JOYCON_R_PID = int(_CONFIG["hardware"]["product_ids"]["joycon_r"])
 VENDOR_ID = int(_CONFIG["hardware"]["vendor_id"])
 API_URL = "http://127.0.0.1:8085"
-TELEMETRY_FILE = "/tmp/joycon_telemetry.json"
-LEGACY_TELEMETRY_FILE = "/tmp/pokeball_telemetry.json"
+TELEMETRY_FILE = "/dev/shm/joycon_telemetry.json"
+LEGACY_TELEMETRY_FILE = "/dev/shm/pokeball_telemetry.json"
 
 
 def load_joycon_calibration() -> Tuple[int, int, int, int, int, int]:
@@ -223,6 +223,9 @@ class JoyConService:
         self.thread: Optional[threading.Thread] = None
         self.logger = logging.getLogger("so101.joycon_service")
         self.config = _CONFIG
+
+        self.telemetry_write_rate_hz = float(self.config["hardware"]["telemetry_write_rate_hz"])
+        self.last_telemetry_write_time = 0.0
 
         self.is_connected = False
         self.button_b_click_event = threading.Event()
@@ -390,6 +393,10 @@ class JoyConService:
             self._process_report_30(bytes(rep))
 
     def write_telemetry(self) -> None:
+        now = time.time()
+        if (now - self.last_telemetry_write_time) < (1.0 / self.telemetry_write_rate_hz):
+            return
+        self.last_telemetry_write_time = now
         try:
             for path in [TELEMETRY_FILE, LEGACY_TELEMETRY_FILE]:
                 tmp_path = path + ".tmp"
@@ -1060,9 +1067,23 @@ class JoyConService:
                 while not self.stop_event.is_set():
                     r, _, _ = select.select([fd], [], [], 0.05)
                     if r:
-                        raw = os.read(fd, 64)
-                        if raw:
-                            self._process_report_30(raw)
+                        latest_raw = None
+                        os.set_blocking(fd, False)
+                        try:
+                            while True:
+                                try:
+                                    chunk = os.read(fd, 64)
+                                    if chunk:
+                                        latest_raw = chunk
+                                    else:
+                                        break
+                                except BlockingIOError:
+                                    break
+                        finally:
+                            os.set_blocking(fd, True)
+                        
+                        if latest_raw:
+                            self._process_report_30(latest_raw)
                     now = time.time()
                     if (now - self.telemetry["last_seen"]) > packet_timeout:
                         self.logger.warning("Packet timeout reached on %s. Reconnecting...", dev_path)
