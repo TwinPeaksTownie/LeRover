@@ -20,7 +20,8 @@ from robot_backend import RobotBackend, ticks_to_degrees_s7, degrees_to_ticks_s7
 from app_manager import AppManager
 from apps.teleop_app.app import TeleopControlApp
 from apps.servo_studio.app import ServoStudioApp
-from apps.joycon_app.app import JoyConApp, JoyConService, PokeballApp, PokeballService
+from apps.joycon_app.app import JoyConApp
+from pi4b.joycon_service import JoyConServiceDaemon
 import threading
 
 try:

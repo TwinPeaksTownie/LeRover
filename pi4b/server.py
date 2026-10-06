@@ -50,7 +50,7 @@ import network_resolver
 import audio_resolver
 from robot_backend import RobotBackend
 from app_manager import AppManager
-from apps.joycon_app.app import JoyConService, PokeballService
+from pi4b.joycon_service import JoyConServiceDaemon
 from api_server import MasterApiHandler, set_chime_callback, ensure_leader_poller_started
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -60,8 +60,8 @@ PORT_MASTER_API = 8085
 
 GLOBAL_BACKEND: Optional[RobotBackend] = None
 GLOBAL_APP_MANAGER: Optional[AppManager] = None
-GLOBAL_JOYCON: Optional[JoyConService] = None
-GLOBAL_POKEBALL: Optional[JoyConService] = None
+GLOBAL_JOYCON: Optional[JoyConServiceDaemon] = None
+GLOBAL_POKEBALL: Optional[JoyConServiceDaemon] = None
 
 STATUS_CACHE: Dict[str, Any] = {
     "pokeball": {"running": False, "connected": False, "status": "DISCONNECTED", "pid": ""},
@@ -1188,7 +1188,7 @@ def main() -> None:
 
     # 2. Initialize Joy-Con controller service
     logging.info("Initializing JoyConService (Right Joy-Con HID driver)...")
-    GLOBAL_JOYCON = JoyConService(backend=GLOBAL_BACKEND)
+    GLOBAL_JOYCON = JoyConServiceDaemon(backend=GLOBAL_BACKEND)
     GLOBAL_POKEBALL = GLOBAL_JOYCON
     GLOBAL_JOYCON.start()
 
